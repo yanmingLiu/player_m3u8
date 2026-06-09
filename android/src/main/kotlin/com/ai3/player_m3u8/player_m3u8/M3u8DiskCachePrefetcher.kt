@@ -27,6 +27,7 @@ internal class M3u8DiskCachePrefetcher(
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val sourceDebugId = M3u8Log.sourceDebugId(url)
     private val executor = Executors.newSingleThreadExecutor { runnable ->
         Thread(runnable, "player_m3u8_hls_prefetch").apply { isDaemon = true }
     }
@@ -135,11 +136,16 @@ internal class M3u8DiskCachePrefetcher(
     private fun loadPlaylist(): Playlist {
         val rootUri = Uri.parse(url)
         return when (val rootPlaylist = loadHlsPlaylist(rootUri)) {
-            is HlsMediaPlaylist -> toPlaylist(rootUri, rootPlaylist)
+            is HlsMediaPlaylist -> {
+                logMediaPlaylist(rootUri, rootPlaylist, root = true)
+                toPlaylist(rootUri, rootPlaylist)
+            }
             is HlsMultivariantPlaylist -> {
+                logMultivariantPlaylist(rootUri, rootPlaylist)
                 val selectedPlaylistUri = selectMediaPlaylistUri(rootPlaylist)
                 val mediaPlaylist = loadHlsPlaylist(selectedPlaylistUri) as? HlsMediaPlaylist
                     ?: return Playlist(emptyList(), emptyList(), durationMs = 0L)
+                logMediaPlaylist(selectedPlaylistUri, mediaPlaylist, root = false)
                 toPlaylist(selectedPlaylistUri, mediaPlaylist)
             }
             else -> Playlist(emptyList(), emptyList(), durationMs = 0L)
@@ -163,6 +169,60 @@ internal class M3u8DiskCachePrefetcher(
         return variant?.url
             ?: playlist.mediaPlaylistUrls.firstOrNull()
             ?: Uri.parse(url)
+    }
+
+    private fun logMultivariantPlaylist(
+        playlistUri: Uri,
+        playlist: HlsMultivariantPlaylist,
+    ) {
+        M3u8Log.info(
+            "hlsMaster source=$sourceDebugId uri=${playlistUri.safeLogUri()} " +
+                "variants=${playlist.variants.size} mediaPlaylistUrls=${playlist.mediaPlaylistUrls.size} " +
+                "audios=${playlist.audios.size} subtitles=${playlist.subtitles.size}",
+        )
+        playlist.variants.forEachIndexed { index, variant ->
+            val format = variant.format
+            M3u8Log.info(
+                "hlsVariant source=$sourceDebugId index=$index " +
+                    "resolution=${format.width.valueOrUnknown()}x${format.height.valueOrUnknown()} " +
+                    "bandwidth=${format.bitrate.valueOrUnknown()} " +
+                    "averageBitrate=${format.averageBitrate.valueOrUnknown()} " +
+                    "peakBitrate=${format.peakBitrate.valueOrUnknown()} " +
+                    "codecs=${format.codecs ?: "unknown"} " +
+                    "mime=${format.sampleMimeType ?: format.containerMimeType ?: "unknown"} " +
+                    "videoGroup=${variant.videoGroupId ?: "none"} " +
+                    "audioGroup=${variant.audioGroupId ?: "none"} " +
+                    "uri=${variant.url.safeLogUri()}",
+            )
+        }
+        val selectedPlaylistUri = selectMediaPlaylistUri(playlist)
+        M3u8Log.info(
+            "hlsSelectedVariant source=$sourceDebugId uri=${selectedPlaylistUri.safeLogUri()}",
+        )
+    }
+
+    private fun logMediaPlaylist(
+        playlistUri: Uri,
+        playlist: HlsMediaPlaylist,
+        root: Boolean,
+    ) {
+        M3u8Log.info(
+            "hlsMedia source=$sourceDebugId root=$root uri=${playlistUri.safeLogUri()} " +
+                "type=${playlist.playlistType.name()} segments=${playlist.segments.size} " +
+                "durationMs=${usToMs(playlist.durationUs).coerceAtLeast(0L)} " +
+                "targetDurationMs=${usToMs(playlist.targetDurationUs).coerceAtLeast(0L)} " +
+                "version=${playlist.version} hasEndTag=${playlist.hasEndTag}",
+        )
+        val firstSegment = playlist.segments.firstOrNull()
+        val lastSegment = playlist.segments.lastOrNull()
+        if (firstSegment != null && lastSegment != null) {
+            val baseUri = playlist.baseUri.takeIf { it.isNotBlank() } ?: playlistUri.toString()
+            M3u8Log.info(
+                "hlsSegments source=$sourceDebugId " +
+                    "first=${resolveUri(baseUri, firstSegment.url).safeLogUri()} " +
+                    "last=${resolveUri(baseUri, lastSegment.url).safeLogUri()}",
+            )
+        }
     }
 
     private fun toPlaylist(playlistUri: Uri, mediaPlaylist: HlsMediaPlaylist): Playlist {
@@ -269,6 +329,24 @@ internal class M3u8DiskCachePrefetcher(
     private fun usToMs(timeUs: Long): Long {
         return timeUs / C.MICROS_PER_SECOND * C.MILLIS_PER_SECOND +
             timeUs % C.MICROS_PER_SECOND / 1_000L
+    }
+
+    private fun Int.valueOrUnknown(): String {
+        return takeIf { it > 0 }?.toString() ?: "unknown"
+    }
+
+    private fun Int.name(): String {
+        return when (this) {
+            HlsMediaPlaylist.PLAYLIST_TYPE_VOD -> "vod"
+            HlsMediaPlaylist.PLAYLIST_TYPE_EVENT -> "event"
+            HlsMediaPlaylist.PLAYLIST_TYPE_UNKNOWN -> "unknown"
+            else -> "unknown:$this"
+        }
+    }
+
+    private fun Uri.safeLogUri(): String {
+        val lastPath = lastPathSegment ?: return M3u8Log.sourceDebugId(toString())
+        return ".../$lastPath"
     }
 
     private data class Playlist(

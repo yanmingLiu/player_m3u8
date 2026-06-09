@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import io.flutter.plugin.common.EventChannel
 import io.flutter.view.TextureRegistry
 
@@ -30,6 +31,8 @@ class M3u8AndroidPlayer(
     private var savedState: SavedState? = null
     private var lastProgressSentAt = 0L
     private var initialized = false
+    private val sourceDebugId = M3u8Log.sourceDebugId(url)
+    private val videoTrackCompatLimit = videoTrackCompatLimit()
     private val diskCachePrefetcher = M3u8DiskCachePrefetcher(
         context = context,
         url = url,
@@ -50,6 +53,12 @@ class M3u8AndroidPlayer(
 
     init {
         runOnMain {
+            logInfo(
+                "init playerId=${surfaceProducer.id()} source=$sourceDebugId " +
+                    "headerCount=${headers.size} decoderFallback=true " +
+                    "trackCompat=${videoTrackCompatLimit?.name ?: "none"} " +
+                    "device=${Build.MANUFACTURER}/${Build.MODEL} sdk=${Build.VERSION.SDK_INT}",
+            )
             surfaceProducer.setCallback(this)
             createPlayer()
             diskCachePrefetcher.start()
@@ -59,6 +68,7 @@ class M3u8AndroidPlayer(
 
     fun play() {
         runOnMain {
+            logInfo("play playerId=${surfaceProducer.id()} source=$sourceDebugId")
             player?.playWhenReady = true
             sendPlaybackEvent("playing")
         }
@@ -66,6 +76,7 @@ class M3u8AndroidPlayer(
 
     fun pause() {
         runOnMain {
+            logInfo("pause playerId=${surfaceProducer.id()} source=$sourceDebugId")
             player?.playWhenReady = false
             sendPlaybackEvent("paused")
         }
@@ -73,6 +84,10 @@ class M3u8AndroidPlayer(
 
     fun seekTo(positionMs: Long) {
         runOnMain {
+            logInfo(
+                "seek playerId=${surfaceProducer.id()} source=$sourceDebugId " +
+                    "positionMs=${positionMs.coerceAtLeast(0L)}",
+            )
             player?.seekTo(positionMs)
             diskCachePrefetcher.restartFrom(positionMs)
             sendProgress(force = true)
@@ -84,6 +99,7 @@ class M3u8AndroidPlayer(
             if (disposed) {
                 return@runOnMain
             }
+            logInfo("dispose playerId=${surfaceProducer.id()} source=$sourceDebugId")
             disposed = true
             mainHandler.removeCallbacks(progressRunnable)
             diskCachePrefetcher.cancel()
@@ -97,6 +113,10 @@ class M3u8AndroidPlayer(
 
     override fun onSurfaceAvailable() {
         runOnMain {
+            logInfo(
+                "surfaceAvailable playerId=${surfaceProducer.id()} source=$sourceDebugId " +
+                    "recreate=${!disposed && player == null}",
+            )
             if (!disposed && player == null) {
                 createPlayer(savedState)
                 savedState = null
@@ -109,6 +129,11 @@ class M3u8AndroidPlayer(
     override fun onSurfaceCleanup() {
         runOnMain {
             val currentPlayer = player ?: return@runOnMain
+            logInfo(
+                "surfaceCleanup playerId=${surfaceProducer.id()} source=$sourceDebugId " +
+                    "positionMs=${currentPlayer.currentPosition.coerceAtLeast(0L)} " +
+                    "playWhenReady=${currentPlayer.playWhenReady}",
+            )
             savedState = SavedState(
                 positionMs = currentPlayer.currentPosition.coerceAtLeast(0L),
                 playWhenReady = currentPlayer.playWhenReady,
@@ -121,6 +146,13 @@ class M3u8AndroidPlayer(
     }
 
     override fun onPlaybackStateChanged(playbackState: Int) {
+        logInfo(
+            "state playerId=${surfaceProducer.id()} source=$sourceDebugId " +
+                "state=${playbackState.name()} positionMs=${player?.currentPosition?.coerceAtLeast(0L) ?: 0L} " +
+                "durationMs=${player?.duration?.takeIf { it >= 0L } ?: 0L} " +
+                "bufferedMs=${player?.bufferedPosition?.coerceAtLeast(0L) ?: 0L} " +
+                "playWhenReady=${player?.playWhenReady}",
+        )
         when (playbackState) {
             Player.STATE_BUFFERING -> sendPlaybackEvent("buffering")
             Player.STATE_READY -> {
@@ -140,20 +172,31 @@ class M3u8AndroidPlayer(
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
+        logInfo(
+            "isPlaying playerId=${surfaceProducer.id()} source=$sourceDebugId " +
+                "value=$isPlaying positionMs=${player?.currentPosition?.coerceAtLeast(0L) ?: 0L}",
+        )
         sendPlaybackEvent(if (isPlaying) "playing" else "paused")
     }
 
     override fun onVideoSizeChanged(videoSize: VideoSize) {
+        logInfo(
+            "videoSize playerId=${surfaceProducer.id()} source=$sourceDebugId " +
+                "width=${videoSize.width} height=${videoSize.height} " +
+                "rotation=${videoSize.unappliedRotationDegrees}",
+        )
         if (initialized) {
             sendInitialized()
         }
     }
 
     override fun onPlayerError(error: PlaybackException) {
+        val details = playbackErrorDetails(error)
+        logPlayerError(error, details)
         sendEvent(
             mapOf(
                 "event" to "error",
-                "error" to playbackErrorPayload(error),
+                "error" to playbackErrorPayload(error, details),
             ),
         )
     }
@@ -176,9 +219,25 @@ class M3u8AndroidPlayer(
             .build()
         val renderersFactory = DefaultRenderersFactory(context)
             .setEnableDecoderFallback(true)
+        val trackSelector = DefaultTrackSelector(context)
+        videoTrackCompatLimit?.let { limit ->
+            trackSelector.setParameters(
+                trackSelector.buildUponParameters()
+                    .setMaxVideoSize(limit.maxWidth, limit.maxHeight)
+                    .setExceedVideoConstraintsIfNecessary(true),
+            )
+        }
+        logInfo(
+            "createPlayer playerId=${surfaceProducer.id()} source=$sourceDebugId " +
+                "restore=${state != null} restorePositionMs=${state?.positionMs ?: 0L} " +
+                "restorePlayWhenReady=${state?.playWhenReady} decoderFallback=true " +
+                "trackCompat=${videoTrackCompatLimit?.description() ?: "none"} " +
+                "bufferMs=$MIN_BUFFER_MS-$MAX_BUFFER_MS",
+        )
         val newPlayer = ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
+            .setTrackSelector(trackSelector)
             .build()
         newPlayer.addListener(this)
         newPlayer.setMediaItem(mediaItem)
@@ -189,6 +248,7 @@ class M3u8AndroidPlayer(
         }
         newPlayer.prepare()
         player = newPlayer
+        logInfo("prepare playerId=${surfaceProducer.id()} source=$sourceDebugId")
     }
 
     private fun sendInitialized() {
@@ -235,11 +295,14 @@ class M3u8AndroidPlayer(
         )
     }
 
-    private fun playbackErrorPayload(error: PlaybackException): Map<String, Any?> {
+    private fun playbackErrorPayload(
+        error: PlaybackException,
+        details: Map<String, Any?>,
+    ): Map<String, Any?> {
         return mapOf(
             "code" to error.errorCodeName,
             "message" to (error.message ?: "Playback failed."),
-            "details" to playbackErrorDetails(error),
+            "details" to details,
         )
     }
 
@@ -251,10 +314,13 @@ class M3u8AndroidPlayer(
             "errorCodeName" to error.errorCodeName,
             "device" to mapOf(
                 "manufacturer" to Build.MANUFACTURER,
+                "brand" to Build.BRAND,
                 "model" to Build.MODEL,
                 "device" to Build.DEVICE,
+                "product" to Build.PRODUCT,
                 "sdkInt" to Build.VERSION.SDK_INT,
             ),
+            "trackCompat" to videoTrackCompatLimit?.description(),
             "cause" to error.cause?.javaClass?.name,
             "causeMessage" to error.cause?.message,
         )
@@ -275,6 +341,25 @@ class M3u8AndroidPlayer(
             ExoPlaybackException.TYPE_REMOTE -> "remote"
             else -> "playback"
         }
+    }
+
+    private fun logPlayerError(error: PlaybackException, details: Map<String, Any?>) {
+        M3u8Log.error(
+            "error playerId=${surfaceProducer.id()} source=$sourceDebugId " +
+                "type=${details["type"]} code=${details["errorCodeName"]} " +
+                "message=${error.message} cause=${details["cause"]} " +
+                "causeMessage=${details["causeMessage"]} " +
+                "rendererName=${details["rendererName"]} " +
+                "rendererIndex=${details["rendererIndex"]} " +
+                "rendererFormat=${details["rendererFormat"]} " +
+                "trackCompat=${details["trackCompat"]} " +
+                "device=${Build.MANUFACTURER}/${Build.MODEL} sdk=${Build.VERSION.SDK_INT}",
+            error,
+        )
+    }
+
+    private fun logInfo(message: String) {
+        M3u8Log.info(message)
     }
 
     private fun sendEvent(payload: Map<String, Any?>) {
@@ -300,6 +385,52 @@ class M3u8AndroidPlayer(
         val positionMs: Long,
         val playWhenReady: Boolean,
     )
+
+    private fun Int.name(): String {
+        return when (this) {
+            Player.STATE_IDLE -> "idle"
+            Player.STATE_BUFFERING -> "buffering"
+            Player.STATE_READY -> "ready"
+            Player.STATE_ENDED -> "ended"
+            else -> "unknown:$this"
+        }
+    }
+
+    private fun videoTrackCompatLimit(): VideoTrackCompatLimit? {
+        if (!isHuaweiP30Android9()) {
+            return null
+        }
+        return VideoTrackCompatLimit(
+            name = "huawei_p30_android9_720p",
+            maxWidth = 1280,
+            maxHeight = 720,
+        )
+    }
+
+    private fun isHuaweiP30Android9(): Boolean {
+        if (
+            !Build.MANUFACTURER.equals("HUAWEI", ignoreCase = true) ||
+                Build.VERSION.SDK_INT != Build.VERSION_CODES.P
+        ) {
+            return false
+        }
+        val deviceName = listOf(Build.MODEL, Build.DEVICE, Build.PRODUCT)
+            .joinToString(separator = " ")
+            .uppercase()
+        return deviceName.contains("P30") ||
+            deviceName.contains("ELE-") ||
+            deviceName.contains("HWELE")
+    }
+
+    private data class VideoTrackCompatLimit(
+        val name: String,
+        val maxWidth: Int,
+        val maxHeight: Int,
+    ) {
+        fun description(): String {
+            return "$name:${maxWidth}x$maxHeight"
+        }
+    }
 
     private companion object {
         const val PROGRESS_INTERVAL_MS = 250L

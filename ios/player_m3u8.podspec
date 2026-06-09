@@ -9,7 +9,7 @@ Pod::Spec.new do |s|
   s.description      = <<-DESC
 Texture-based HLS/m3u8 playback for iOS and Android Flutter apps.
                        DESC
-  s.homepage         = 'https://example.com/player_m3u8'
+  s.homepage         = 'https://github.com/yanmingLiu/player_m3u8'
   s.license          = { :file => '../LICENSE' }
   s.author           = { 'player_m3u8' => 'noreply@example.com' }
   s.source           = { :path => '.' }

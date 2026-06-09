@@ -11,7 +11,9 @@ final class M3u8DiskCachePrefetcher {
   private let session = URLSession(configuration: .ephemeral)
   private let lock = NSLock()
   private var cancelled = false
+  private var generation = 0
   private var currentTask: URLSessionTask?
+  private var playlist: Playlist?
 
   init(
     url: URL,
@@ -26,35 +28,59 @@ final class M3u8DiskCachePrefetcher {
   }
 
   func start() {
+    restart(from: 0)
+  }
+
+  func restart(from positionMs: Int64) {
+    lock.lock()
+    guard !cancelled else {
+      lock.unlock()
+      return
+    }
+    generation += 1
+    let taskGeneration = generation
+    let task = currentTask
+    lock.unlock()
+    task?.cancel()
     queue.async { [weak self] in
-      self?.cacheVod()
+      self?.cacheVod(startPositionMs: max(positionMs, 0), generation: taskGeneration)
     }
   }
 
   func cancel() {
     lock.lock()
     cancelled = true
+    generation += 1
     let task = currentTask
     lock.unlock()
     task?.cancel()
     session.invalidateAndCancel()
   }
 
-  private func cacheVod() {
+  private func cacheVod(startPositionMs: Int64, generation taskGeneration: Int) {
     do {
-      let playlist = try loadPlaylist(url: url)
-      guard !playlist.segments.isEmpty, playlist.durationMs > 0 else { return }
+      let playlist = try self.playlist ?? loadPlaylist(url: url)
+      self.playlist = playlist
+      guard !playlist.segments.isEmpty, playlist.durationMs > 0, isCurrent(taskGeneration) else {
+        return
+      }
 
       let directory = try cacheDirectory(for: url)
-      var diskCachePositionMs: Int64 = 0
+      let startIndex = playlist.segmentIndex(for: startPositionMs)
+      let orderedSegments = Array(playlist.segments[startIndex...])
+        + Array(playlist.segments[..<startIndex])
+      let diskCacheStartMs = playlist.segments[startIndex].startTimeMs
+      var diskCachePositionMs = diskCacheStartMs
       sendDiskCacheProgress(
+        diskCacheStartMs: diskCacheStartMs,
         diskCachePositionMs: diskCachePositionMs,
         durationMs: playlist.durationMs,
-        isComplete: false
+        isComplete: false,
+        generation: taskGeneration
       )
 
       for resource in playlist.resources {
-        if isCancelled { return }
+        if !isCurrent(taskGeneration) { return }
         let destination = directory.appendingPathComponent(
           "resource_\(cacheKey(for: resource.absoluteString)).cache"
         )
@@ -63,25 +89,33 @@ final class M3u8DiskCachePrefetcher {
         }
       }
 
-      for (index, segment) in playlist.segments.enumerated() {
-        if isCancelled { return }
-        let destination = directory.appendingPathComponent("segment_\(index).cache")
+      for segment in orderedSegments {
+        if !isCurrent(taskGeneration) { return }
+        let destination = directory.appendingPathComponent(
+          "segment_\(segment.index)_\(cacheKey(for: segment.url.absoluteString)).cache"
+        )
         if !FileManager.default.fileExists(atPath: destination.path) {
           try downloadFile(from: segment.url, to: destination)
         }
-        diskCachePositionMs = min(diskCachePositionMs + segment.durationMs, playlist.durationMs)
-        sendDiskCacheProgress(
-          diskCachePositionMs: diskCachePositionMs,
-          durationMs: playlist.durationMs,
-          isComplete: false
-        )
+        if segment.startTimeMs >= diskCacheStartMs {
+          diskCachePositionMs = min(segment.endTimeMs, playlist.durationMs)
+          sendDiskCacheProgress(
+            diskCacheStartMs: diskCacheStartMs,
+            diskCachePositionMs: diskCachePositionMs,
+            durationMs: playlist.durationMs,
+            isComplete: false,
+            generation: taskGeneration
+          )
+        }
       }
 
-      if !isCancelled {
+      if isCurrent(taskGeneration) {
         sendDiskCacheProgress(
+          diskCacheStartMs: 0,
           diskCachePositionMs: playlist.durationMs,
           durationMs: playlist.durationMs,
-          isComplete: true
+          isComplete: true,
+          generation: taskGeneration
         )
       }
     } catch {
@@ -103,6 +137,7 @@ final class M3u8DiskCachePrefetcher {
     var resources: [URL] = []
     var childPlaylists: [URL] = []
     var pendingDurationMs: Int64?
+    var pendingStartTimeMs: Int64 = 0
 
     for rawLine in text.components(separatedBy: .newlines) {
       let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -120,7 +155,17 @@ final class M3u8DiskCachePrefetcher {
         continue
       } else if let durationMs = pendingDurationMs {
         if let segmentUrl = URL(string: line, relativeTo: playlistUrl)?.absoluteURL {
-          segments.append(Segment(url: segmentUrl, durationMs: durationMs))
+          let startTimeMs = pendingStartTimeMs
+          let endTimeMs = startTimeMs + durationMs
+          segments.append(
+            Segment(
+              index: segments.count,
+              url: segmentUrl,
+              startTimeMs: startTimeMs,
+              endTimeMs: endTimeMs
+            )
+          )
+          pendingStartTimeMs = endTimeMs
         }
         pendingDurationMs = nil
       } else if let childPlaylist = URL(string: line, relativeTo: playlistUrl)?.absoluteURL {
@@ -132,7 +177,7 @@ final class M3u8DiskCachePrefetcher {
       return Playlist(
         segments: segments,
         resources: resources,
-        durationMs: segments.reduce(0) { $0 + $1.durationMs }
+        durationMs: segments.last?.endTimeMs ?? 0
       )
     }
 
@@ -241,19 +286,26 @@ final class M3u8DiskCachePrefetcher {
   }
 
   private func sendDiskCacheProgress(
+    diskCacheStartMs: Int64,
     diskCachePositionMs: Int64,
     durationMs: Int64,
-    isComplete: Bool
+    isComplete: Bool,
+    generation taskGeneration: Int
   ) {
     DispatchQueue.main.async { [weak self] in
-      guard let self, !self.isCancelled else { return }
+      guard let self, self.isCurrent(taskGeneration) else { return }
       let playerId = self.playerIdProvider()
       guard playerId >= 0 else { return }
+      let percent = durationMs <= 0
+        ? 0.0
+        : min(max(Double(diskCachePositionMs) / Double(durationMs) * 100.0, 0), 100)
       self.eventSinkProvider()?([
         "playerId": playerId,
         "event": "diskCache",
         "duration": durationMs,
+        "diskCacheStartPosition": diskCacheStartMs,
         "diskCachePosition": diskCachePositionMs,
+        "diskCachePercent": percent,
         "isDiskCacheComplete": isComplete,
       ])
     }
@@ -263,6 +315,12 @@ final class M3u8DiskCachePrefetcher {
     lock.lock()
     defer { lock.unlock() }
     return cancelled
+  }
+
+  private func isCurrent(_ taskGeneration: Int) -> Bool {
+    lock.lock()
+    defer { lock.unlock() }
+    return !cancelled && generation == taskGeneration
   }
 
   private func setCurrentTask(_ task: URLSessionTask?) {
@@ -275,10 +333,19 @@ final class M3u8DiskCachePrefetcher {
     let segments: [Segment]
     let resources: [URL]
     let durationMs: Int64
+
+    func segmentIndex(for positionMs: Int64) -> Int {
+      guard !segments.isEmpty else { return 0 }
+      let normalizedPositionMs = min(max(positionMs, 0), durationMs)
+      return segments.firstIndex { normalizedPositionMs < $0.endTimeMs }
+        ?? segments.index(before: segments.endIndex)
+    }
   }
 
   private struct Segment {
+    let index: Int
     let url: URL
-    let durationMs: Int64
+    let startTimeMs: Int64
+    let endTimeMs: Int64
   }
 }

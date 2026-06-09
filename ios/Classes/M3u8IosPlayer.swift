@@ -72,6 +72,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   func seek(to positionMs: Int64) {
     guard !disposed else { return }
     let seconds = Double(max(positionMs, 0)) / 1000.0
+    diskCachePrefetcher?.restart(from: positionMs)
     player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600)) { [weak self] _ in
       self?.sendProgress()
       self?.textureRegistry.textureFrameAvailable(self?.textureId ?? -1)

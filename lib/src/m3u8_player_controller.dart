@@ -145,6 +145,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       return;
     }
     final diskCachePosition = _diskCachePositionFor(event);
+    final diskCacheStartPosition = event.diskCacheStartPosition;
     final nextValue = switch (event.type) {
       M3u8PlayerEventType.initialized => value.copyWith(
         isInitialized: true,
@@ -152,6 +153,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         isCompleted: false,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
+        diskCacheStartPosition: diskCacheStartPosition,
         diskCachePosition: diskCachePosition,
         diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
@@ -163,6 +165,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         position: event.position,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
+        diskCacheStartPosition: diskCacheStartPosition,
         diskCachePosition: diskCachePosition,
         diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
@@ -171,6 +174,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         position: event.position,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
+        diskCacheStartPosition: diskCacheStartPosition,
         diskCachePosition: diskCachePosition,
         diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
@@ -182,6 +186,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         position: event.position,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
+        diskCacheStartPosition: diskCacheStartPosition,
         diskCachePosition: diskCachePosition,
         diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
@@ -193,6 +198,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         position: event.position,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
+        diskCacheStartPosition: diskCacheStartPosition,
         diskCachePosition: diskCachePosition,
         diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
@@ -204,12 +210,14 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         position: event.position ?? value.duration,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
+        diskCacheStartPosition: diskCacheStartPosition,
         diskCachePosition: diskCachePosition,
         diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
       ),
       M3u8PlayerEventType.diskCache => value.copyWith(
         duration: value.duration == Duration.zero ? event.duration : null,
+        diskCacheStartPosition: diskCacheStartPosition,
         diskCachePosition: diskCachePosition,
         diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,

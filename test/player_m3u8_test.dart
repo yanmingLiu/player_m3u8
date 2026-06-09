@@ -62,6 +62,7 @@ void main() {
       'playerId': 4,
       'event': 'diskCache',
       'duration': 60000,
+      'diskCacheStartPosition': 15000,
       'diskCachePosition': 30000,
       'diskCachePercent': 50.0,
       'isDiskCacheComplete': false,
@@ -70,6 +71,7 @@ void main() {
     expect(event.playerId, 4);
     expect(event.type, M3u8PlayerEventType.diskCache);
     expect(event.duration, const Duration(seconds: 60));
+    expect(event.diskCacheStartPosition, const Duration(seconds: 15));
     expect(event.diskCachePosition, const Duration(seconds: 30));
     expect(event.diskCachePercent, 50.0);
     expect(event.isDiskCacheComplete, false);
@@ -94,6 +96,7 @@ void main() {
         type: M3u8PlayerEventType.initialized,
         duration: Duration(seconds: 120),
         bufferedPosition: Duration(seconds: 10),
+        diskCacheStartPosition: Duration.zero,
         diskCachePosition: Duration(seconds: 30),
         size: Size(1920, 1080),
       ),
@@ -111,12 +114,17 @@ void main() {
         playerId: 7,
         type: M3u8PlayerEventType.diskCache,
         duration: Duration(seconds: 120),
+        diskCacheStartPosition: Duration(seconds: 30),
         diskCachePosition: Duration(seconds: 90),
         isDiskCacheComplete: false,
       ),
     );
     await pumpEventQueue();
 
+    expect(
+      controller.value.diskCacheStartPosition,
+      const Duration(seconds: 30),
+    );
     expect(controller.value.diskCachePosition, const Duration(seconds: 90));
     expect(controller.value.isDiskCacheComplete, false);
 

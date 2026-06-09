@@ -299,6 +299,12 @@ class _BufferedSeekBarState extends State<_BufferedSeekBar> {
     final bufferedMs = durationMs == 0
         ? 0
         : value.visibleBufferedPosition.inMilliseconds.clamp(0, durationMs);
+    final bufferedStartMs = durationMs == 0
+        ? 0
+        : value.visibleBufferedStartPosition.inMilliseconds.clamp(
+            0,
+            bufferedMs,
+          );
     final enabled = value.isInitialized && durationMs > 0;
     final playedFraction = durationMs == 0
         ? 0.0
@@ -339,6 +345,9 @@ class _BufferedSeekBarState extends State<_BufferedSeekBar> {
               child: CustomPaint(
                 painter: _BufferedTrackPainter(
                   playedFraction: playedFraction,
+                  bufferedStartFraction: durationMs == 0
+                      ? 0
+                      : bufferedStartMs / durationMs,
                   bufferedFraction: durationMs == 0
                       ? 0
                       : bufferedMs / durationMs,
@@ -405,11 +414,13 @@ class _BufferedSeekBarState extends State<_BufferedSeekBar> {
 class _BufferedTrackPainter extends CustomPainter {
   const _BufferedTrackPainter({
     required this.playedFraction,
+    required this.bufferedStartFraction,
     required this.bufferedFraction,
     required this.isScrubbing,
   });
 
   final double playedFraction;
+  final double bufferedStartFraction;
   final double bufferedFraction;
   final bool isScrubbing;
 
@@ -440,16 +451,20 @@ class _BufferedTrackPainter extends CustomPainter {
 
     void drawSegment({
       required Rect rect,
+      double startFraction = 0,
       required double fraction,
       required Color color,
     }) {
-      final width = (rect.width * fraction.clamp(0.0, 1.0)).toDouble();
+      final start = startFraction.clamp(0.0, 1.0).toDouble();
+      final end = fraction.clamp(start, 1.0).toDouble();
+      final left = rect.left + rect.width * start;
+      final width = rect.width * (end - start);
       if (width <= 0) {
         return;
       }
       canvas.drawRRect(
         RRect.fromRectAndRadius(
-          Rect.fromLTWH(rect.left, rect.top, width, rect.height),
+          Rect.fromLTWH(left, rect.top, width, rect.height),
           Radius.circular(rect.height / 2),
         ),
         Paint()..color = color,
@@ -462,6 +477,7 @@ class _BufferedTrackPainter extends CustomPainter {
     );
     drawSegment(
       rect: bufferedRect,
+      startFraction: bufferedStartFraction,
       fraction: bufferedFraction,
       color: const Color(0xFFFFB74D),
     );
@@ -493,6 +509,7 @@ class _BufferedTrackPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _BufferedTrackPainter oldDelegate) {
     return oldDelegate.playedFraction != playedFraction ||
+        oldDelegate.bufferedStartFraction != bufferedStartFraction ||
         oldDelegate.bufferedFraction != bufferedFraction ||
         oldDelegate.isScrubbing != isScrubbing;
   }
@@ -537,7 +554,8 @@ class _PlaybackStats extends StatelessWidget {
             '${_formatDuration(value.duration)} ($bufferedPercent%)',
           ),
           Text(
-            'Disk cache: ${_formatDuration(value.diskCachePosition)} / '
+            'Disk cache: ${_formatDuration(value.diskCacheStartPosition)} - '
+            '${_formatDuration(value.diskCachePosition)} / '
             '${_formatDuration(value.duration)} ($diskCachePercent%)'
             '${value.isDiskCacheComplete ? ' complete' : ''}',
           ),

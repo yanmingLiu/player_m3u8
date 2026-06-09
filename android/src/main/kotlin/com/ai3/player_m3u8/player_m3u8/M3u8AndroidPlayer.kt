@@ -1,6 +1,7 @@
 package com.ai3.player_m3u8.player_m3u8
 
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.MediaItem
@@ -9,6 +10,8 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.DefaultLoadControl
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import io.flutter.plugin.common.EventChannel
@@ -71,6 +74,7 @@ class M3u8AndroidPlayer(
     fun seekTo(positionMs: Long) {
         runOnMain {
             player?.seekTo(positionMs)
+            diskCachePrefetcher.restartFrom(positionMs)
             sendProgress(force = true)
         }
     }
@@ -149,11 +153,7 @@ class M3u8AndroidPlayer(
         sendEvent(
             mapOf(
                 "event" to "error",
-                "error" to mapOf(
-                    "code" to (error.errorCodeName ?: "playback_error"),
-                    "message" to (error.message ?: "Playback failed."),
-                    "details" to error.cause?.message,
-                ),
+                "error" to playbackErrorPayload(error),
             ),
         )
     }
@@ -174,7 +174,9 @@ class M3u8AndroidPlayer(
                 BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
             )
             .build()
-        val newPlayer = ExoPlayer.Builder(context)
+        val renderersFactory = DefaultRenderersFactory(context)
+            .setEnableDecoderFallback(true)
+        val newPlayer = ExoPlayer.Builder(context, renderersFactory)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
             .build()
@@ -231,6 +233,48 @@ class M3u8AndroidPlayer(
             "duration" to duration,
             "bufferedPosition" to (currentPlayer?.bufferedPosition?.coerceAtLeast(0L) ?: 0L),
         )
+    }
+
+    private fun playbackErrorPayload(error: PlaybackException): Map<String, Any?> {
+        return mapOf(
+            "code" to error.errorCodeName,
+            "message" to (error.message ?: "Playback failed."),
+            "details" to playbackErrorDetails(error),
+        )
+    }
+
+    private fun playbackErrorDetails(error: PlaybackException): Map<String, Any?> {
+        val details = linkedMapOf<String, Any?>(
+            "platform" to "android",
+            "type" to playbackErrorType(error),
+            "errorCode" to error.errorCode,
+            "errorCodeName" to error.errorCodeName,
+            "device" to mapOf(
+                "manufacturer" to Build.MANUFACTURER,
+                "model" to Build.MODEL,
+                "device" to Build.DEVICE,
+                "sdkInt" to Build.VERSION.SDK_INT,
+            ),
+            "cause" to error.cause?.javaClass?.name,
+            "causeMessage" to error.cause?.message,
+        )
+        if (error is ExoPlaybackException) {
+            details["rendererName"] = error.rendererName
+            details["rendererIndex"] = error.rendererIndex
+            details["rendererFormat"] = error.rendererFormat?.toString()
+            details["rendererFormatSupport"] = error.rendererFormatSupport
+        }
+        return details
+    }
+
+    private fun playbackErrorType(error: PlaybackException): String {
+        return when ((error as? ExoPlaybackException)?.type) {
+            ExoPlaybackException.TYPE_SOURCE -> "source"
+            ExoPlaybackException.TYPE_RENDERER -> "renderer"
+            ExoPlaybackException.TYPE_UNEXPECTED -> "unexpected"
+            ExoPlaybackException.TYPE_REMOTE -> "remote"
+            else -> "playback"
+        }
     }
 
     private fun sendEvent(payload: Map<String, Any?>) {

@@ -11,7 +11,7 @@
 - 支持平台：Android 和 iOS。
 - 渲染方式：Flutter `Texture`，不要改成 PlatformView。
 - Android 使用 Media3 ExoPlayer。
-- Android HLS 播放和磁盘预取优先使用 Media3 自带能力，例如 `HlsMediaSource`/`HlsDownloader`，不要手写 m3u8 分片解析作为主链路。
+- Android HLS 播放和磁盘预取优先使用 Media3 自带能力，例如 `HlsMediaSource`、`HlsDownloader`、`HlsPlaylistParser`、`CacheWriter`，不要手写 m3u8 分片解析作为主链路。
 - iOS 使用 AVFoundation。
 
 ## Playback And Cache Rules
@@ -22,6 +22,7 @@
 - 切换 source 时必须释放旧 native player，并取消旧 source 的主动预下载任务。
 - 旧 source 已经写入磁盘的数据可以保留复用，但旧 source 不应继续后台下载。
 - 当前 source 暂停播放时可以继续磁盘预取，直到完成或 dispose/source 切换。
+- 当前 source seek 后应取消当前主动预取，并从 seek 目标时间对应的分片开始优先预取。
 
 ## Validation
 

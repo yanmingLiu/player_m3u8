@@ -12,6 +12,7 @@ class M3u8PlayerValue {
     this.position = Duration.zero,
     this.duration = Duration.zero,
     this.bufferedPosition = Duration.zero,
+    this.diskCacheStartPosition = Duration.zero,
     this.diskCachePosition = Duration.zero,
     this.diskCachePercent = 0,
     this.isDiskCacheComplete = false,
@@ -26,6 +27,7 @@ class M3u8PlayerValue {
   final Duration position;
   final Duration duration;
   final Duration bufferedPosition;
+  final Duration diskCacheStartPosition;
   final Duration diskCachePosition;
   final double diskCachePercent;
   final bool isDiskCacheComplete;
@@ -38,6 +40,12 @@ class M3u8PlayerValue {
     return diskCachePosition > bufferedPosition
         ? diskCachePosition
         : bufferedPosition;
+  }
+
+  Duration get visibleBufferedStartPosition {
+    return diskCachePosition > bufferedPosition
+        ? diskCacheStartPosition
+        : Duration.zero;
   }
 
   double get aspectRatio {
@@ -55,6 +63,7 @@ class M3u8PlayerValue {
     Duration? position,
     Duration? duration,
     Duration? bufferedPosition,
+    Duration? diskCacheStartPosition,
     Duration? diskCachePosition,
     double? diskCachePercent,
     bool? isDiskCacheComplete,
@@ -69,6 +78,8 @@ class M3u8PlayerValue {
       position: position ?? this.position,
       duration: duration ?? this.duration,
       bufferedPosition: bufferedPosition ?? this.bufferedPosition,
+      diskCacheStartPosition:
+          diskCacheStartPosition ?? this.diskCacheStartPosition,
       diskCachePosition: diskCachePosition ?? this.diskCachePosition,
       diskCachePercent: diskCachePercent ?? this.diskCachePercent,
       isDiskCacheComplete: isDiskCacheComplete ?? this.isDiskCacheComplete,
@@ -89,6 +100,7 @@ class M3u8PlayerValue {
         'position: $position, '
         'duration: $duration, '
         'bufferedPosition: $bufferedPosition, '
+        'diskCacheStartPosition: $diskCacheStartPosition, '
         'diskCachePosition: $diskCachePosition, '
         'diskCachePercent: $diskCachePercent, '
         'isDiskCacheComplete: $isDiskCacheComplete, '

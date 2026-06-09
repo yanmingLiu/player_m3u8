@@ -1,0 +1,589 @@
+import 'package:flutter/material.dart';
+import 'package:player_m3u8/player_m3u8.dart';
+
+const String sampleM3u8Url =
+    'https://prod-gg.niftyvaughanpxnew.com/movies/795bf902-1d7a-4811-af9e-239f0a232f3a-216100/index.m3u8';
+
+const List<VideoSource> sampleVideos = <VideoSource>[
+  VideoSource(title: 'Nifty VOD', url: sampleM3u8Url),
+  VideoSource(
+    title: 'Nifty VOD 292394',
+    url:
+        'https://prod-gg.niftyvaughanpxnew.com/movies/7b318dc9-64cb-49dd-bdc0-d28b80f6ed53-292394/index.m3u8',
+  ),
+  VideoSource(
+    title: 'Nifty VOD 198867',
+    url:
+        'https://prod-gg.niftyvaughanpxnew.com/movies/b6cf4a77-6fa1-4b15-b5ec-f440b923c281-198867/index.m3u8',
+  ),
+  VideoSource(
+    title: 'Mux HLS Test',
+    url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+  ),
+  VideoSource(
+    title: 'Tears of Steel',
+    url:
+        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+  ),
+  VideoSource(
+    title: 'Apple BipBop',
+    url:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8',
+  ),
+];
+
+void main() {
+  runApp(const PlayerM3u8ExampleApp());
+}
+
+class VideoSource {
+  const VideoSource({required this.title, required this.url});
+
+  final String title;
+  final String url;
+}
+
+class PlayerM3u8ExampleApp extends StatelessWidget {
+  const PlayerM3u8ExampleApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'M3U8 Player',
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F766E)),
+        useMaterial3: true,
+      ),
+      home: const PlayerExamplePage(),
+    );
+  }
+}
+
+typedef M3u8ControllerFactory = M3u8PlayerController Function();
+
+class PlayerExamplePage extends StatefulWidget {
+  const PlayerExamplePage({
+    super.key,
+    this.controllerFactory,
+    this.autoInitialize = true,
+  });
+
+  final M3u8ControllerFactory? controllerFactory;
+  final bool autoInitialize;
+
+  @override
+  State<PlayerExamplePage> createState() => _PlayerExamplePageState();
+}
+
+class _PlayerExamplePageState extends State<PlayerExamplePage> {
+  late final M3u8PlayerController _controller;
+  bool _initializing = true;
+  bool _switching = false;
+  int _currentVideoIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = widget.controllerFactory?.call() ?? M3u8PlayerController();
+    if (widget.autoInitialize) {
+      _initialize();
+    } else {
+      _initializing = false;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      await _controller.initialize(sampleVideos[_currentVideoIndex].url);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _initializing = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _selectVideo(int index) async {
+    if (_switching || index == _currentVideoIndex) {
+      return;
+    }
+    setState(() {
+      _currentVideoIndex = index;
+      _switching = true;
+    });
+    try {
+      await _controller.setSource(sampleVideos[index].url, autoPlay: true);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _switching = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('M3U8 Player')),
+      body: SafeArea(
+        child: ValueListenableBuilder<M3u8PlayerValue>(
+          valueListenable: _controller,
+          builder:
+              (BuildContext context, M3u8PlayerValue value, Widget? child) {
+                return ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    AspectRatio(
+                      aspectRatio: value.aspectRatio,
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          M3u8Player(controller: _controller),
+                          if (_initializing || _switching || value.isBuffering)
+                            const Center(child: CircularProgressIndicator()),
+                          if (value.hasError)
+                            _ErrorOverlay(error: value.error!),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    _PlaylistControls(
+                      videos: sampleVideos,
+                      currentIndex: _currentVideoIndex,
+                      switching: _switching,
+                      onSelected: _selectVideo,
+                    ),
+                    const SizedBox(height: 16),
+                    _Controls(controller: _controller, value: value),
+                    const SizedBox(height: 16),
+                    _PlaybackStats(value: value),
+                  ],
+                );
+              },
+        ),
+      ),
+    );
+  }
+}
+
+class _PlaylistControls extends StatelessWidget {
+  const _PlaylistControls({
+    required this.videos,
+    required this.currentIndex,
+    required this.switching,
+    required this.onSelected,
+  });
+
+  final List<VideoSource> videos;
+  final int currentIndex;
+  final bool switching;
+  final ValueChanged<int> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final canGoPrevious = !switching && currentIndex > 0;
+    final canGoNext = !switching && currentIndex < videos.length - 1;
+    return Row(
+      children: [
+        IconButton.outlined(
+          tooltip: 'Previous video',
+          onPressed: canGoPrevious ? () => onSelected(currentIndex - 1) : null,
+          icon: const Icon(Icons.skip_previous),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: DropdownButtonFormField<int>(
+            key: ValueKey<int>(currentIndex),
+            initialValue: currentIndex,
+            isExpanded: true,
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
+            items: [
+              for (var index = 0; index < videos.length; index += 1)
+                DropdownMenuItem<int>(
+                  value: index,
+                  child: Text(
+                    videos[index].title,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: switching
+                ? null
+                : (int? index) {
+                    if (index != null) {
+                      onSelected(index);
+                    }
+                  },
+          ),
+        ),
+        const SizedBox(width: 8),
+        IconButton.outlined(
+          tooltip: 'Next video',
+          onPressed: canGoNext ? () => onSelected(currentIndex + 1) : null,
+          icon: const Icon(Icons.skip_next),
+        ),
+      ],
+    );
+  }
+}
+
+class _Controls extends StatelessWidget {
+  const _Controls({required this.controller, required this.value});
+
+  final M3u8PlayerController controller;
+  final M3u8PlayerValue value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            IconButton.filled(
+              tooltip: value.isPlaying ? 'Pause' : 'Play',
+              onPressed: value.isInitialized
+                  ? () {
+                      if (value.isPlaying) {
+                        controller.pause();
+                      } else {
+                        controller.play();
+                      }
+                    }
+                  : null,
+              icon: Icon(value.isPlaying ? Icons.pause : Icons.play_arrow),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _BufferedSeekBar(controller: controller, value: value),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _BufferedSeekBar extends StatefulWidget {
+  const _BufferedSeekBar({required this.controller, required this.value});
+
+  final M3u8PlayerController controller;
+  final M3u8PlayerValue value;
+
+  @override
+  State<_BufferedSeekBar> createState() => _BufferedSeekBarState();
+}
+
+class _BufferedSeekBarState extends State<_BufferedSeekBar> {
+  bool _isScrubbing = false;
+  double? _scrubFraction;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = widget.value;
+    final durationMs = value.duration.inMilliseconds;
+    final positionMs = durationMs == 0
+        ? 0
+        : value.position.inMilliseconds.clamp(0, durationMs);
+    final bufferedMs = durationMs == 0
+        ? 0
+        : value.visibleBufferedPosition.inMilliseconds.clamp(0, durationMs);
+    final enabled = value.isInitialized && durationMs > 0;
+    final playedFraction = durationMs == 0
+        ? 0.0
+        : (_scrubFraction ?? positionMs / durationMs);
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 160),
+      curve: Curves.easeOutCubic,
+      height: _isScrubbing ? 48 : 36,
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          return GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapDown: enabled
+                ? (TapDownDetails details) {
+                    _seekFromDx(details.localPosition.dx, constraints.maxWidth);
+                  }
+                : null,
+            onHorizontalDragStart: enabled
+                ? (DragStartDetails details) {
+                    _beginScrub(details.localPosition.dx, constraints.maxWidth);
+                  }
+                : null,
+            onHorizontalDragUpdate: enabled
+                ? (DragUpdateDetails details) {
+                    _updateScrub(
+                      details.localPosition.dx,
+                      constraints.maxWidth,
+                    );
+                  }
+                : null,
+            onHorizontalDragEnd: enabled ? (_) => _endScrub() : null,
+            onHorizontalDragCancel: enabled ? _endScrub : null,
+            child: Semantics(
+              label: 'Playback progress',
+              value:
+                  '${_formatDuration(value.position)} of ${_formatDuration(value.duration)}',
+              child: CustomPaint(
+                painter: _BufferedTrackPainter(
+                  playedFraction: playedFraction,
+                  bufferedFraction: durationMs == 0
+                      ? 0
+                      : bufferedMs / durationMs,
+                  isScrubbing: _isScrubbing,
+                ),
+                child: const SizedBox.expand(),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _beginScrub(double dx, double width) {
+    setState(() {
+      _isScrubbing = true;
+      _scrubFraction = _fractionForDx(dx, width);
+    });
+    _seekToFraction(_scrubFraction);
+  }
+
+  void _updateScrub(double dx, double width) {
+    final fraction = _fractionForDx(dx, width);
+    setState(() {
+      _scrubFraction = fraction;
+    });
+    _seekToFraction(fraction);
+  }
+
+  void _endScrub() {
+    if (!_isScrubbing) {
+      return;
+    }
+    setState(() {
+      _isScrubbing = false;
+      _scrubFraction = null;
+    });
+  }
+
+  void _seekFromDx(double dx, double width) {
+    final fraction = _fractionForDx(dx, width);
+    _seekToFraction(fraction);
+  }
+
+  double _fractionForDx(double dx, double width) {
+    if (width <= 0) {
+      return 0;
+    }
+    return (dx / width).clamp(0.0, 1.0);
+  }
+
+  void _seekToFraction(double? fraction) {
+    final durationMs = widget.value.duration.inMilliseconds;
+    if (fraction == null || durationMs <= 0) {
+      return;
+    }
+    widget.controller.seekTo(
+      Duration(milliseconds: (durationMs * fraction).round()),
+    );
+  }
+}
+
+class _BufferedTrackPainter extends CustomPainter {
+  const _BufferedTrackPainter({
+    required this.playedFraction,
+    required this.bufferedFraction,
+    required this.isScrubbing,
+  });
+
+  final double playedFraction;
+  final double bufferedFraction;
+  final bool isScrubbing;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final baseHeight = isScrubbing ? 7.0 : 4.0;
+    final bufferedHeight = isScrubbing ? 9.0 : 6.0;
+    final playedHeight = isScrubbing ? 12.0 : 7.0;
+    final centerY = size.height / 2;
+    final baseRect = Rect.fromLTWH(
+      0,
+      centerY - baseHeight / 2,
+      size.width,
+      baseHeight,
+    );
+    final bufferedRect = Rect.fromLTWH(
+      0,
+      centerY - bufferedHeight / 2,
+      size.width,
+      bufferedHeight,
+    );
+    final playedRect = Rect.fromLTWH(
+      0,
+      centerY - playedHeight / 2,
+      size.width,
+      playedHeight,
+    );
+
+    void drawSegment({
+      required Rect rect,
+      required double fraction,
+      required Color color,
+    }) {
+      final width = (rect.width * fraction.clamp(0.0, 1.0)).toDouble();
+      if (width <= 0) {
+        return;
+      }
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(
+          Rect.fromLTWH(rect.left, rect.top, width, rect.height),
+          Radius.circular(rect.height / 2),
+        ),
+        Paint()..color = color,
+      );
+    }
+
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(baseRect, Radius.circular(baseRect.height / 2)),
+      Paint()..color = const Color(0xFFD6DDD9),
+    );
+    drawSegment(
+      rect: bufferedRect,
+      fraction: bufferedFraction,
+      color: const Color(0xFFFFB74D),
+    );
+    drawSegment(
+      rect: playedRect,
+      fraction: playedFraction,
+      color: const Color(0xFF006B5F),
+    );
+
+    final markerX = size.width * playedFraction.clamp(0.0, 1.0);
+    if (!isScrubbing) {
+      return;
+    }
+    canvas.drawCircle(
+      Offset(markerX, centerY),
+      10,
+      Paint()..color = const Color(0xFFFFFFFF),
+    );
+    canvas.drawCircle(
+      Offset(markerX, centerY),
+      10,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..color = const Color(0xFF006B5F),
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BufferedTrackPainter oldDelegate) {
+    return oldDelegate.playedFraction != playedFraction ||
+        oldDelegate.bufferedFraction != bufferedFraction ||
+        oldDelegate.isScrubbing != isScrubbing;
+  }
+}
+
+class _PlaybackStats extends StatelessWidget {
+  const _PlaybackStats({required this.value});
+
+  final M3u8PlayerValue value;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final durationMs = value.duration.inMilliseconds;
+    final bufferedPercent = durationMs <= 0
+        ? 0
+        : (value.bufferedPosition.inMilliseconds / durationMs * 100)
+              .clamp(0, 100)
+              .round();
+    final diskCachePercent = durationMs <= 0
+        ? 0
+        : (value.diskCachePosition.inMilliseconds / durationMs * 100)
+              .clamp(0, 100)
+              .round();
+    final bufferAhead = value.bufferedPosition - value.position;
+    return DefaultTextStyle(
+      style: textTheme.bodyMedium!,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Position: ${_formatDuration(value.position)}'),
+          Text('Duration: ${_formatDuration(value.duration)}'),
+          Text(
+            'Player buffer: ${_formatDuration(value.bufferedPosition)} / '
+            '${_formatDuration(value.duration)} ($bufferedPercent%)',
+          ),
+          Text(
+            'Disk cache: ${_formatDuration(value.diskCachePosition)} / '
+            '${_formatDuration(value.duration)} ($diskCachePercent%)'
+            '${value.isDiskCacheComplete ? ' complete' : ''}',
+          ),
+          Text(
+            'Buffer ahead: ${_formatDuration(_positiveDuration(bufferAhead))}',
+          ),
+          Text(
+            'Size: ${value.size.width.toInt()} x ${value.size.height.toInt()}',
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ErrorOverlay extends StatelessWidget {
+  const _ErrorOverlay({required this.error});
+
+  final M3u8PlayerError error;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      color: Colors.black.withValues(alpha: 0.72),
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Text(
+            error.message,
+            style: Theme.of(
+              context,
+            ).textTheme.bodyLarge?.copyWith(color: Colors.white),
+            textAlign: TextAlign.center,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _formatDuration(Duration duration) {
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  if (hours > 0) {
+    return '${hours.toString().padLeft(2, '0')}:$minutes:$seconds';
+  }
+  return '$minutes:$seconds';
+}
+
+Duration _positiveDuration(Duration duration) {
+  if (duration.isNegative) {
+    return Duration.zero;
+  }
+  return duration;
+}

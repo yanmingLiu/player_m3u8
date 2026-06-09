@@ -1,17 +1,15 @@
 package com.ai3.player_m3u8.player_m3u8
 
 import android.content.Context
-import android.net.Uri
 import android.os.Handler
 import android.os.Looper
-import androidx.media3.datasource.DataSpec
-import androidx.media3.datasource.cache.CacheWriter
+import android.os.SystemClock
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
+import androidx.media3.exoplayer.hls.offline.HlsDownloader
+import androidx.media3.exoplayer.offline.Downloader
 import io.flutter.plugin.common.EventChannel
-import java.net.HttpURLConnection
-import java.net.URI
-import java.net.URL
 import java.util.concurrent.Executors
-import kotlin.math.roundToLong
 
 internal class M3u8DiskCachePrefetcher(
     context: Context,
@@ -22,193 +20,87 @@ internal class M3u8DiskCachePrefetcher(
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
-    private val executor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "player_m3u8_disk_cache").apply { isDaemon = true }
+    private val taskExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "player_m3u8_hls_prefetch").apply { isDaemon = true }
+    }
+    private val downloadExecutor = Executors.newFixedThreadPool(MAX_PARALLEL_DOWNLOADS) { runnable ->
+        Thread(runnable, "player_m3u8_hls_download").apply { isDaemon = true }
     }
 
     @Volatile
     private var cancelled = false
 
     @Volatile
-    private var currentWriter: CacheWriter? = null
+    private var downloader: HlsDownloader? = null
+
+    private var lastProgressSentAt = 0L
 
     fun start() {
-        executor.execute {
+        taskExecutor.execute {
             cacheVod()
         }
     }
 
     fun cancel() {
         cancelled = true
-        currentWriter?.cancel()
-        executor.shutdownNow()
+        downloader?.cancel()
+        taskExecutor.shutdownNow()
+        downloadExecutor.shutdownNow()
     }
 
     private fun cacheVod() {
+        val mediaItem = MediaItem.Builder()
+            .setUri(url)
+            .setMimeType(MimeTypes.APPLICATION_M3U8)
+            .build()
+        val currentDownloader = HlsDownloader(
+            mediaItem,
+            M3u8CacheManager.downloadDataSourceFactory(appContext, headers),
+            downloadExecutor,
+        )
+        downloader = currentDownloader
+        sendDiskCacheProgress(percent = 0.0, isComplete = false, force = true)
+
         try {
-            val playlist = loadPlaylist(url)
-            if (playlist.segments.isEmpty() || playlist.durationMs <= 0L) {
+            currentDownloader.download(
+                Downloader.ProgressListener { _, _, percentDownloaded ->
+                    if (!cancelled && percentDownloaded >= 0f) {
+                        sendDiskCacheProgress(
+                            percent = percentDownloaded.coerceIn(0f, 100f).toDouble(),
+                            isComplete = false,
+                            force = false,
+                        )
+                    }
+                },
+            )
+            if (!cancelled) {
+                sendDiskCacheProgress(percent = 100.0, isComplete = true, force = true)
+            }
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        } catch (_: Throwable) {
+            // Disk prefetch is optional; playback should continue through ExoPlayer.
+        } finally {
+            if (downloader === currentDownloader) {
+                downloader = null
+            }
+        }
+    }
+
+    private fun sendDiskCacheProgress(percent: Double, isComplete: Boolean, force: Boolean) {
+        if (!force) {
+            val now = SystemClock.elapsedRealtime()
+            if (now - lastProgressSentAt < PROGRESS_INTERVAL_MS) {
                 return
             }
-
-            var diskCachePositionMs = 0L
-            sendDiskCacheProgress(diskCachePositionMs, playlist.durationMs, isComplete = false)
-
-            for (resourceUrl in playlist.resources) {
-                if (cancelled) {
-                    return
-                }
-                try {
-                    cacheSegment(resourceUrl)
-                } catch (_: Throwable) {
-                    // Optional HLS resources should not stop segment prefetch.
-                }
-            }
-
-            for (segment in playlist.segments) {
-                if (cancelled) {
-                    return
-                }
-                cacheSegment(segment.url)
-                diskCachePositionMs =
-                    (diskCachePositionMs + segment.durationMs).coerceAtMost(playlist.durationMs)
-                sendDiskCacheProgress(
-                    diskCachePositionMs,
-                    playlist.durationMs,
-                    isComplete = false,
-                )
-            }
-
-            if (!cancelled) {
-                sendDiskCacheProgress(
-                    playlist.durationMs,
-                    playlist.durationMs,
-                    isComplete = true,
-                )
-            }
-        } catch (_: Throwable) {
-            // Playback must not fail just because the optional disk prefetch failed.
+            lastProgressSentAt = now
+        } else {
+            lastProgressSentAt = SystemClock.elapsedRealtime()
         }
-    }
-
-    private fun cacheSegment(segmentUrl: String) {
-        val dataSpec = DataSpec.Builder()
-            .setUri(Uri.parse(segmentUrl))
-            .setHttpRequestHeaders(headers)
-            .build()
-        val writer = CacheWriter(
-            M3u8CacheManager.downloadDataSource(appContext, headers),
-            dataSpec,
-            ByteArray(CacheWriter.DEFAULT_BUFFER_SIZE_BYTES),
-            null,
-        )
-        currentWriter = writer
-        try {
-            writer.cache()
-        } finally {
-            currentWriter = null
-        }
-    }
-
-    private fun loadPlaylist(playlistUrl: String, depth: Int = 0): Playlist {
-        if (cancelled || depth > MAX_PLAYLIST_DEPTH) {
-            return Playlist(emptyList(), emptyList(), durationMs = 0L)
-        }
-
-        val lines = readText(playlistUrl)
-            .lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-
-        val segments = mutableListOf<Segment>()
-        val resources = linkedSetOf<String>()
-        val childPlaylists = mutableListOf<String>()
-        var pendingDurationMs: Long? = null
-
-        for (line in lines) {
-            when {
-                line.startsWith("#EXTINF:") -> {
-                    pendingDurationMs = parseExtInfDurationMs(line)
-                }
-                line.startsWith("#EXT-X-KEY:") || line.startsWith("#EXT-X-MAP:") -> {
-                    parseAttributeUri(line)?.let { resources.add(resolveUrl(playlistUrl, it)) }
-                }
-                line.startsWith("#") -> Unit
-                pendingDurationMs != null -> {
-                    segments.add(
-                        Segment(
-                            url = resolveUrl(playlistUrl, line),
-                            durationMs = pendingDurationMs ?: 0L,
-                        ),
-                    )
-                    pendingDurationMs = null
-                }
-                else -> childPlaylists.add(resolveUrl(playlistUrl, line))
-            }
-        }
-
-        if (segments.isNotEmpty()) {
-            return Playlist(
-                segments = segments,
-                resources = resources.toList(),
-                durationMs = segments.sumOf { it.durationMs },
-            )
-        }
-
-        for (childPlaylist in childPlaylists) {
-            val playlist = loadPlaylist(childPlaylist, depth + 1)
-            if (playlist.segments.isNotEmpty()) {
-                return playlist
-            }
-        }
-
-        return Playlist(emptyList(), emptyList(), durationMs = 0L)
-    }
-
-    private fun readText(playlistUrl: String): String {
-        val connection = URL(playlistUrl).openConnection() as HttpURLConnection
-        connection.instanceFollowRedirects = true
-        connection.connectTimeout = NETWORK_TIMEOUT_MS
-        connection.readTimeout = NETWORK_TIMEOUT_MS
-        headers.forEach { (key, value) ->
-            connection.setRequestProperty(key, value)
-        }
-        return try {
-            connection.inputStream.bufferedReader().use { it.readText() }
-        } finally {
-            connection.disconnect()
-        }
-    }
-
-    private fun parseExtInfDurationMs(line: String): Long {
-        val seconds = line.substringAfter(':')
-            .substringBefore(',')
-            .trim()
-            .toDoubleOrNull()
-            ?: return 0L
-        return (seconds * 1000.0).roundToLong().coerceAtLeast(0L)
-    }
-
-    private fun parseAttributeUri(line: String): String? {
-        val attributes = line.substringAfter(':', missingDelimiterValue = "")
-        val match = Regex("""URI="([^"]+)"""").find(attributes)
-        return match?.groupValues?.getOrNull(1)
-    }
-
-    private fun resolveUrl(baseUrl: String, maybeRelativeUrl: String): String {
-        return URI(baseUrl).resolve(maybeRelativeUrl).toString()
-    }
-
-    private fun sendDiskCacheProgress(
-        diskCachePositionMs: Long,
-        durationMs: Long,
-        isComplete: Boolean,
-    ) {
         val event = mapOf(
             "playerId" to playerIdProvider(),
             "event" to "diskCache",
-            "duration" to durationMs,
-            "diskCachePosition" to diskCachePositionMs,
+            "diskCachePercent" to percent,
             "isDiskCacheComplete" to isComplete,
         )
         mainHandler.post {
@@ -218,19 +110,8 @@ internal class M3u8DiskCachePrefetcher(
         }
     }
 
-    private data class Playlist(
-        val segments: List<Segment>,
-        val resources: List<String>,
-        val durationMs: Long,
-    )
-
-    private data class Segment(
-        val url: String,
-        val durationMs: Long,
-    )
-
     private companion object {
-        const val NETWORK_TIMEOUT_MS = 15_000
-        const val MAX_PLAYLIST_DEPTH = 3
+        const val MAX_PARALLEL_DOWNLOADS = 3
+        const val PROGRESS_INTERVAL_MS = 250L
     }
 }

@@ -33,11 +33,11 @@ internal object M3u8CacheManager {
         return cacheDataSourceFactory(context, headers)
     }
 
-    fun downloadDataSource(
+    fun downloadDataSourceFactory(
         context: Context,
         headers: Map<String, String>,
-    ): CacheDataSource {
-        return cacheDataSourceFactory(context, headers).createDataSourceForDownloading()
+    ): CacheDataSource.Factory {
+        return cacheDataSourceFactory(context, headers)
     }
 
     private fun cacheDataSourceFactory(

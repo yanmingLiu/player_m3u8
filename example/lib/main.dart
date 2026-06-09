@@ -512,11 +512,18 @@ class _PlaybackStats extends StatelessWidget {
         : (value.bufferedPosition.inMilliseconds / durationMs * 100)
               .clamp(0, 100)
               .round();
-    final diskCachePercent = durationMs <= 0
-        ? 0
-        : (value.diskCachePosition.inMilliseconds / durationMs * 100)
-              .clamp(0, 100)
-              .round();
+    final reportedDiskCachePercent = value.diskCachePercent.clamp(0.0, 100.0);
+    final estimatedDiskCachePercent = durationMs <= 0
+        ? 0.0
+        : (value.diskCachePosition.inMilliseconds / durationMs * 100).clamp(
+            0.0,
+            100.0,
+          );
+    final diskCachePercent =
+        (reportedDiskCachePercent > 0
+                ? reportedDiskCachePercent
+                : estimatedDiskCachePercent)
+            .round();
     final bufferAhead = value.bufferedPosition - value.position;
     return DefaultTextStyle(
       style: textTheme.bodyMedium!,

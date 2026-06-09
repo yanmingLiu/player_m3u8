@@ -21,6 +21,7 @@ class M3u8PlayerEvent {
     this.duration,
     this.bufferedPosition,
     this.diskCachePosition,
+    this.diskCachePercent,
     this.isDiskCacheComplete,
     this.size,
     this.error,
@@ -36,6 +37,7 @@ class M3u8PlayerEvent {
       duration: _durationFromMs(map['duration']),
       bufferedPosition: _durationFromMs(map['bufferedPosition']),
       diskCachePosition: _durationFromMs(map['diskCachePosition']),
+      diskCachePercent: _asNullableDouble(map['diskCachePercent']),
       isDiskCacheComplete: map['isDiskCacheComplete'] as bool?,
       size: _sizeFromMap(map),
       error: errorMap is Map
@@ -54,6 +56,7 @@ class M3u8PlayerEvent {
   final Duration? duration;
   final Duration? bufferedPosition;
   final Duration? diskCachePosition;
+  final double? diskCachePercent;
   final bool? isDiskCacheComplete;
   final Size? size;
   final M3u8PlayerError? error;

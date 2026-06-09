@@ -97,7 +97,8 @@ ValueListenableBuilder<M3u8PlayerValue>(
     return Text(
       'position=${value.position}, '
       'buffered=${value.bufferedPosition}, '
-      'disk=${value.diskCachePosition}',
+      'disk=${value.diskCachePosition}, '
+      'diskPercent=${value.diskCachePercent}',
     );
   },
 );
@@ -113,6 +114,7 @@ ValueListenableBuilder<M3u8PlayerValue>(
 - `duration`
 - `bufferedPosition`
 - `diskCachePosition`
+- `diskCachePercent`
 - `isDiskCacheComplete`
 - `size`
 - `error`
@@ -134,7 +136,7 @@ android/src/main/kotlin/
   PlayerM3u8Plugin.kt                   Flutter plugin entry
   M3u8AndroidPlayer.kt                  ExoPlayer + Texture surface binding
   M3u8CacheManager.kt                   Media3 SimpleCache singleton
-  M3u8DiskCachePrefetcher.kt            HLS playlist parsing and CacheWriter prefetch
+  M3u8DiskCachePrefetcher.kt            Media3 HlsDownloader disk prefetch
 
 ios/Classes/
   PlayerM3u8Plugin.swift                Flutter plugin entry
@@ -152,7 +154,7 @@ example/
 - 完整缓存思路走磁盘缓存/下载任务。
 - 进度事件默认约 250ms 一次，避免高频 channel 压力。
 - dispose 或 source 切换时释放 player、surface/texture、observer/timer、预取任务。
-- Android 预取写入 Media3 `SimpleCache`，播放器可复用缓存数据。
+- Android 预取使用 Media3 `HlsDownloader` 解析 HLS 并写入 `SimpleCache`，播放器可复用缓存数据。
 - iOS 预取写入 app caches 目录并上报进度；AVPlayer 播放仍由系统网络栈管理。
 
 ### 当前限制
@@ -310,7 +312,8 @@ ValueListenableBuilder<M3u8PlayerValue>(
     return Text(
       'position=${value.position}, '
       'buffered=${value.bufferedPosition}, '
-      'disk=${value.diskCachePosition}',
+      'disk=${value.diskCachePosition}, '
+      'diskPercent=${value.diskCachePercent}',
     );
   },
 );
@@ -326,6 +329,7 @@ Common fields:
 - `duration`
 - `bufferedPosition`
 - `diskCachePosition`
+- `diskCachePercent`
 - `isDiskCacheComplete`
 - `size`
 - `error`
@@ -347,7 +351,7 @@ android/src/main/kotlin/
   PlayerM3u8Plugin.kt                   Flutter plugin entry
   M3u8AndroidPlayer.kt                  ExoPlayer + Texture surface binding
   M3u8CacheManager.kt                   Media3 SimpleCache singleton
-  M3u8DiskCachePrefetcher.kt            HLS playlist parsing and CacheWriter prefetch
+  M3u8DiskCachePrefetcher.kt            Media3 HlsDownloader disk prefetch
 
 ios/Classes/
   PlayerM3u8Plugin.swift                Flutter plugin entry
@@ -365,7 +369,7 @@ example/
 - Full-video prefetch is handled through disk cache/download tasks.
 - Progress events are throttled to about 250ms.
 - dispose and source switching release native players, surfaces/textures, observers/timers, and active prefetch tasks.
-- Android prefetch writes to Media3 `SimpleCache`, which ExoPlayer can reuse.
+- Android prefetch uses Media3 `HlsDownloader` for HLS parsing and writes to `SimpleCache`, which ExoPlayer can reuse.
 - iOS prefetch writes to the app caches directory and reports progress; AVPlayer playback still uses the system network stack.
 
 ### Current Limitations

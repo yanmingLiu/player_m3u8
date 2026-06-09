@@ -11,6 +11,7 @@
 - 支持平台：Android 和 iOS。
 - 渲染方式：Flutter `Texture`，不要改成 PlatformView。
 - Android 使用 Media3 ExoPlayer。
+- Android HLS 播放和磁盘预取优先使用 Media3 自带能力，例如 `HlsMediaSource`/`HlsDownloader`，不要手写 m3u8 分片解析作为主链路。
 - iOS 使用 AVFoundation。
 
 ## Playback And Cache Rules

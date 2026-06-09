@@ -144,6 +144,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     if (_disposed) {
       return;
     }
+    final diskCachePosition = _diskCachePositionFor(event);
     final nextValue = switch (event.type) {
       M3u8PlayerEventType.initialized => value.copyWith(
         isInitialized: true,
@@ -151,7 +152,8 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         isCompleted: false,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
-        diskCachePosition: event.diskCachePosition,
+        diskCachePosition: diskCachePosition,
+        diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
         size: event.size,
         error: null,
@@ -161,14 +163,16 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         position: event.position,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
-        diskCachePosition: event.diskCachePosition,
+        diskCachePosition: diskCachePosition,
+        diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
       ),
       M3u8PlayerEventType.progress => value.copyWith(
         position: event.position,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
-        diskCachePosition: event.diskCachePosition,
+        diskCachePosition: diskCachePosition,
+        diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
       ),
       M3u8PlayerEventType.playing => value.copyWith(
@@ -178,7 +182,8 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         position: event.position,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
-        diskCachePosition: event.diskCachePosition,
+        diskCachePosition: diskCachePosition,
+        diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
         error: null,
       ),
@@ -188,7 +193,8 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         position: event.position,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
-        diskCachePosition: event.diskCachePosition,
+        diskCachePosition: diskCachePosition,
+        diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
       ),
       M3u8PlayerEventType.completed => value.copyWith(
@@ -198,12 +204,14 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         position: event.position ?? value.duration,
         duration: event.duration,
         bufferedPosition: event.bufferedPosition,
-        diskCachePosition: event.diskCachePosition,
+        diskCachePosition: diskCachePosition,
+        diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
       ),
       M3u8PlayerEventType.diskCache => value.copyWith(
         duration: value.duration == Duration.zero ? event.duration : null,
-        diskCachePosition: event.diskCachePosition,
+        diskCachePosition: diskCachePosition,
+        diskCachePercent: event.diskCachePercent,
         isDiskCacheComplete: event.isDiskCacheComplete,
       ),
       M3u8PlayerEventType.error => value.copyWith(
@@ -218,6 +226,22 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       ),
     };
     value = nextValue;
+  }
+
+  Duration? _diskCachePositionFor(M3u8PlayerEvent event) {
+    final diskCachePosition = event.diskCachePosition;
+    if (diskCachePosition != null) {
+      return diskCachePosition;
+    }
+    final percent = event.diskCachePercent;
+    final durationMs = value.duration.inMilliseconds;
+    if (percent == null || durationMs <= 0) {
+      return null;
+    }
+    final normalizedPercent = percent.clamp(0.0, 100.0);
+    return Duration(
+      milliseconds: (durationMs * normalizedPercent / 100.0).round(),
+    );
   }
 
   int _requirePlayerId() {

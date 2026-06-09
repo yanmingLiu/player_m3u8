@@ -13,6 +13,7 @@ class M3u8PlayerValue {
     this.duration = Duration.zero,
     this.bufferedPosition = Duration.zero,
     this.diskCachePosition = Duration.zero,
+    this.diskCachePercent = 0,
     this.isDiskCacheComplete = false,
     this.size = Size.zero,
     this.error,
@@ -26,6 +27,7 @@ class M3u8PlayerValue {
   final Duration duration;
   final Duration bufferedPosition;
   final Duration diskCachePosition;
+  final double diskCachePercent;
   final bool isDiskCacheComplete;
   final Size size;
   final M3u8PlayerError? error;
@@ -54,6 +56,7 @@ class M3u8PlayerValue {
     Duration? duration,
     Duration? bufferedPosition,
     Duration? diskCachePosition,
+    double? diskCachePercent,
     bool? isDiskCacheComplete,
     Size? size,
     Object? error = _sentinel,
@@ -67,6 +70,7 @@ class M3u8PlayerValue {
       duration: duration ?? this.duration,
       bufferedPosition: bufferedPosition ?? this.bufferedPosition,
       diskCachePosition: diskCachePosition ?? this.diskCachePosition,
+      diskCachePercent: diskCachePercent ?? this.diskCachePercent,
       isDiskCacheComplete: isDiskCacheComplete ?? this.isDiskCacheComplete,
       size: size ?? this.size,
       error: identical(error, _sentinel)
@@ -86,6 +90,7 @@ class M3u8PlayerValue {
         'duration: $duration, '
         'bufferedPosition: $bufferedPosition, '
         'diskCachePosition: $diskCachePosition, '
+        'diskCachePercent: $diskCachePercent, '
         'isDiskCacheComplete: $isDiskCacheComplete, '
         'size: $size, '
         'error: $error'

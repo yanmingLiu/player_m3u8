@@ -49,6 +49,14 @@ internal object M3u8CacheManager {
         }
     }
 
+    fun info(context: Context): Map<String, Long> {
+        val configuredMaxCacheBytes = synchronized(this) { maxCacheBytes }
+        return mapOf(
+            "maxSizeBytes" to configuredMaxCacheBytes,
+            "sizeBytes" to directorySize(cacheDirectory(context)),
+        )
+    }
+
     fun mediaDataSourceFactory(
         context: Context,
         headers: Map<String, String>,
@@ -86,5 +94,11 @@ internal object M3u8CacheManager {
 
     private fun cacheDirectory(context: Context): File {
         return File(context.cacheDir, CACHE_DIRECTORY_NAME)
+    }
+
+    private fun directorySize(file: File): Long {
+        if (!file.exists()) return 0L
+        if (file.isFile) return file.length()
+        return file.listFiles()?.sumOf { directorySize(it) } ?: 0L
     }
 }

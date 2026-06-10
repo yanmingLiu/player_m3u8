@@ -131,7 +131,8 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
       url: url,
       headers: headers,
       playerIdProvider: { [weak self] in self?.textureId ?? -1 },
-      eventSinkProvider: eventSinkProvider
+      eventSinkProvider: eventSinkProvider,
+      qualityProvider: { [weak self] in self?.selectedQuality ?? Self.autoQuality() }
     )
     playerItem.add(videoOutput)
     player.actionAtItemEnd = .pause
@@ -175,6 +176,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     let position = player.currentTime()
     let shouldPlay = player.rate > 0
     replacePlayerItem()
+    diskCachePrefetcher?.restart(from: milliseconds(from: position))
     player.seek(to: position) { [weak self] _ in
       if shouldPlay {
         self?.player.rate = Float(self?.playbackSpeed ?? 1.0)
@@ -525,6 +527,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
       "player_m3u8 recover playerId=\(textureId) reason=\(reason) quality=\(lowerQuality["id"] ?? "unknown")"
     )
     replacePlayerItem()
+    diskCachePrefetcher?.restart(from: milliseconds(from: position))
     player.seek(to: position) { [weak self] _ in
       if shouldPlay {
         self?.player.rate = Float(self?.playbackSpeed ?? 1.0)

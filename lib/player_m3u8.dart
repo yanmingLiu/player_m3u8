@@ -1,6 +1,8 @@
 library;
 
 export 'src/m3u8_player.dart';
+export 'src/m3u8_cache_event.dart';
+export 'src/m3u8_cache_info.dart';
 export 'src/m3u8_player_cache.dart';
 export 'src/m3u8_player_controller.dart';
 export 'src/m3u8_player_value.dart';

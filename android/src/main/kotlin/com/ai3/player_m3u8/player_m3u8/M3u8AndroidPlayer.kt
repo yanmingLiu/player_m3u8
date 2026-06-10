@@ -69,8 +69,9 @@ class M3u8AndroidPlayer(
         url = url,
         headers = headers,
         playerIdProvider = { surfaceProducer.id() },
-        eventSinkProvider = eventSinkProvider,
-    )
+            eventSinkProvider = eventSinkProvider,
+            qualityProvider = { selectedQuality },
+        )
 
     private val progressRunnable = object : Runnable {
         override fun run() {
@@ -141,6 +142,7 @@ class M3u8AndroidPlayer(
             }
             qualitySwitchCount += 1
             applySelectedQuality()
+            diskCachePrefetcher.restartFrom(player?.currentPosition?.coerceAtLeast(0L) ?: 0L)
             sendProgress(force = true)
         }
     }
@@ -524,6 +526,7 @@ class M3u8AndroidPlayer(
         )
         applySelectedQuality()
         currentPlayer.seekTo(positionMs)
+        diskCachePrefetcher.restartFrom(positionMs)
         if (currentPlayer.playbackState == Player.STATE_IDLE) {
             currentPlayer.prepare()
         }

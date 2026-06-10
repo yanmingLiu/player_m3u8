@@ -2,6 +2,8 @@ import 'package:flutter/services.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'player_m3u8_method_channel.dart';
+import 'src/m3u8_cache_event.dart';
+import 'src/m3u8_cache_info.dart';
 import 'src/m3u8_player_event.dart';
 import 'src/m3u8_player_value.dart';
 import 'src/m3u8_recovery_policy.dart';
@@ -22,6 +24,10 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
 
   Stream<M3u8PlayerEvent> get events {
     throw UnimplementedError('events has not been implemented.');
+  }
+
+  Stream<M3u8CacheEvent> get cacheEvents {
+    throw UnimplementedError('cacheEvents has not been implemented.');
   }
 
   Future<int> create({
@@ -81,6 +87,23 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
 
   Future<void> clearCache() {
     throw UnimplementedError('clearCache() has not been implemented.');
+  }
+
+  Future<M3u8CacheInfo> getCacheInfo() {
+    throw UnimplementedError('getCacheInfo() has not been implemented.');
+  }
+
+  Future<String> precache({
+    required String url,
+    Map<String, String> headers = const <String, String>{},
+    Duration initialPosition = Duration.zero,
+    M3u8Quality quality = M3u8Quality.auto,
+  }) {
+    throw UnimplementedError('precache() has not been implemented.');
+  }
+
+  Future<void> cancelPrecache(String taskId) {
+    throw UnimplementedError('cancelPrecache() has not been implemented.');
   }
 }
 

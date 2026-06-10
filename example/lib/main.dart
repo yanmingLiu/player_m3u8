@@ -82,16 +82,20 @@ class PlayerExamplePage extends StatefulWidget {
 class _PlayerExamplePageState extends State<PlayerExamplePage> {
   late final M3u8PlayerController _controller;
   StreamSubscription<M3u8QoeSnapshot>? _qoeSubscription;
+  StreamSubscription<M3u8CacheEvent>? _cacheSubscription;
   final List<M3u8QoeSnapshot> _qoeSnapshots = <M3u8QoeSnapshot>[];
   bool _initializing = true;
   bool _switching = false;
   int _currentVideoIndex = 0;
+  String? _precacheTaskId;
+  M3u8CacheEvent? _latestCacheEvent;
 
   @override
   void initState() {
     super.initState();
     _controller = widget.controllerFactory?.call() ?? M3u8PlayerController();
     _qoeSubscription = _controller.qoeSnapshots.listen(_handleQoeSnapshot);
+    _cacheSubscription = M3u8PlayerCache.events().listen(_handleCacheEvent);
     if (widget.autoInitialize) {
       _initialize();
     } else {
@@ -102,6 +106,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   @override
   void dispose() {
     _qoeSubscription?.cancel();
+    _cacheSubscription?.cancel();
+    _cancelPrecacheTaskSilently();
     _controller.dispose();
     super.dispose();
   }
@@ -126,8 +132,10 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     setState(() {
       _currentVideoIndex = index;
       _switching = true;
+      _latestCacheEvent = null;
     });
     try {
+      await _cancelPrecacheTask();
       await _controller.setSource(sampleVideos[index].url, autoPlay: true);
       _qoeSnapshots.clear();
     } finally {
@@ -149,6 +157,70 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
         _qoeSnapshots.removeRange(6, _qoeSnapshots.length);
       }
     });
+  }
+
+  void _handleCacheEvent(M3u8CacheEvent event) {
+    if (!mounted || event.taskId != _precacheTaskId) {
+      return;
+    }
+    setState(() {
+      _latestCacheEvent = event;
+      if (event.type == M3u8CacheEventType.completed ||
+          event.type == M3u8CacheEventType.cancelled ||
+          event.type == M3u8CacheEventType.error) {
+        _precacheTaskId = null;
+      }
+    });
+  }
+
+  Future<void> _precacheCurrentSource() async {
+    if (_precacheTaskId != null) {
+      return;
+    }
+    final url = sampleVideos[_currentVideoIndex].url;
+    final taskId = await M3u8PlayerCache.precache(
+      url,
+      initialPosition: _controller.value.position,
+      quality: _controller.value.selectedQuality,
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _precacheTaskId = taskId;
+      _latestCacheEvent = M3u8CacheEvent(
+        taskId: taskId,
+        url: url,
+        type: M3u8CacheEventType.progress,
+        position: _controller.value.position,
+        startPosition: _controller.value.position,
+        quality: _controller.value.selectedQuality,
+      );
+    });
+  }
+
+  Future<void> _cancelPrecacheTask() async {
+    final taskId = _precacheTaskId;
+    if (taskId == null) {
+      return;
+    }
+    if (mounted) {
+      setState(() {
+        _precacheTaskId = null;
+      });
+    } else {
+      _precacheTaskId = null;
+    }
+    await M3u8PlayerCache.cancelPrecache(taskId);
+  }
+
+  void _cancelPrecacheTaskSilently() {
+    final taskId = _precacheTaskId;
+    if (taskId == null) {
+      return;
+    }
+    _precacheTaskId = null;
+    unawaited(M3u8PlayerCache.cancelPrecache(taskId));
   }
 
   Future<void> _copyLatestQoeSnapshot() async {
@@ -201,6 +273,13 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                       currentIndex: _currentVideoIndex,
                       switching: _switching,
                       onSelected: _selectVideo,
+                    ),
+                    const SizedBox(height: 16),
+                    _CacheTaskControls(
+                      event: _latestCacheEvent,
+                      isRunning: _precacheTaskId != null,
+                      onPrecache: _precacheCurrentSource,
+                      onCancel: _cancelPrecacheTask,
                     ),
                     const SizedBox(height: 16),
                     _Controls(controller: _controller, value: value),
@@ -281,6 +360,69 @@ class _PlaylistControls extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _CacheTaskControls extends StatelessWidget {
+  const _CacheTaskControls({
+    required this.event,
+    required this.isRunning,
+    required this.onPrecache,
+    required this.onCancel,
+  });
+
+  final M3u8CacheEvent? event;
+  final bool isRunning;
+  final VoidCallback onPrecache;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    return Row(
+      children: [
+        IconButton.outlined(
+          tooltip: 'Precache current source',
+          onPressed: isRunning ? null : onPrecache,
+          icon: const Icon(Icons.download),
+        ),
+        const SizedBox(width: 8),
+        IconButton.outlined(
+          tooltip: 'Cancel precache',
+          onPressed: isRunning ? onCancel : null,
+          icon: const Icon(Icons.cancel_outlined),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            _cacheStatus(event, isRunning),
+            style: textTheme.bodyMedium,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _cacheStatus(M3u8CacheEvent? event, bool isRunning) {
+    if (event == null) {
+      return 'Precache idle';
+    }
+    final percent = event.percent?.clamp(0.0, 100.0).round();
+    final progress = event.position == null
+        ? ''
+        : ' ${_formatDuration(event.position!)}';
+    final suffix = percent == null ? progress : ' $percent%$progress';
+    final quality = event.quality?.label;
+    final qualitySuffix = quality == null ? '' : ' $quality';
+    return switch (event.type) {
+      M3u8CacheEventType.completed => 'Precache complete$qualitySuffix',
+      M3u8CacheEventType.cancelled => 'Precache cancelled',
+      M3u8CacheEventType.error =>
+        'Precache failed: ${event.error?.message ?? 'unknown'}',
+      M3u8CacheEventType.progress =>
+        isRunning ? 'Precaching$qualitySuffix$suffix' : 'Precache idle',
+    };
   }
 }
 

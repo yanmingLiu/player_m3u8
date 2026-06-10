@@ -111,10 +111,22 @@ await controller.setSource(
 
 ```dart
 await M3u8PlayerCache.configure(maxSizeBytes: 1024 * 1024 * 1024);
+final cacheInfo = await M3u8PlayerCache.info();
+final taskId = await M3u8PlayerCache.precache(
+  url,
+  initialPosition: resumePosition,
+  quality: controller.value.selectedQuality,
+);
+final cacheSubscription = M3u8PlayerCache.events().listen((event) {
+  if (event.taskId == taskId) {
+    // Update cache progress UI.
+  }
+});
+await M3u8PlayerCache.cancelPrecache(taskId);
 await M3u8PlayerCache.clear();
 ```
 
-配置和清理都要求当前没有活跃 native player。Android 会重建 Media3 `SimpleCache` 并保留符合上限的数据；iOS 会调整 app caches 目录的 LRU 清理上限。
+配置和清理都要求当前没有活跃 native player 或独立预缓存任务；查询缓存状态和独立预缓存任务可在播放中调用。独立预缓存返回 `taskId`，进度通过 `M3u8PlayerCache.events()` 上报，可按 `taskId` 过滤并取消。`precache` 可传入 `quality`，用于预热当前播放档位或下一个 source 的目标档位；事件会回传实际预缓存档位。Android 预缓存复用 Media3 `HlsPlaylistParser` + `CacheWriter` + `SimpleCache`；iOS 复用 AVFoundation resource loader 同一套 app caches。播放器 source 切换会取消播放器内部预取；业务自己发起的独立预缓存任务应按业务生命周期主动取消。
 
 ### 清晰度选择
 
@@ -290,6 +302,8 @@ example/
 - dispose 或 source 切换时释放 player、surface/texture、observer/timer、预取任务。
 - Android 预取使用 Media3 `HlsPlaylistParser` 解析 HLS，并通过 Media3 `CacheWriter` 写入 `SimpleCache`，播放器可复用缓存数据。
 - iOS 播放通过 `AVAssetResourceLoader` 读取自定义 scheme，playlist、key、map、segment 请求会优先命中 app caches；缺失时下载并写入缓存。
+- `M3u8PlayerCache.precache` 可在创建播放器前预热当前/下一个 source 的磁盘缓存，并通过独立 cache event channel 上报进度、完成、取消或错误；传入 `quality` 后会优先预缓存最接近该档位的 HLS variant。
+- 播放器内部主动预取会跟随手动清晰度、自动降级恢复和 seek 位置重启，不再固定优先最高码率 variant。
 - Android 通过 ExoPlayer track/analytics 上报首帧、rebuffer、丢帧、当前码率和带宽估计；iOS 通过 AVPlayer access log 和视频轨道信息上报对应指标。rebuffer 总时长和清晰度切换次数可用于真实设备 QoE 统计。
 - Android 手动清晰度通过 `DefaultTrackSelector` 约束最高视频尺寸和码率；iOS 手动清晰度通过 ResourceLoader 过滤 HLS master variants。
 - 连续 rebuffer 或播放错误触发自动降级恢复，保留当前位置；没有更低档可降时才向 Dart 上报播放错误。
@@ -298,7 +312,7 @@ example/
 ### 当前限制
 
 - 仅支持网络 HLS/m3u8 VOD。
-- 暂不支持字幕、倍速、后台播放、DRM。
+- 暂不支持字幕、后台播放、DRM。
 - 当前已支持手动清晰度约束，但尚未暴露自定义自动码率策略。
 - iOS HLS 解析仍是轻量实现，适合常见 VOD playlist；复杂 HLS 特性仍需继续补测试。
 - 磁盘缓存配置和清理必须在没有活跃播放器时调用。
@@ -467,10 +481,22 @@ The default disk cache limit is 512 MB. Configure it before creating players, or
 
 ```dart
 await M3u8PlayerCache.configure(maxSizeBytes: 1024 * 1024 * 1024);
+final cacheInfo = await M3u8PlayerCache.info();
+final taskId = await M3u8PlayerCache.precache(
+  url,
+  initialPosition: resumePosition,
+  quality: controller.value.selectedQuality,
+);
+final cacheSubscription = M3u8PlayerCache.events().listen((event) {
+  if (event.taskId == taskId) {
+    // Update cache progress UI.
+  }
+});
+await M3u8PlayerCache.cancelPrecache(taskId);
 await M3u8PlayerCache.clear();
 ```
 
-Both operations require no active native players. Android rebuilds Media3 `SimpleCache` with the configured LRU limit; iOS applies the LRU limit to the app caches directory.
+Configure and clear require no active native players or standalone precache tasks; cache info and standalone precache tasks can run while playback is active. Standalone precache returns a `taskId`, emits progress through `M3u8PlayerCache.events()`, and can be cancelled by `taskId`. Pass `quality` to warm the current playback rendition or the next source's target rendition; cache events include the actual warmed quality. Android precache reuses Media3 `HlsPlaylistParser`, `CacheWriter`, and `SimpleCache`; iOS reuses the same app caches path as the AVFoundation resource loader. Player source switching cancels player-owned prefetch; app-owned standalone precache tasks should be cancelled according to app lifecycle.
 
 ### Quality Selection
 
@@ -649,6 +675,8 @@ example/
 - dispose and source switching release native players, surfaces/textures, observers/timers, and active prefetch tasks.
 - Android prefetch uses Media3 `HlsPlaylistParser` for HLS parsing and Media3 `CacheWriter` to write into `SimpleCache`, which ExoPlayer can reuse.
 - iOS playback uses `AVAssetResourceLoader` with a custom scheme. Playlist, key, map, and segment requests read from app caches first; missing resources are downloaded and stored.
+- `M3u8PlayerCache.precache` can warm disk cache before creating a player or for the next source, with standalone cache events for progress, completion, cancellation, and errors. Passing `quality` prioritizes the closest HLS variant for that rendition.
+- Player-owned active prefetch follows manual quality, automatic recovery downshifts, and seek restarts instead of always prioritizing the highest bitrate variant.
 - Android reports startup, rebuffer, dropped-frame, bitrate, and bandwidth metrics through ExoPlayer tracks/analytics. iOS reports the same metric class through AVPlayer access logs and video track data. Total rebuffer duration and quality switch count are available for real-device QoE analytics.
 - Android manual quality constrains maximum video size and bitrate through `DefaultTrackSelector`; iOS manual quality filters HLS master variants through ResourceLoader.
 - Repeated rebuffering or playback errors trigger automatic lower-quality recovery and preserve the playback position. Playback errors are reported to Dart only when no lower variant is available.

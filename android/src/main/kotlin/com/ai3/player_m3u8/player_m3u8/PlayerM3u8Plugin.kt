@@ -8,22 +8,32 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.view.TextureRegistry
+import java.util.UUID
 
-class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler {
+class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler {
     private lateinit var context: Context
     private lateinit var textures: TextureRegistry
     private lateinit var methodChannel: MethodChannel
     private lateinit var eventChannel: EventChannel
+    private lateinit var cacheEventChannel: EventChannel
     private val players = mutableMapOf<Long, M3u8AndroidPlayer>()
+    private val cacheTasks = mutableMapOf<String, M3u8DiskCachePrefetcher>()
     private var eventSink: EventChannel.EventSink? = null
+    private var cacheEventSink: EventChannel.EventSink? = null
+
+    internal constructor(context: Context) : this() {
+        this.context = context
+    }
 
     override fun onAttachedToEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         context = binding.applicationContext
         textures = binding.textureRegistry
         methodChannel = MethodChannel(binding.binaryMessenger, METHOD_CHANNEL_NAME)
         eventChannel = EventChannel(binding.binaryMessenger, EVENT_CHANNEL_NAME)
+        cacheEventChannel = EventChannel(binding.binaryMessenger, CACHE_EVENT_CHANNEL_NAME)
         methodChannel.setMethodCallHandler(this)
         eventChannel.setStreamHandler(this)
+        cacheEventChannel.setStreamHandler(CacheEventStreamHandler())
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -106,6 +116,9 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
             }
             "configureCache" -> configureCache(call, result)
             "clearCache" -> clearCache(result)
+            "getCacheInfo" -> getCacheInfo(result)
+            "precache" -> precache(call, result)
+            "cancelPrecache" -> cancelPrecache(call, result)
             else -> result.notImplemented()
         }
     }
@@ -121,9 +134,13 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
     override fun onDetachedFromEngine(binding: FlutterPlugin.FlutterPluginBinding) {
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
+        cacheEventChannel.setStreamHandler(null)
         players.values.forEach { it.dispose() }
         players.clear()
+        cacheTasks.values.forEach { it.cancel() }
+        cacheTasks.clear()
         eventSink = null
+        cacheEventSink = null
     }
 
     private fun create(call: MethodCall, result: Result) {
@@ -204,6 +221,14 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
             )
             return
         }
+        if (cacheTasks.isNotEmpty()) {
+            result.error(
+                "active_cache_tasks",
+                "Cache cannot be configured while cache tasks are active.",
+                null,
+            )
+            return
+        }
         try {
             M3u8CacheManager.configure(maxSizeBytes)
             result.success(null)
@@ -221,7 +246,68 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
             )
             return
         }
+        if (cacheTasks.isNotEmpty()) {
+            result.error(
+                "active_cache_tasks",
+                "Cache cannot be cleared while cache tasks are active.",
+                null,
+            )
+            return
+        }
         M3u8CacheManager.clear(context)
+        result.success(null)
+    }
+
+    private fun getCacheInfo(result: Result) {
+        result.success(M3u8CacheManager.info(context))
+    }
+
+    private fun precache(call: MethodCall, result: Result) {
+        val url = call.argument<String>("url")
+        if (url.isNullOrBlank()) {
+            result.error("invalid_url", "url is required.", null)
+            return
+        }
+        val initialPositionMs = call.argument<Number>("initialPosition")?.toLong() ?: 0L
+        if (initialPositionMs < 0L) {
+            result.error(
+                "invalid_initial_position",
+                "initialPosition must be a non-negative integer.",
+                null,
+            )
+            return
+        }
+        val headers = call.argument<Map<String, String>>("headers") ?: emptyMap()
+        val quality = call.argument<Map<String, Any?>>("quality") ?: autoQuality()
+        val taskId = UUID.randomUUID().toString()
+        val prefetcher = M3u8DiskCachePrefetcher(
+            context = context,
+            url = url,
+            headers = headers,
+            playerIdProvider = { -1L },
+            eventSinkProvider = { cacheEventSink },
+            taskId = taskId,
+            onFinished = { cacheTasks.remove(taskId) },
+            qualityProvider = { quality },
+        )
+        cacheTasks[taskId] = prefetcher
+        prefetcher.restartFrom(initialPositionMs)
+        result.success(taskId)
+    }
+
+    private fun cancelPrecache(call: MethodCall, result: Result) {
+        val taskId = call.argument<String>("taskId")
+        if (taskId.isNullOrBlank()) {
+            result.error("invalid_cache_task", "taskId is required.", null)
+            return
+        }
+        cacheTasks.remove(taskId)?.cancel()
+        cacheEventSink?.success(
+            mapOf(
+                "taskId" to taskId,
+                "event" to "cancelled",
+            ),
+        )
         result.success(null)
     }
 
@@ -242,5 +328,27 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
     private companion object {
         const val METHOD_CHANNEL_NAME = "player_m3u8/methods"
         const val EVENT_CHANNEL_NAME = "player_m3u8/events"
+        const val CACHE_EVENT_CHANNEL_NAME = "player_m3u8/cache_events"
+    }
+
+    private inner class CacheEventStreamHandler : EventChannel.StreamHandler {
+        override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+            cacheEventSink = events
+        }
+
+        override fun onCancel(arguments: Any?) {
+            cacheEventSink = null
+        }
+    }
+
+    private fun autoQuality(): Map<String, Any?> {
+        return mapOf(
+            "id" to "auto",
+            "label" to "Auto",
+            "width" to 0,
+            "height" to 0,
+            "bitrate" to 0,
+            "isAuto" to true,
+        )
     }
 }

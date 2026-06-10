@@ -32,6 +32,17 @@ final class M3u8IosCacheManager {
     }
   }
 
+  func info() throws -> [String: Int64] {
+    lock.lock()
+    let configuredMaxCacheBytes = maxCacheBytes
+    lock.unlock()
+    let directory = try cacheDirectory(create: false)
+    return [
+      "maxSizeBytes": configuredMaxCacheBytes,
+      "sizeBytes": try directorySize(directory),
+    ]
+  }
+
   func data(
     for url: URL,
     headers: [String: String],
@@ -212,5 +223,29 @@ final class M3u8IosCacheManager {
         break
       }
     }
+  }
+
+  private func directorySize(_ directory: URL) throws -> Int64 {
+    guard FileManager.default.fileExists(atPath: directory.path) else { return 0 }
+    guard
+      let enumerator = FileManager.default.enumerator(
+        at: directory,
+        includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
+        options: [.skipsHiddenFiles]
+      )
+    else {
+      return 0
+    }
+
+    var totalSize: Int64 = 0
+    for case let fileUrl as URL in enumerator {
+      let values = try fileUrl.resourceValues(forKeys: [
+        .isRegularFileKey,
+        .fileSizeKey,
+      ])
+      guard values.isRegularFile == true else { continue }
+      totalSize += Int64(values.fileSize ?? 0)
+    }
+    return totalSize
   }
 }

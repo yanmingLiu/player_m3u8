@@ -18,6 +18,15 @@ void main() {
           if (methodCall.method == 'create') {
             return 3;
           }
+          if (methodCall.method == 'getCacheInfo') {
+            return <String, Object>{
+              'maxSizeBytes': 64 * 1024 * 1024,
+              'sizeBytes': 16 * 1024 * 1024,
+            };
+          }
+          if (methodCall.method == 'precache') {
+            return 'cache-task-1';
+          }
           return null;
         });
   });
@@ -181,5 +190,57 @@ void main() {
 
     expect(log.single.method, 'clearCache');
     expect(log.single.arguments, isNull);
+  });
+
+  test('getCacheInfo parses cache usage payload', () async {
+    final info = await platform.getCacheInfo();
+
+    expect(log.single.method, 'getCacheInfo');
+    expect(log.single.arguments, isNull);
+    expect(info.maxSizeBytes, 64 * 1024 * 1024);
+    expect(info.sizeBytes, 16 * 1024 * 1024);
+    expect(info.usageRatio, 0.25);
+    expect(info.toMap(), {
+      'maxSizeBytes': 64 * 1024 * 1024,
+      'sizeBytes': 16 * 1024 * 1024,
+    });
+  });
+
+  test('precache sends source and returns task id', () async {
+    final taskId = await platform.precache(
+      url: 'https://example.com/index.m3u8',
+      headers: const {'Authorization': 'token'},
+      initialPosition: const Duration(seconds: 15),
+      quality: const M3u8Quality(
+        id: '720p',
+        label: '720p',
+        width: 1280,
+        height: 720,
+        bitrate: 1500000,
+      ),
+    );
+
+    expect(taskId, 'cache-task-1');
+    expect(log.single.method, 'precache');
+    expect(log.single.arguments, {
+      'url': 'https://example.com/index.m3u8',
+      'headers': {'Authorization': 'token'},
+      'initialPosition': 15000,
+      'quality': {
+        'id': '720p',
+        'label': '720p',
+        'width': 1280,
+        'height': 720,
+        'bitrate': 1500000,
+        'isAuto': false,
+      },
+    });
+  });
+
+  test('cancelPrecache sends task id', () async {
+    await platform.cancelPrecache('cache-task-1');
+
+    expect(log.single.method, 'cancelPrecache');
+    expect(log.single.arguments, {'taskId': 'cache-task-1'});
   });
 }

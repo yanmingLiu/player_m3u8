@@ -11,6 +11,8 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
     with MockPlatformInterfaceMixin {
   final StreamController<M3u8PlayerEvent> eventController =
       StreamController<M3u8PlayerEvent>.broadcast();
+  final StreamController<M3u8CacheEvent> cacheEventController =
+      StreamController<M3u8CacheEvent>.broadcast();
 
   int nextPlayerId = 7;
   int? createdPlayerId;
@@ -30,10 +32,21 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   bool? selectedMuted;
   M3u8RecoveryPolicy? recoveryPolicy;
   int? configuredCacheBytes;
+  M3u8CacheInfo cacheInfo = const M3u8CacheInfo(
+    maxSizeBytes: 512,
+    sizeBytes: 128,
+  );
   bool cacheCleared = false;
+  String? precacheUrl;
+  Map<String, String>? precacheHeaders;
+  Duration? precacheInitialPosition;
+  String? cancelledPrecacheTaskId;
 
   @override
   Stream<M3u8PlayerEvent> get events => eventController.stream;
+
+  @override
+  Stream<M3u8CacheEvent> get cacheEvents => cacheEventController.stream;
 
   @override
   Future<int> create({
@@ -113,6 +126,30 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   Future<void> clearCache() async {
     cacheCleared = true;
   }
+
+  @override
+  Future<M3u8CacheInfo> getCacheInfo() async {
+    return cacheInfo;
+  }
+
+  @override
+  Future<String> precache({
+    required String url,
+    Map<String, String> headers = const <String, String>{},
+    Duration initialPosition = Duration.zero,
+    M3u8Quality quality = M3u8Quality.auto,
+  }) async {
+    precacheUrl = url;
+    precacheHeaders = headers;
+    precacheInitialPosition = initialPosition;
+    selectedQuality = quality;
+    return 'cache-task-1';
+  }
+
+  @override
+  Future<void> cancelPrecache(String taskId) async {
+    cancelledPrecacheTaskId = taskId;
+  }
 }
 
 void main() {
@@ -165,6 +202,36 @@ void main() {
     expect(event.availableQualities, hasLength(1));
     expect(event.availableQualities!.single.height, 1080);
     expect(event.selectedQuality, M3u8Quality.auto);
+  });
+
+  test('parses standalone cache event fields', () {
+    final event = M3u8CacheEvent.fromMap(const <Object?, Object?>{
+      'taskId': 'cache-task-1',
+      'url': 'https://example.com/index.m3u8',
+      'event': 'completed',
+      'duration': 60000,
+      'diskCacheStartPosition': 15000,
+      'diskCachePosition': 60000,
+      'diskCachePercent': 100.0,
+      'isDiskCacheComplete': true,
+      'quality': {
+        'id': '720p',
+        'label': '720p',
+        'width': 1280,
+        'height': 720,
+        'bitrate': 1500000,
+      },
+    });
+
+    expect(event.taskId, 'cache-task-1');
+    expect(event.url, 'https://example.com/index.m3u8');
+    expect(event.type, M3u8CacheEventType.completed);
+    expect(event.duration, const Duration(seconds: 60));
+    expect(event.startPosition, const Duration(seconds: 15));
+    expect(event.position, const Duration(seconds: 60));
+    expect(event.percent, 100.0);
+    expect(event.isComplete, true);
+    expect(event.quality?.height, 720);
   });
 
   test('controller initializes and applies player events', () async {
@@ -599,11 +666,36 @@ void main() {
     final platform = FakePlayerM3u8Platform();
 
     await M3u8PlayerCache.configure(maxSizeBytes: 128, platform: platform);
+    final info = await M3u8PlayerCache.info(platform: platform);
+    final taskId = await M3u8PlayerCache.precache(
+      'https://example.com/index.m3u8',
+      headers: const {'Authorization': 'token'},
+      initialPosition: const Duration(seconds: 12),
+      quality: const M3u8Quality(
+        id: '720p',
+        label: '720p',
+        width: 1280,
+        height: 720,
+        bitrate: 1500000,
+      ),
+      platform: platform,
+    );
+    await M3u8PlayerCache.cancelPrecache(taskId, platform: platform);
     await M3u8PlayerCache.clear(platform: platform);
 
     expect(platform.configuredCacheBytes, 128);
+    expect(info.maxSizeBytes, 512);
+    expect(info.sizeBytes, 128);
+    expect(info.usageRatio, 0.25);
+    expect(taskId, 'cache-task-1');
+    expect(platform.precacheUrl, 'https://example.com/index.m3u8');
+    expect(platform.precacheHeaders, const {'Authorization': 'token'});
+    expect(platform.precacheInitialPosition, const Duration(seconds: 12));
+    expect(platform.selectedQuality?.height, 720);
+    expect(platform.cancelledPrecacheTaskId, 'cache-task-1');
     expect(platform.cacheCleared, true);
     await platform.eventController.close();
+    await platform.cacheEventController.close();
   });
 
   test('cache wrapper rejects invalid cache size', () {
@@ -611,6 +703,22 @@ void main() {
 
     expect(
       () => M3u8PlayerCache.configure(maxSizeBytes: 0, platform: platform),
+      throwsArgumentError,
+    );
+    expect(
+      () => M3u8PlayerCache.precache('', platform: platform),
+      throwsArgumentError,
+    );
+    expect(
+      () => M3u8PlayerCache.precache(
+        'https://example.com/index.m3u8',
+        initialPosition: const Duration(milliseconds: -1),
+        platform: platform,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => M3u8PlayerCache.cancelPrecache('', platform: platform),
       throwsArgumentError,
     );
   });

@@ -5,7 +5,9 @@ import UIKit
 public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var textureRegistry: FlutterTextureRegistry
   private var eventSink: FlutterEventSink?
+  private var cacheEventSink: FlutterEventSink?
   private var players: [Int64: M3u8IosPlayer] = [:]
+  private var cacheTasks: [String: M3u8DiskCachePrefetcher] = [:]
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let methodChannel = FlutterMethodChannel(
@@ -16,9 +18,14 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       name: "player_m3u8/events",
       binaryMessenger: registrar.messenger()
     )
+    let cacheEventChannel = FlutterEventChannel(
+      name: "player_m3u8/cache_events",
+      binaryMessenger: registrar.messenger()
+    )
     let instance = PlayerM3u8Plugin(textureRegistry: registrar.textures())
     registrar.addMethodCallDelegate(instance, channel: methodChannel)
     eventChannel.setStreamHandler(instance)
+    cacheEventChannel.setStreamHandler(CacheEventStreamHandler(plugin: instance))
   }
 
   init(textureRegistry: FlutterTextureRegistry) {
@@ -161,6 +168,12 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       configureCache(call: call, result: result)
     case "clearCache":
       clearCache(result: result)
+    case "getCacheInfo":
+      getCacheInfo(result: result)
+    case "precache":
+      precache(call: call, result: result)
+    case "cancelPrecache":
+      cancelPrecache(call: call, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -263,6 +276,16 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       )
       return
     }
+    guard cacheTasks.isEmpty else {
+      result(
+        FlutterError(
+          code: "active_cache_tasks",
+          message: "Cache cannot be configured while cache tasks are active.",
+          details: nil
+        )
+      )
+      return
+    }
     do {
       try M3u8IosCacheManager.shared.configure(maxSizeBytes: maxSizeBytes.int64Value)
       result(nil)
@@ -288,6 +311,16 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       )
       return
     }
+    guard cacheTasks.isEmpty else {
+      result(
+        FlutterError(
+          code: "active_cache_tasks",
+          message: "Cache cannot be cleared while cache tasks are active.",
+          details: nil
+        )
+      )
+      return
+    }
     do {
       try M3u8IosCacheManager.shared.clear()
       result(nil)
@@ -300,6 +333,75 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         )
       )
     }
+  }
+
+  private func getCacheInfo(result: @escaping FlutterResult) {
+    do {
+      result(try M3u8IosCacheManager.shared.info())
+    } catch {
+      result(
+        FlutterError(
+          code: "cache_info_failed",
+          message: error.localizedDescription,
+          details: nil
+        )
+      )
+    }
+  }
+
+  private func precache(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let urlString = arguments["url"] as? String,
+      !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+      let url = URL(string: urlString)
+    else {
+      result(FlutterError(code: "invalid_url", message: "url is required.", details: nil))
+      return
+    }
+    let initialPositionMs = (arguments["initialPosition"] as? NSNumber)?.int64Value ?? 0
+    guard initialPositionMs >= 0 else {
+      result(
+        FlutterError(
+          code: "invalid_initial_position",
+          message: "initialPosition must be a non-negative integer.",
+          details: nil
+        )
+      )
+      return
+    }
+    let headers = arguments["headers"] as? [String: String] ?? [:]
+    let quality = arguments["quality"] as? [String: Any] ?? autoQuality()
+    let taskId = UUID().uuidString
+    let prefetcher = M3u8DiskCachePrefetcher(
+      url: url,
+      headers: headers,
+      playerIdProvider: { -1 },
+      eventSinkProvider: { [weak self] in self?.cacheEventSink },
+      taskId: taskId,
+      onFinished: { [weak self] in self?.cacheTasks.removeValue(forKey: taskId) },
+      qualityProvider: { quality }
+    )
+    cacheTasks[taskId] = prefetcher
+    prefetcher.restart(from: initialPositionMs)
+    result(taskId)
+  }
+
+  private func cancelPrecache(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let taskId = arguments["taskId"] as? String,
+      !taskId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else {
+      result(FlutterError(code: "invalid_cache_task", message: "taskId is required.", details: nil))
+      return
+    }
+    cacheTasks.removeValue(forKey: taskId)?.cancel()
+    cacheEventSink?([
+      "taskId": taskId,
+      "event": "cancelled",
+    ])
+    result(nil)
   }
 
   private func withPlayer(
@@ -322,5 +424,36 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       return
     }
     action(player)
+  }
+
+  private final class CacheEventStreamHandler: NSObject, FlutterStreamHandler {
+    private weak var plugin: PlayerM3u8Plugin?
+
+    init(plugin: PlayerM3u8Plugin) {
+      self.plugin = plugin
+    }
+
+    func onListen(withArguments arguments: Any?, eventSink events: @escaping FlutterEventSink)
+      -> FlutterError?
+    {
+      plugin?.cacheEventSink = events
+      return nil
+    }
+
+    func onCancel(withArguments arguments: Any?) -> FlutterError? {
+      plugin?.cacheEventSink = nil
+      return nil
+    }
+  }
+
+  private func autoQuality() -> [String: Any] {
+    [
+      "id": "auto",
+      "label": "Auto",
+      "width": 0,
+      "height": 0,
+      "bitrate": 0,
+      "isAuto": true,
+    ]
   }
 }

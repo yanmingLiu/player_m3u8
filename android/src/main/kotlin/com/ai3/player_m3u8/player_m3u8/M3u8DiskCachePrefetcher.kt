@@ -24,6 +24,9 @@ internal class M3u8DiskCachePrefetcher(
     private val headers: Map<String, String>,
     private val playerIdProvider: () -> Long,
     private val eventSinkProvider: () -> EventChannel.EventSink?,
+    private val taskId: String? = null,
+    private val onFinished: (() -> Unit)? = null,
+    private val qualityProvider: () -> Map<String, Any?> = { autoQuality() },
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -41,6 +44,9 @@ internal class M3u8DiskCachePrefetcher(
 
     @Volatile
     private var playlist: Playlist? = null
+
+    @Volatile
+    private var playlistQualityKey: String? = null
 
     private var lastProgressSentAt = 0L
 
@@ -68,12 +74,25 @@ internal class M3u8DiskCachePrefetcher(
 
     private fun cacheVod(startPositionMs: Long, taskGeneration: Int) {
         try {
-            val currentPlaylist = playlist ?: loadPlaylist().also { playlist = it }
-            if (
-                currentPlaylist.segments.isEmpty() ||
-                currentPlaylist.durationMs <= 0L ||
-                !isCurrent(taskGeneration)
-            ) {
+            val selectedQuality = normalizedQuality(qualityProvider())
+            val selectedQualityKey = qualityKey(selectedQuality)
+            val currentPlaylist = if (playlist != null && playlistQualityKey == selectedQualityKey) {
+                playlist!!
+            } else {
+                loadPlaylist(selectedQuality).also {
+                    playlist = it
+                    playlistQualityKey = selectedQualityKey
+                }
+            }
+            if (!isCurrent(taskGeneration)) {
+                return
+            }
+            if (currentPlaylist.segments.isEmpty() || currentPlaylist.durationMs <= 0L) {
+                sendCacheError(
+                    IllegalStateException("No cacheable HLS segments found."),
+                    taskGeneration,
+                )
+                notifyFinished(taskGeneration)
                 return
             }
 
@@ -89,6 +108,7 @@ internal class M3u8DiskCachePrefetcher(
                 isComplete = false,
                 force = true,
                 taskGeneration = taskGeneration,
+                quality = currentPlaylist.quality,
             )
 
             for (resource in currentPlaylist.resources) {
@@ -112,6 +132,7 @@ internal class M3u8DiskCachePrefetcher(
                         isComplete = false,
                         force = false,
                         taskGeneration = taskGeneration,
+                        quality = currentPlaylist.quality,
                     )
                 }
             }
@@ -124,31 +145,48 @@ internal class M3u8DiskCachePrefetcher(
                     isComplete = true,
                     force = true,
                     taskGeneration = taskGeneration,
+                    quality = currentPlaylist.quality,
                 )
+                notifyFinished(taskGeneration)
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
-        } catch (_: Throwable) {
+        } catch (error: Throwable) {
+            sendCacheError(error, taskGeneration)
+            notifyFinished(taskGeneration)
             // Disk prefetch is optional; playback should continue through ExoPlayer.
         }
     }
 
-    private fun loadPlaylist(): Playlist {
+    private fun loadPlaylist(selectedQuality: Map<String, Any?>): Playlist {
         val rootUri = Uri.parse(url)
         return when (val rootPlaylist = loadHlsPlaylist(rootUri)) {
             is HlsMediaPlaylist -> {
                 logMediaPlaylist(rootUri, rootPlaylist, root = true)
-                toPlaylist(rootUri, rootPlaylist)
+                toPlaylist(rootUri, rootPlaylist, selectedQuality)
             }
             is HlsMultivariantPlaylist -> {
                 logMultivariantPlaylist(rootUri, rootPlaylist)
-                val selectedPlaylistUri = selectMediaPlaylistUri(rootPlaylist)
+                val selectedVariant = selectMediaPlaylistVariant(rootPlaylist, selectedQuality)
+                val selectedPlaylistUri = selectedVariant?.url
+                    ?: rootPlaylist.mediaPlaylistUrls.firstOrNull()
+                    ?: Uri.parse(url)
                 val mediaPlaylist = loadHlsPlaylist(selectedPlaylistUri) as? HlsMediaPlaylist
-                    ?: return Playlist(emptyList(), emptyList(), durationMs = 0L)
+                    ?: return Playlist(emptyList(), emptyList(), durationMs = 0L, quality = selectedQuality)
                 logMediaPlaylist(selectedPlaylistUri, mediaPlaylist, root = false)
-                toPlaylist(selectedPlaylistUri, mediaPlaylist)
+                toPlaylist(
+                    selectedPlaylistUri,
+                    mediaPlaylist,
+                    selectedVariant?.format?.let {
+                        qualityPayload(
+                            width = it.width.coerceAtLeast(0),
+                            height = it.height.coerceAtLeast(0),
+                            bitrate = it.bitrate.coerceAtLeast(0),
+                        )
+                    } ?: selectedQuality,
+                )
             }
-            else -> Playlist(emptyList(), emptyList(), durationMs = 0L)
+            else -> Playlist(emptyList(), emptyList(), durationMs = 0L, quality = selectedQuality)
         }
     }
 
@@ -164,11 +202,51 @@ internal class M3u8DiskCachePrefetcher(
     }
 
     private fun selectMediaPlaylistUri(playlist: HlsMultivariantPlaylist): Uri {
-        val variant = playlist.variants
-            .maxByOrNull { it.format.height.takeIf { height -> height > 0 } ?: 0 }
-        return variant?.url
+        val selectedQuality = normalizedQuality(qualityProvider())
+        return selectMediaPlaylistVariant(playlist, selectedQuality)?.url
             ?: playlist.mediaPlaylistUrls.firstOrNull()
             ?: Uri.parse(url)
+    }
+
+    private fun selectMediaPlaylistVariant(
+        playlist: HlsMultivariantPlaylist,
+        selectedQuality: Map<String, Any?>,
+    ): HlsMultivariantPlaylist.Variant? {
+        val variants = playlist.variants
+        if (variants.isEmpty()) {
+            return null
+        }
+        val isAuto = selectedQuality["isAuto"] == true
+        if (isAuto) {
+            return variants.first()
+        }
+        val selectedHeight = selectedQuality["height"] as? Int ?: 0
+        val selectedBitrate = selectedQuality["bitrate"] as? Int ?: 0
+        val selectedWidth = selectedQuality["width"] as? Int ?: 0
+        return variants.minWithOrNull(
+            compareBy<HlsMultivariantPlaylist.Variant> { variant ->
+                val height = variant.format.height.coerceAtLeast(0)
+                if (selectedHeight > 0 && height > 0) {
+                    kotlin.math.abs(height - selectedHeight)
+                } else {
+                    Int.MAX_VALUE / 4
+                }
+            }.thenBy { variant ->
+                val bitrate = variant.format.bitrate.coerceAtLeast(0)
+                if (selectedBitrate > 0 && bitrate > 0) {
+                    kotlin.math.abs(bitrate - selectedBitrate)
+                } else {
+                    Int.MAX_VALUE / 4
+                }
+            }.thenBy { variant ->
+                val width = variant.format.width.coerceAtLeast(0)
+                if (selectedWidth > 0 && width > 0) {
+                    kotlin.math.abs(width - selectedWidth)
+                } else {
+                    Int.MAX_VALUE / 4
+                }
+            },
+        )
     }
 
     private fun logMultivariantPlaylist(
@@ -225,7 +303,11 @@ internal class M3u8DiskCachePrefetcher(
         }
     }
 
-    private fun toPlaylist(playlistUri: Uri, mediaPlaylist: HlsMediaPlaylist): Playlist {
+    private fun toPlaylist(
+        playlistUri: Uri,
+        mediaPlaylist: HlsMediaPlaylist,
+        quality: Map<String, Any?>,
+    ): Playlist {
         val resources = linkedSetOf<Uri>()
         val segments = mutableListOf<Segment>()
         val baseUri = mediaPlaylist.baseUri.takeIf { it.isNotBlank() } ?: playlistUri.toString()
@@ -252,6 +334,7 @@ internal class M3u8DiskCachePrefetcher(
             segments = segments,
             resources = resources.toList(),
             durationMs = usToMs(mediaPlaylist.durationUs).coerceAtLeast(0L),
+            quality = quality,
         )
     }
 
@@ -290,6 +373,7 @@ internal class M3u8DiskCachePrefetcher(
         isComplete: Boolean,
         force: Boolean,
         taskGeneration: Int,
+        quality: Map<String, Any?>,
     ) {
         if (!force) {
             val now = SystemClock.elapsedRealtime()
@@ -306,15 +390,23 @@ internal class M3u8DiskCachePrefetcher(
             (diskCachePositionMs.toDouble() / durationMs.toDouble() * 100.0)
                 .coerceIn(0.0, 100.0)
         }
+        val eventName = when {
+            taskId == null -> "diskCache"
+            isComplete -> "completed"
+            else -> "progress"
+        }
         val event = mapOf(
             "playerId" to playerIdProvider(),
-            "event" to "diskCache",
+            "event" to eventName,
+            "taskId" to taskId,
+            "url" to url,
             "duration" to durationMs,
             "diskCacheStartPosition" to diskCacheStartMs,
             "diskCachePosition" to diskCachePositionMs,
             "diskCachePercent" to percent,
             "isDiskCacheComplete" to isComplete,
-        )
+            "quality" to quality,
+        ).filterValues { it != null }
         mainHandler.post {
             if (isCurrent(taskGeneration)) {
                 eventSinkProvider()?.success(event)
@@ -322,8 +414,80 @@ internal class M3u8DiskCachePrefetcher(
         }
     }
 
+    private fun sendCacheError(error: Throwable, taskGeneration: Int) {
+        val cacheTaskId = taskId ?: return
+        mainHandler.post {
+            if (isCurrent(taskGeneration)) {
+                eventSinkProvider()?.success(
+                    mapOf(
+                        "taskId" to cacheTaskId,
+                        "url" to url,
+                        "event" to "error",
+                        "error" to mapOf(
+                            "code" to "cache_error",
+                            "message" to (error.message ?: "Cache task failed."),
+                        ),
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun notifyFinished(taskGeneration: Int) {
+        val callback = onFinished ?: return
+        mainHandler.post {
+            if (generation.get() == taskGeneration) {
+                callback()
+            }
+        }
+    }
+
     private fun isCurrent(taskGeneration: Int): Boolean {
         return !cancelled && generation.get() == taskGeneration
+    }
+
+    private fun normalizedQuality(quality: Map<String, Any?>): Map<String, Any?> {
+        return if (quality["isAuto"] == true) {
+            autoQuality()
+        } else {
+            qualityPayload(
+                width = (quality["width"] as? Number)?.toInt() ?: 0,
+                height = (quality["height"] as? Number)?.toInt() ?: 0,
+                bitrate = (quality["bitrate"] as? Number)?.toInt() ?: 0,
+            )
+        }
+    }
+
+    private fun qualityKey(quality: Map<String, Any?>): String {
+        return listOf(
+            quality["isAuto"] == true,
+            quality["width"] as? Int ?: 0,
+            quality["height"] as? Int ?: 0,
+            quality["bitrate"] as? Int ?: 0,
+        ).joinToString(":")
+    }
+
+    private fun qualityPayload(width: Int, height: Int, bitrate: Int): Map<String, Any?> {
+        val safeHeight = height.coerceAtLeast(0)
+        val safeBitrate = bitrate.coerceAtLeast(0)
+        val label = when {
+            safeHeight > 0 -> "${safeHeight}p"
+            safeBitrate > 0 -> "${safeBitrate / 1000} Kbps"
+            else -> "Unknown"
+        }
+        val id = when {
+            safeHeight > 0 -> "${safeHeight}p"
+            safeBitrate > 0 -> "${safeBitrate}bps"
+            else -> "unknown"
+        }
+        return mapOf(
+            "id" to id,
+            "label" to label,
+            "width" to width.coerceAtLeast(0),
+            "height" to safeHeight,
+            "bitrate" to safeBitrate,
+            "isAuto" to false,
+        )
     }
 
     private fun usToMs(timeUs: Long): Long {
@@ -353,6 +517,7 @@ internal class M3u8DiskCachePrefetcher(
         val segments: List<Segment>,
         val resources: List<Uri>,
         val durationMs: Long,
+        val quality: Map<String, Any?>,
     ) {
         fun segmentIndexFor(positionMs: Long): Int {
             if (segments.isEmpty()) {
@@ -374,5 +539,16 @@ internal class M3u8DiskCachePrefetcher(
 
     private companion object {
         const val PROGRESS_INTERVAL_MS = 250L
+
+        fun autoQuality(): Map<String, Any?> {
+            return mapOf(
+                "id" to "auto",
+                "label" to "Auto",
+                "width" to 0,
+                "height" to 0,
+                "bitrate" to 0,
+                "isAuto" to true,
+            )
+        }
     }
 }

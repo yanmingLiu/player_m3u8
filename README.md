@@ -4,33 +4,33 @@
 
 ## 中文
 
-`player_m3u8` 是一个面向 iOS 和 Android 的 Flutter HLS/m3u8 播放插件。插件使用 Flutter `Texture` 渲染视频画面，Android 基于 Media3 ExoPlayer，iOS 基于 AVFoundation。
+`player_m3u8` 是一个面向 iOS 和 Android 的 Flutter HLS/m3u8 播放插件，并支持 progressive MP4/MOV 播放。插件使用 Flutter `Texture` 渲染视频画面，Android 基于 Media3 ExoPlayer，iOS 基于 AVFoundation。
 
-它适合需要直接播放网络 HLS/m3u8 VOD、展示播放进度/缓冲进度/磁盘预取进度，并支持播放列表切换的 Flutter 应用。
+它适合需要直接播放网络 HLS/m3u8 VOD 或 MP4/MOV 文件、展示播放进度/缓冲进度，并支持播放列表切换的 Flutter 应用。HLS source 额外支持磁盘预取、清晰度选择和 seek-aware 预取。
 
 ### 功能
 
-- 网络 HLS/m3u8 播放。
+- 网络 HLS/m3u8 播放，以及 progressive MP4/MOV 播放。
 - iOS 和 Android 原生解码与 Texture 渲染。
 - 播放、暂停、seek、相对快进/快退、倍速、音量/静音、错误重试、dispose。
 - 播放列表切换：`setSource(...)`。
 - 播放状态、进度、时长、播放器缓冲、磁盘缓存、视频尺寸、错误事件。
 - 播放健康指标：首帧耗时、rebuffer 次数和总时长、丢帧数、当前码率、观测带宽、清晰度切换次数。
-- HLS 清晰度列表和 Auto/手动清晰度选择。
+- HLS 清晰度列表和 Auto/手动清晰度选择；MP4/MOV 不提供清晰度选择。
 - 播放倍速控制，支持 0.25x 到 2.0x。
 - 音量和静音控制，切换 source 后保留当前音频状态。
 - 连续 rebuffer 或播放错误时自动降到下一档清晰度并尝试恢复当前位置。
 - 有界播放器内存缓冲，避免用超大 forward buffer 导致 OOM。
 - 可配置磁盘缓存容量，并支持清理磁盘缓存。
-- 当前视频磁盘预取：播放暂停时仍可继续缓存，切换视频时停止旧视频主动缓存。
-- seek 后磁盘预取会从新的播放位置重新开始，优先缓存用户即将观看的内容。
+- HLS 当前视频磁盘预取：播放暂停时仍可继续缓存，切换视频时停止旧视频主动缓存。
+- HLS seek 后磁盘预取会从新的播放位置重新开始，优先缓存用户即将观看的内容。
 
 ### 平台实现
 
 | 平台 | 播放内核 | 渲染 | 缓存策略 |
 | --- | --- | --- | --- |
-| Android | Media3 ExoPlayer + HLS | Flutter Texture / SurfaceProducer | 播放和预取共用 Media3 `SimpleCache` |
-| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | `AVAssetResourceLoader` 让播放和预取共用 app caches 磁盘文件 |
+| Android | Media3 ExoPlayer + HLS/progressive | Flutter Texture / SurfaceProducer | HLS 播放和预取共用 Media3 `SimpleCache`；MP4/MOV 不启动主动预取 |
+| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | HLS 通过 `AVAssetResourceLoader` 复用 app caches；MP4/MOV 直接使用原始 URL |
 
 ### 安装
 
@@ -65,6 +65,16 @@ await controller.initialize(
 );
 
 M3u8Player(controller: controller);
+```
+
+MP4/MOV 会在默认 `sourceType: M3u8SourceType.auto` 下按后缀自动识别；如果 URL 没有标准后缀，可以显式传入：
+
+```dart
+await controller.initialize(
+  'https://example.com/video.mp4',
+  sourceType: M3u8SourceType.progressive,
+  autoPlay: true,
+);
 ```
 
 在 widget 销毁时释放：
@@ -126,11 +136,11 @@ await M3u8PlayerCache.cancelPrecache(taskId);
 await M3u8PlayerCache.clear();
 ```
 
-配置和清理都要求当前没有活跃 native player 或独立预缓存任务；查询缓存状态和独立预缓存任务可在播放中调用。独立预缓存返回 `taskId`，进度通过 `M3u8PlayerCache.events()` 上报，可按 `taskId` 过滤并取消。`precache` 可传入 `quality`，用于预热当前播放档位或下一个 source 的目标档位；事件会回传实际预缓存档位。Android 预缓存复用 Media3 `HlsPlaylistParser` + `CacheWriter` + `SimpleCache`；iOS 复用 AVFoundation resource loader 同一套 app caches。播放器 source 切换会取消播放器内部预取；业务自己发起的独立预缓存任务应按业务生命周期主动取消。
+配置和清理都要求当前没有活跃 native player 或独立预缓存任务；查询缓存状态和独立预缓存任务可在播放中调用。独立预缓存返回 `taskId`，进度通过 `M3u8PlayerCache.events()` 上报，可按 `taskId` 过滤并取消。`precache` 只支持 HLS，可传入 `quality`，用于预热当前播放档位或下一个 source 的目标档位；事件会回传实际预缓存档位。Android 预缓存复用 Media3 `HlsPlaylistParser` + `CacheWriter` + `SimpleCache`；iOS 复用 AVFoundation resource loader 同一套 app caches。MP4/MOV 调用 `precache` 会返回 `unsupported_source_type`。播放器 source 切换会取消播放器内部预取；业务自己发起的独立预缓存任务应按业务生命周期主动取消。
 
 ### 清晰度选择
 
-播放器会在状态中暴露 HLS master playlist 中的可用清晰度：
+播放器会在状态中暴露 HLS master playlist 中的可用清晰度；MP4/MOV 的 `availableQualities` 为空，调用 `setQuality` 会返回 `unsupported_source_type`：
 
 ```dart
 final qualities = controller.value.availableQualities;
@@ -300,10 +310,10 @@ example/
 - 完整缓存思路走磁盘缓存/下载任务。
 - 进度事件默认约 250ms 一次，避免高频 channel 压力。
 - dispose 或 source 切换时释放 player、surface/texture、observer/timer、预取任务。
-- Android 预取使用 Media3 `HlsPlaylistParser` 解析 HLS，并通过 Media3 `CacheWriter` 写入 `SimpleCache`，播放器可复用缓存数据。
-- iOS 播放通过 `AVAssetResourceLoader` 读取自定义 scheme，playlist、key、map、segment 请求会优先命中 app caches；缺失时下载并写入缓存。
-- `M3u8PlayerCache.precache` 可在创建播放器前预热当前/下一个 source 的磁盘缓存，并通过独立 cache event channel 上报进度、完成、取消或错误；传入 `quality` 后会优先预缓存最接近该档位的 HLS variant。
-- 播放器内部主动预取会跟随手动清晰度、自动降级恢复和 seek 位置重启，不再固定优先最高码率 variant。
+- Android 预取使用 Media3 `HlsPlaylistParser` 解析 HLS，并通过 Media3 `CacheWriter` 写入 `SimpleCache`，播放器可复用缓存数据；MP4/MOV 不启动主动预取。
+- iOS HLS 播放通过 `AVAssetResourceLoader` 读取自定义 scheme，playlist、key、map、segment 请求会优先命中 app caches；MP4/MOV 直接用原始 URL 创建 `AVURLAsset`。
+- `M3u8PlayerCache.precache` 可在创建播放器前预热当前/下一个 HLS source 的磁盘缓存，并通过独立 cache event channel 上报进度、完成、取消或错误；传入 `quality` 后会优先预缓存最接近该档位的 HLS variant。
+- HLS 播放器内部主动预取会跟随手动清晰度、自动降级恢复和 seek 位置重启，不再固定优先最高码率 variant。
 - Android 通过 ExoPlayer track/analytics 上报首帧、rebuffer、丢帧、当前码率和带宽估计；iOS 通过 AVPlayer access log 和视频轨道信息上报对应指标。rebuffer 总时长和清晰度切换次数可用于真实设备 QoE 统计。
 - Android 手动清晰度通过 `DefaultTrackSelector` 约束最高视频尺寸和码率；iOS 手动清晰度通过 ResourceLoader 过滤 HLS master variants。
 - 连续 rebuffer 或播放错误触发自动降级恢复，保留当前位置；没有更低档可降时才向 Dart 上报播放错误。
@@ -311,7 +321,8 @@ example/
 
 ### 当前限制
 
-- 仅支持网络 HLS/m3u8 VOD。
+- 支持网络 HLS/m3u8 VOD 和 progressive MP4/MOV；不支持 DASH、SmoothStreaming、RTSP、FLV 或本地文件。
+- MP4/MOV 第一版仅支持播放、暂停、seek、进度和 source 切换，不支持磁盘预取或清晰度选择。
 - 暂不支持字幕、后台播放、DRM。
 - 当前已支持手动清晰度约束，但尚未暴露自定义自动码率策略。
 - iOS HLS 解析仍是轻量实现，适合常见 VOD playlist；复杂 HLS 特性仍需继续补测试。
@@ -319,7 +330,7 @@ example/
 
 ### 示例工程
 
-example 默认使用中文界面，顶部按钮可在中文和英文之间切换。示例内置多个公开 HLS 测试源用于切换播放、清晰度、缓存和 seek 后预取验证：
+example 默认使用中文界面，顶部按钮可在中文和英文之间切换。示例内置多个公开 HLS 和 MP4 测试源，用于切换播放、清晰度、缓存、seek 后预取，以及 progressive 播放验证：
 
 | 名称 | 地址 |
 | --- | --- |
@@ -329,6 +340,10 @@ example 默认使用中文界面，顶部按钮可在中文和英文之间切换
 | Mux Tears of Steel | `https://test-streams.mux.dev/tos_ismc/main.m3u8` |
 | Akamai HLS Test | `https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8` |
 | AWS CloudFront Sintel | `https://d2zihajmogu5jn.cloudfront.net/sintel/master.m3u8` |
+| MP4 Video.js Oceans | `https://vjs.zencdn.net/v/oceans.mp4` |
+| MP4 W3C Sintel Trailer | `https://media.w3.org/2010/05/sintel/trailer.mp4` |
+| MP4 W3Schools Big Buck Bunny | `https://www.w3schools.com/html/mov_bbb.mp4` |
+| MP4 MDN Flower | `https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4` |
 
 example 页面还包含播放控制、播放列表切换、独立磁盘预取控制、播放健康指标和 QoE 快照面板，可在真机调试时观察最近采样窗口的 rebuffer ratio、丢帧增量、恢复增量、清晰度切换增量，并复制最新快照 JSON。
 
@@ -376,33 +391,33 @@ dart pub publish
 
 ## English
 
-`player_m3u8` is a Flutter plugin for network HLS/m3u8 playback on iOS and Android. It renders video through Flutter `Texture`, uses Media3 ExoPlayer on Android, and uses AVFoundation on iOS.
+`player_m3u8` is a Flutter plugin for network HLS/m3u8 playback on iOS and Android, with progressive MP4/MOV playback support. It renders video through Flutter `Texture`, uses Media3 ExoPlayer on Android, and uses AVFoundation on iOS.
 
-It is designed for Flutter apps that need HLS/m3u8 VOD playback, playback/buffer/cache progress, error reporting, and playlist source switching.
+It is designed for Flutter apps that need HLS/m3u8 VOD or MP4/MOV playback, playback/buffer progress, error reporting, and playlist source switching. HLS sources also support disk prefetch, quality selection, and seek-aware prefetch.
 
 ### Features
 
-- Network HLS/m3u8 playback.
+- Network HLS/m3u8 playback plus progressive MP4/MOV playback.
 - Native decoding and Flutter Texture rendering on iOS and Android.
 - Play, pause, seek, relative skip, playback speed, volume/mute, error retry, and dispose.
 - Playlist source switching through `setSource(...)`.
 - Playback state, progress, duration, player buffer, disk cache, video size, and error events.
 - Playback health metrics: startup time, rebuffer count and duration, dropped frames, current video bitrate, observed bitrate, and quality switch count.
-- HLS quality list plus Auto/manual quality selection.
+- HLS quality list plus Auto/manual quality selection. MP4/MOV sources do not expose quality selection.
 - Playback speed control from 0.25x to 2.0x.
 - Volume and mute controls that survive source switching.
 - Automatic lower-quality recovery after repeated rebuffering or playback errors.
 - Bounded in-memory player buffering to avoid OOM.
 - Configurable disk cache size and disk cache clearing.
-- Disk prefetch for the current source. Prefetch can continue while playback is paused and is stopped when switching away from the source.
-- After seek, disk prefetch restarts from the new playback position and prioritizes the content the user is about to watch.
+- HLS disk prefetch for the current source. Prefetch can continue while playback is paused and is stopped when switching away from the source.
+- After HLS seek, disk prefetch restarts from the new playback position and prioritizes the content the user is about to watch.
 
 ### Platform Implementation
 
 | Platform | Playback Engine | Rendering | Cache Strategy |
 | --- | --- | --- | --- |
-| Android | Media3 ExoPlayer + HLS | Flutter Texture / SurfaceProducer | Playback and prefetch share Media3 `SimpleCache` |
-| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | `AVAssetResourceLoader` makes playback and prefetch share app caches files |
+| Android | Media3 ExoPlayer + HLS/progressive | Flutter Texture / SurfaceProducer | HLS playback and prefetch share Media3 `SimpleCache`; MP4/MOV do not start active prefetch |
+| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | HLS reuses app caches through `AVAssetResourceLoader`; MP4/MOV use the original URL directly |
 
 ### Installation
 
@@ -437,6 +452,16 @@ await controller.initialize(
 );
 
 M3u8Player(controller: controller);
+```
+
+MP4/MOV sources are detected by extension with the default `sourceType: M3u8SourceType.auto`. If the URL has no standard extension, pass the source type explicitly:
+
+```dart
+await controller.initialize(
+  'https://example.com/video.mp4',
+  sourceType: M3u8SourceType.progressive,
+  autoPlay: true,
+);
 ```
 
 Dispose the controller with the owning widget:
@@ -498,11 +523,11 @@ await M3u8PlayerCache.cancelPrecache(taskId);
 await M3u8PlayerCache.clear();
 ```
 
-Configure and clear require no active native players or standalone precache tasks; cache info and standalone precache tasks can run while playback is active. Standalone precache returns a `taskId`, emits progress through `M3u8PlayerCache.events()`, and can be cancelled by `taskId`. Pass `quality` to warm the current playback rendition or the next source's target rendition; cache events include the actual warmed quality. Android precache reuses Media3 `HlsPlaylistParser`, `CacheWriter`, and `SimpleCache`; iOS reuses the same app caches path as the AVFoundation resource loader. Player source switching cancels player-owned prefetch; app-owned standalone precache tasks should be cancelled according to app lifecycle.
+Configure and clear require no active native players or standalone precache tasks; cache info and standalone precache tasks can run while playback is active. Standalone HLS precache returns a `taskId`, emits progress through `M3u8PlayerCache.events()`, and can be cancelled by `taskId`. Pass `quality` to warm the current playback rendition or the next source's target rendition; cache events include the actual warmed quality. Android precache reuses Media3 `HlsPlaylistParser`, `CacheWriter`, and `SimpleCache`; iOS reuses the same app caches path as the AVFoundation resource loader. MP4/MOV precache returns `unsupported_source_type`. Player source switching cancels player-owned prefetch; app-owned standalone precache tasks should be cancelled according to app lifecycle.
 
 ### Quality Selection
 
-The player exposes variants from the HLS master playlist:
+The player exposes variants from the HLS master playlist. MP4/MOV `availableQualities` is empty, and `setQuality` returns `unsupported_source_type`:
 
 ```dart
 final qualities = controller.value.availableQualities;
@@ -675,10 +700,10 @@ example/
 - Full-video prefetch is handled through disk cache/download tasks.
 - Progress events are throttled to about 250ms.
 - dispose and source switching release native players, surfaces/textures, observers/timers, and active prefetch tasks.
-- Android prefetch uses Media3 `HlsPlaylistParser` for HLS parsing and Media3 `CacheWriter` to write into `SimpleCache`, which ExoPlayer can reuse.
-- iOS playback uses `AVAssetResourceLoader` with a custom scheme. Playlist, key, map, and segment requests read from app caches first; missing resources are downloaded and stored.
-- `M3u8PlayerCache.precache` can warm disk cache before creating a player or for the next source, with standalone cache events for progress, completion, cancellation, and errors. Passing `quality` prioritizes the closest HLS variant for that rendition.
-- Player-owned active prefetch follows manual quality, automatic recovery downshifts, and seek restarts instead of always prioritizing the highest bitrate variant.
+- Android prefetch uses Media3 `HlsPlaylistParser` for HLS parsing and Media3 `CacheWriter` to write into `SimpleCache`, which ExoPlayer can reuse. MP4/MOV do not start active prefetch.
+- iOS HLS playback uses `AVAssetResourceLoader` with a custom scheme. Playlist, key, map, and segment requests read from app caches first; MP4/MOV create `AVURLAsset` from the original URL.
+- `M3u8PlayerCache.precache` can warm HLS disk cache before creating a player or for the next source, with standalone cache events for progress, completion, cancellation, and errors. Passing `quality` prioritizes the closest HLS variant for that rendition.
+- HLS player-owned active prefetch follows manual quality, automatic recovery downshifts, and seek restarts instead of always prioritizing the highest bitrate variant.
 - Android reports startup, rebuffer, dropped-frame, bitrate, and bandwidth metrics through ExoPlayer tracks/analytics. iOS reports the same metric class through AVPlayer access logs and video track data. Total rebuffer duration and quality switch count are available for real-device QoE analytics.
 - Android manual quality constrains maximum video size and bitrate through `DefaultTrackSelector`; iOS manual quality filters HLS master variants through ResourceLoader.
 - Repeated rebuffering or playback errors trigger automatic lower-quality recovery and preserve the playback position. Playback errors are reported to Dart only when no lower variant is available.
@@ -686,7 +711,8 @@ example/
 
 ### Current Limitations
 
-- Network HLS/m3u8 VOD only.
+- Network HLS/m3u8 VOD and progressive MP4/MOV are supported. DASH, SmoothStreaming, RTSP, FLV, and local files are not supported.
+- MP4/MOV v1 covers playback, pause, seek, progress, and source switching, but not disk prefetch or quality selection.
 - No subtitles, background playback, or DRM yet.
 - Manual quality constraints are supported, but custom automatic bitrate policy controls are not exposed yet.
 - iOS HLS parsing remains lightweight and targets common VOD playlists; complex HLS features need additional validation.
@@ -694,7 +720,7 @@ example/
 
 ### Example App
 
-The example app uses Chinese by default and provides a top-bar language button to switch between Chinese and English. It includes multiple public HLS test sources for playback switching, quality selection, cache, and seek-aware prefetch validation:
+The example app uses Chinese by default and provides a top-bar language button to switch between Chinese and English. It includes multiple public HLS and MP4 test sources for playback switching, quality selection, cache, seek-aware prefetch, and progressive playback validation:
 
 | Name | URL |
 | --- | --- |
@@ -704,6 +730,10 @@ The example app uses Chinese by default and provides a top-bar language button t
 | Mux Tears of Steel | `https://test-streams.mux.dev/tos_ismc/main.m3u8` |
 | Akamai HLS Test | `https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8` |
 | AWS CloudFront Sintel | `https://d2zihajmogu5jn.cloudfront.net/sintel/master.m3u8` |
+| MP4 Video.js Oceans | `https://vjs.zencdn.net/v/oceans.mp4` |
+| MP4 W3C Sintel Trailer | `https://media.w3.org/2010/05/sintel/trailer.mp4` |
+| MP4 W3Schools Big Buck Bunny | `https://www.w3schools.com/html/mov_bbb.mp4` |
+| MP4 MDN Flower | `https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4` |
 
 The example page also includes playback controls, playlist switching, standalone disk prefetch controls, playback-health stats, and a QoE snapshot panel for real-device debugging. It shows recent rebuffer ratio, dropped-frame deltas, recovery deltas, quality-switch deltas, and can copy the latest snapshot JSON.
 

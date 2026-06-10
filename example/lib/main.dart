@@ -32,6 +32,27 @@ const List<VideoSource> sampleVideos = <VideoSource>[
     title: 'AWS CloudFront Sintel',
     url: 'https://d2zihajmogu5jn.cloudfront.net/sintel/master.m3u8',
   ),
+  VideoSource(
+    title: 'MP4 Video.js Oceans',
+    url: 'https://vjs.zencdn.net/v/oceans.mp4',
+    sourceType: M3u8SourceType.progressive,
+  ),
+  VideoSource(
+    title: 'MP4 W3C Sintel Trailer',
+    url: 'https://media.w3.org/2010/05/sintel/trailer.mp4',
+    sourceType: M3u8SourceType.progressive,
+  ),
+  VideoSource(
+    title: 'MP4 W3Schools Big Buck Bunny',
+    url: 'https://www.w3schools.com/html/mov_bbb.mp4',
+    sourceType: M3u8SourceType.progressive,
+  ),
+  VideoSource(
+    title: 'MP4 MDN Flower',
+    url:
+        'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
+    sourceType: M3u8SourceType.progressive,
+  ),
 ];
 
 void main() {
@@ -39,10 +60,17 @@ void main() {
 }
 
 class VideoSource {
-  const VideoSource({required this.title, required this.url});
+  const VideoSource({
+    required this.title,
+    required this.url,
+    this.sourceType = M3u8SourceType.auto,
+  });
 
   final String title;
   final String url;
+  final M3u8SourceType sourceType;
+
+  bool get supportsPrecache => sourceType != M3u8SourceType.progressive;
 }
 
 enum ExampleLanguage { zh, en }
@@ -62,6 +90,8 @@ class ExampleStrings {
   String get nextVideoTooltip => _isZh ? '下一个视频' : 'Next video';
   String get precacheCurrentSourceTooltip =>
       _isZh ? '预取当前播放源' : 'Precache current source';
+  String get precacheUnsupported =>
+      _isZh ? '当前格式不支持预取' : 'Precache unsupported for this source';
   String get cancelPrecacheTooltip => _isZh ? '取消预取' : 'Cancel precache';
   String get precacheIdle => _isZh ? '预取空闲' : 'Precache idle';
   String get precacheCancelled => _isZh ? '预取已取消' : 'Precache cancelled';
@@ -223,7 +253,10 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
 
   Future<void> _initialize() async {
     try {
-      await _controller.initialize(sampleVideos[_currentVideoIndex].url);
+      await _controller.initialize(
+        sampleVideos[_currentVideoIndex].url,
+        sourceType: sampleVideos[_currentVideoIndex].sourceType,
+      );
       _controller.startQoeSampling(interval: const Duration(seconds: 5));
     } finally {
       if (mounted) {
@@ -245,7 +278,11 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     });
     try {
       await _cancelPrecacheTask();
-      await _controller.setSource(sampleVideos[index].url, autoPlay: true);
+      await _controller.setSource(
+        sampleVideos[index].url,
+        sourceType: sampleVideos[index].sourceType,
+        autoPlay: true,
+      );
       _qoeSnapshots.clear();
     } finally {
       if (mounted) {
@@ -287,8 +324,13 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
       return;
     }
     final url = sampleVideos[_currentVideoIndex].url;
+    final sourceType = sampleVideos[_currentVideoIndex].sourceType;
+    if (!sampleVideos[_currentVideoIndex].supportsPrecache) {
+      return;
+    }
     final taskId = await M3u8PlayerCache.precache(
       url,
+      sourceType: sourceType,
       initialPosition: _controller.value.position,
       quality: _controller.value.selectedQuality,
     );
@@ -416,6 +458,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                     _CacheTaskControls(
                       event: _latestCacheEvent,
                       isRunning: _precacheTaskId != null,
+                      isSupported:
+                          sampleVideos[_currentVideoIndex].supportsPrecache,
                       onPrecache: _precacheCurrentSource,
                       onCancel: _cancelPrecacheTask,
                       strings: strings,
@@ -424,6 +468,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                     _Controls(
                       controller: _controller,
                       value: value,
+                      sourceType: sampleVideos[_currentVideoIndex].sourceType,
                       strings: strings,
                     ),
                     const SizedBox(height: 16),
@@ -513,6 +558,7 @@ class _CacheTaskControls extends StatelessWidget {
   const _CacheTaskControls({
     required this.event,
     required this.isRunning,
+    required this.isSupported,
     required this.onPrecache,
     required this.onCancel,
     required this.strings,
@@ -520,6 +566,7 @@ class _CacheTaskControls extends StatelessWidget {
 
   final M3u8CacheEvent? event;
   final bool isRunning;
+  final bool isSupported;
   final VoidCallback onPrecache;
   final VoidCallback onCancel;
   final ExampleStrings strings;
@@ -531,7 +578,7 @@ class _CacheTaskControls extends StatelessWidget {
       children: [
         IconButton.outlined(
           tooltip: strings.precacheCurrentSourceTooltip,
-          onPressed: isRunning ? null : onPrecache,
+          onPressed: isRunning || !isSupported ? null : onPrecache,
           icon: const Icon(Icons.download),
         ),
         const SizedBox(width: 8),
@@ -543,7 +590,9 @@ class _CacheTaskControls extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            _cacheStatus(event, isRunning, strings),
+            isSupported
+                ? _cacheStatus(event, isRunning, strings)
+                : strings.precacheUnsupported,
             style: textTheme.bodyMedium,
             overflow: TextOverflow.ellipsis,
           ),
@@ -585,11 +634,13 @@ class _Controls extends StatelessWidget {
   const _Controls({
     required this.controller,
     required this.value,
+    required this.sourceType,
     required this.strings,
   });
 
   final M3u8PlayerController controller;
   final M3u8PlayerValue value;
+  final M3u8SourceType sourceType;
   final ExampleStrings strings;
 
   @override
@@ -647,6 +698,7 @@ class _Controls extends StatelessWidget {
         _QualitySelector(
           controller: controller,
           value: value,
+          isSupported: sourceType != M3u8SourceType.progressive,
           strings: strings,
         ),
       ],
@@ -733,11 +785,13 @@ class _QualitySelector extends StatelessWidget {
   const _QualitySelector({
     required this.controller,
     required this.value,
+    required this.isSupported,
     required this.strings,
   });
 
   final M3u8PlayerController controller;
   final M3u8PlayerValue value;
+  final bool isSupported;
   final ExampleStrings strings;
 
   @override
@@ -764,7 +818,7 @@ class _QualitySelector extends StatelessWidget {
             ),
           ),
       ],
-      onChanged: value.isInitialized
+      onChanged: value.isInitialized && isSupported
           ? (String? qualityId) {
               final quality = qualities.firstWhere(
                 (item) => item.id == qualityId,

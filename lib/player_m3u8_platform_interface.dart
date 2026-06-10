@@ -7,6 +7,7 @@ import 'src/m3u8_cache_info.dart';
 import 'src/m3u8_player_event.dart';
 import 'src/m3u8_player_value.dart';
 import 'src/m3u8_recovery_policy.dart';
+import 'src/m3u8_source_type.dart';
 
 abstract class PlayerM3u8Platform extends PlatformInterface {
   PlayerM3u8Platform() : super(token: _token);
@@ -33,6 +34,7 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
   Future<int> create({
     required String url,
     Map<String, String> headers = const <String, String>{},
+    M3u8SourceType sourceType = M3u8SourceType.auto,
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
     Duration initialPosition = Duration.zero,
     double playbackSpeed = 1.0,
@@ -96,6 +98,7 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
   Future<String> precache({
     required String url,
     Map<String, String> headers = const <String, String>{},
+    M3u8SourceType sourceType = M3u8SourceType.auto,
     Duration initialPosition = Duration.zero,
     M3u8Quality quality = M3u8Quality.auto,
   }) {

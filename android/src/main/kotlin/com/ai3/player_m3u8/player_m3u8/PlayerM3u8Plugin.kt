@@ -62,7 +62,14 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
                     result.error("invalid_quality", "quality is required.", null)
                     return@withPlayer
                 }
-                player.setQuality(quality)
+                if (!player.setQuality(quality)) {
+                    result.error(
+                        "unsupported_source_type",
+                        "Quality selection is only supported for HLS sources.",
+                        null,
+                    )
+                    return@withPlayer
+                }
                 result.success(null)
             }
             "setRecoveryPolicy" -> withPlayer(call, result) { player ->
@@ -186,11 +193,13 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
             return
         }
         val isMuted = call.argument<Boolean>("isMuted") ?: false
+        val sourceType = M3u8SourceType.from(call.argument<String>("sourceType"))
         val surfaceProducer = textures.createSurfaceProducer()
         val player = M3u8AndroidPlayer(
             context = context,
             url = url,
             headers = headers,
+            sourceType = sourceType,
             initialPositionMs = initialPositionMs,
             playbackSpeed = playbackSpeed,
             volume = volume,
@@ -278,6 +287,15 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
             return
         }
         val headers = call.argument<Map<String, String>>("headers") ?: emptyMap()
+        val sourceType = M3u8SourceType.from(call.argument<String>("sourceType")).resolve(url)
+        if (sourceType != M3u8SourceType.HLS) {
+            result.error(
+                "unsupported_source_type",
+                "Precache is only supported for HLS sources.",
+                null,
+            )
+            return
+        }
         val quality = call.argument<Map<String, Any?>>("quality") ?: autoQuality()
         val taskId = UUID.randomUUID().toString()
         val prefetcher = M3u8DiskCachePrefetcher(

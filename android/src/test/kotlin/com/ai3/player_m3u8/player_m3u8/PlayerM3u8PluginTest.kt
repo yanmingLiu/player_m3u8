@@ -82,6 +82,45 @@ internal class PlayerM3u8PluginTest {
     }
 
     @Test
+    fun onMethodCall_precacheProgressiveSource_returnsUnsupportedError() {
+        val plugin = PlayerM3u8Plugin()
+        val result: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+
+        plugin.onMethodCall(
+            MethodCall(
+                "precache",
+                mapOf(
+                    "url" to "https://example.com/video.mp4",
+                    "sourceType" to "progressive",
+                ),
+            ),
+            result,
+        )
+
+        Mockito.verify(result).error(
+            Mockito.eq("unsupported_source_type"),
+            Mockito.anyString(),
+            Mockito.isNull(),
+        )
+    }
+
+    @Test
+    fun sourceTypeAuto_resolvesByUrlExtension() {
+        assertEquals(
+            M3u8SourceType.HLS,
+            M3u8SourceType.AUTO.resolve("https://example.com/index.m3u8?token=1"),
+        )
+        assertEquals(
+            M3u8SourceType.PROGRESSIVE,
+            M3u8SourceType.AUTO.resolve("https://example.com/video.mp4#t=1"),
+        )
+        assertEquals(
+            M3u8SourceType.PROGRESSIVE,
+            M3u8SourceType.AUTO.resolve("https://example.com/video.mov"),
+        )
+    }
+
+    @Test
     fun onMethodCall_cancelPrecacheInvalidTask_returnsError() {
         val plugin = PlayerM3u8Plugin()
         val result: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)

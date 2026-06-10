@@ -7,6 +7,7 @@ import 'm3u8_player_event.dart';
 import 'm3u8_player_value.dart';
 import 'm3u8_qoe_snapshot.dart';
 import 'm3u8_recovery_policy.dart';
+import 'm3u8_source_type.dart';
 
 class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   M3u8PlayerController({PlayerM3u8Platform? platform})
@@ -30,6 +31,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   String? _sourceUrl;
   Map<String, String> _sourceHeaders = const <String, String>{};
   bool _sourceAutoPlay = false;
+  M3u8SourceType _sourceType = M3u8SourceType.auto;
   bool _disposed = false;
   bool _isChangingSource = false;
 
@@ -84,6 +86,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   Future<void> initialize(
     String url, {
     Map<String, String> headers = const <String, String>{},
+    M3u8SourceType sourceType = M3u8SourceType.auto,
     bool autoPlay = false,
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
     Duration initialPosition = Duration.zero,
@@ -106,9 +109,11 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     _sourceUrl = url;
     _sourceHeaders = Map<String, String>.unmodifiable(headers);
     _sourceAutoPlay = autoPlay;
+    _sourceType = sourceType;
     await _createSource(
       url,
       headers: headers,
+      sourceType: sourceType,
       autoPlay: autoPlay,
       initialPosition: initialPosition,
     );
@@ -117,6 +122,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   Future<void> setSource(
     String url, {
     Map<String, String> headers = const <String, String>{},
+    M3u8SourceType sourceType = M3u8SourceType.auto,
     bool autoPlay = false,
     M3u8RecoveryPolicy? recoveryPolicy,
     Duration initialPosition = Duration.zero,
@@ -161,9 +167,11 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       _sourceUrl = url;
       _sourceHeaders = Map<String, String>.unmodifiable(headers);
       _sourceAutoPlay = autoPlay;
+      _sourceType = sourceType;
       await _createSource(
         url,
         headers: headers,
+        sourceType: sourceType,
         autoPlay: autoPlay,
         initialPosition: initialPosition,
       );
@@ -277,6 +285,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       await _createSource(
         url,
         headers: _sourceHeaders,
+        sourceType: _sourceType,
         autoPlay: autoPlay ?? _sourceAutoPlay,
         initialPosition: retryPosition,
       );
@@ -307,6 +316,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   Future<void> _createSource(
     String url, {
     required Map<String, String> headers,
+    required M3u8SourceType sourceType,
     required bool autoPlay,
     required Duration initialPosition,
   }) async {
@@ -315,6 +325,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       final playerId = await _platform.create(
         url: url,
         headers: headers,
+        sourceType: sourceType,
         recoveryPolicy: _recoveryPolicy,
         initialPosition: initialPosition,
         playbackSpeed: _playbackSpeed,

@@ -18,6 +18,7 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   int? createdPlayerId;
   String? createdUrl;
   Map<String, String>? createdHeaders;
+  M3u8SourceType? createdSourceType;
   Duration? initialPosition;
   double? playbackSpeed;
   double? volume;
@@ -39,6 +40,7 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   bool cacheCleared = false;
   String? precacheUrl;
   Map<String, String>? precacheHeaders;
+  M3u8SourceType? precacheSourceType;
   Duration? precacheInitialPosition;
   String? cancelledPrecacheTaskId;
 
@@ -52,6 +54,7 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   Future<int> create({
     required String url,
     Map<String, String> headers = const <String, String>{},
+    M3u8SourceType sourceType = M3u8SourceType.auto,
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
     Duration initialPosition = Duration.zero,
     double playbackSpeed = 1.0,
@@ -60,6 +63,7 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   }) async {
     createdUrl = url;
     createdHeaders = headers;
+    createdSourceType = sourceType;
     this.recoveryPolicy = recoveryPolicy;
     this.initialPosition = initialPosition;
     this.playbackSpeed = playbackSpeed;
@@ -136,11 +140,13 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   Future<String> precache({
     required String url,
     Map<String, String> headers = const <String, String>{},
+    M3u8SourceType sourceType = M3u8SourceType.auto,
     Duration initialPosition = Duration.zero,
     M3u8Quality quality = M3u8Quality.auto,
   }) async {
     precacheUrl = url;
     precacheHeaders = headers;
+    precacheSourceType = sourceType;
     precacheInitialPosition = initialPosition;
     selectedQuality = quality;
     return 'cache-task-1';
@@ -255,6 +261,7 @@ void main() {
     expect(controller.playerId, 7);
     expect(platform.createdUrl, 'https://example.com/index.m3u8');
     expect(platform.createdHeaders, const {'Authorization': 'token'});
+    expect(platform.createdSourceType, M3u8SourceType.auto);
     expect(platform.initialPosition, const Duration(seconds: 12));
     expect(platform.playbackSpeed, 1.25);
     expect(platform.volume, 0.75);
@@ -453,7 +460,8 @@ void main() {
     expect(controller.value.isInitialized, true);
 
     await controller.setSource(
-      'https://example.com/two.m3u8',
+      'https://example.com/two.mp4',
+      sourceType: M3u8SourceType.progressive,
       autoPlay: true,
       initialPosition: const Duration(seconds: 18),
       playbackSpeed: 1.5,
@@ -464,7 +472,8 @@ void main() {
     expect(platform.disposedPlayerId, 7);
     expect(controller.playerId, 8);
     expect(platform.playedPlayerId, 8);
-    expect(platform.createdUrl, 'https://example.com/two.m3u8');
+    expect(platform.createdUrl, 'https://example.com/two.mp4');
+    expect(platform.createdSourceType, M3u8SourceType.progressive);
     expect(platform.initialPosition, const Duration(seconds: 18));
     expect(platform.playbackSpeed, 1.5);
     expect(platform.volume, 0.4);
@@ -670,6 +679,7 @@ void main() {
     final taskId = await M3u8PlayerCache.precache(
       'https://example.com/index.m3u8',
       headers: const {'Authorization': 'token'},
+      sourceType: M3u8SourceType.hls,
       initialPosition: const Duration(seconds: 12),
       quality: const M3u8Quality(
         id: '720p',
@@ -690,6 +700,7 @@ void main() {
     expect(taskId, 'cache-task-1');
     expect(platform.precacheUrl, 'https://example.com/index.m3u8');
     expect(platform.precacheHeaders, const {'Authorization': 'token'});
+    expect(platform.precacheSourceType, M3u8SourceType.hls);
     expect(platform.precacheInitialPosition, const Duration(seconds: 12));
     expect(platform.selectedQuality?.height, 720);
     expect(platform.cancelledPrecacheTaskId, 'cache-task-1');
@@ -729,6 +740,7 @@ class _EagerEventPlatform extends FakePlayerM3u8Platform {
   Future<int> create({
     required String url,
     Map<String, String> headers = const <String, String>{},
+    M3u8SourceType sourceType = M3u8SourceType.auto,
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
     Duration initialPosition = Duration.zero,
     double playbackSpeed = 1.0,
@@ -738,6 +750,7 @@ class _EagerEventPlatform extends FakePlayerM3u8Platform {
     final playerId = await super.create(
       url: url,
       headers: headers,
+      sourceType: sourceType,
       recoveryPolicy: recoveryPolicy,
       initialPosition: initialPosition,
       playbackSpeed: playbackSpeed,

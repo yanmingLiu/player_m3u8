@@ -2,6 +2,7 @@ import '../player_m3u8_platform_interface.dart';
 import 'm3u8_cache_event.dart';
 import 'm3u8_cache_info.dart';
 import 'm3u8_player_value.dart';
+import 'm3u8_source_type.dart';
 
 class M3u8PlayerCache {
   const M3u8PlayerCache._();
@@ -37,6 +38,7 @@ class M3u8PlayerCache {
   static Future<String> precache(
     String url, {
     Map<String, String> headers = const <String, String>{},
+    M3u8SourceType sourceType = M3u8SourceType.auto,
     Duration initialPosition = Duration.zero,
     M3u8Quality quality = M3u8Quality.auto,
     PlayerM3u8Platform? platform,
@@ -54,6 +56,7 @@ class M3u8PlayerCache {
     return (platform ?? PlayerM3u8Platform.instance).precache(
       url: url,
       headers: headers,
+      sourceType: sourceType,
       initialPosition: initialPosition,
       quality: quality,
     );

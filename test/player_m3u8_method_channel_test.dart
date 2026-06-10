@@ -53,6 +53,7 @@ void main() {
       expect(log.single.arguments, {
         'url': 'https://example.com/index.m3u8',
         'headers': {'User-Agent': 'test'},
+        'sourceType': 'auto',
         'recoveryPolicy': {
           'isEnabled': true,
           'rebufferThreshold': 3,
@@ -66,6 +67,17 @@ void main() {
       });
     },
   );
+
+  test('create sends explicit progressive source type', () async {
+    final playerId = await platform.create(
+      url: 'https://example.com/video.mp4',
+      sourceType: M3u8SourceType.progressive,
+    );
+
+    expect(playerId, 3);
+    expect(log.single.method, 'create');
+    expect(log.single.arguments, containsPair('sourceType', 'progressive'));
+  });
 
   test('create rejects negative initial position', () {
     expect(
@@ -225,6 +237,7 @@ void main() {
     expect(log.single.arguments, {
       'url': 'https://example.com/index.m3u8',
       'headers': {'Authorization': 'token'},
+      'sourceType': 'auto',
       'initialPosition': 15000,
       'quality': {
         'id': '720p',
@@ -235,6 +248,17 @@ void main() {
         'isAuto': false,
       },
     });
+  });
+
+  test('precache sends explicit HLS source type', () async {
+    final taskId = await platform.precache(
+      url: 'https://example.com/index.m3u8',
+      sourceType: M3u8SourceType.hls,
+    );
+
+    expect(taskId, 'cache-task-1');
+    expect(log.single.method, 'precache');
+    expect(log.single.arguments, containsPair('sourceType', 'hls'));
   });
 
   test('cancelPrecache sends task id', () async {

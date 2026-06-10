@@ -2,6 +2,38 @@ import AVFoundation
 import Flutter
 import UIKit
 
+enum M3u8SourceType {
+  case auto
+  case hls
+  case progressive
+
+  static func from(_ value: Any?) -> M3u8SourceType {
+    guard let value = value as? String else { return .auto }
+    switch value.lowercased() {
+    case "hls":
+      return .hls
+    case "progressive":
+      return .progressive
+    default:
+      return .auto
+    }
+  }
+
+  func resolve(url: URL) -> M3u8SourceType {
+    switch self {
+    case .hls, .progressive:
+      return self
+    case .auto:
+      switch url.pathExtension.lowercased() {
+      case "mp4", "mov":
+        return .progressive
+      default:
+        return .hls
+      }
+    }
+  }
+}
+
 struct M3u8RecoveryPolicy {
   static let defaultRebufferThreshold = 3
   static let defaultMinimumRecoveryIntervalMs: Int64 = 10_000
@@ -49,6 +81,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   private let eventSinkProvider: () -> FlutterEventSink?
   private let url: URL
   private let headers: [String: String]
+  private let sourceType: M3u8SourceType
   private var asset: AVURLAsset
   private let player: AVPlayer
   private var playerItem: AVPlayerItem
@@ -86,9 +119,12 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   private var lastRecoveredRebufferCount = 0
   private var lastRecoveryAt = Date.distantPast
 
+  var supportsQualitySelection: Bool { sourceType == .hls }
+
   init(
     url: URL,
     headers: [String: String],
+    sourceType: M3u8SourceType,
     initialPositionMs: Int64,
     playbackSpeed: Double,
     volume: Double,
@@ -101,6 +137,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     self.eventSinkProvider = eventSinkProvider
     self.url = url
     self.headers = headers
+    self.sourceType = sourceType.resolve(url: url)
     self.playbackSpeed = min(max(playbackSpeed, 0.25), 2.0)
     self.volume = min(max(volume, 0), 1)
     self.isMuted = isMuted
@@ -108,9 +145,11 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     self.resourceLoader = M3u8ResourceLoader(headers: headers)
     let assetOptions: [String: Any]? =
       headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers]
-    let asset = AVURLAsset(url: M3u8ResourceLoader.cachedUrl(for: url), options: assetOptions)
+    let asset = AVURLAsset(url: Self.assetUrl(for: url, sourceType: self.sourceType), options: assetOptions)
     self.asset = asset
-    self.asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
+    if self.sourceType == .hls {
+      self.asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
+    }
     self.playerItem = AVPlayerItem(asset: self.asset)
     self.videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
       kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
@@ -122,18 +161,26 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     resourceLoader.qualityProvider = { [weak self] in
       self?.selectedQuality ?? Self.autoQuality()
     }
-    loadAvailableQualities()
+    if self.sourceType == .hls {
+      loadAvailableQualities()
+    } else {
+      availableQualities = []
+    }
     if initialPositionMs > 0 {
       let seconds = Double(initialPositionMs) / 1000.0
       player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
     }
-    diskCachePrefetcher = M3u8DiskCachePrefetcher(
-      url: url,
-      headers: headers,
-      playerIdProvider: { [weak self] in self?.textureId ?? -1 },
-      eventSinkProvider: eventSinkProvider,
-      qualityProvider: { [weak self] in self?.selectedQuality ?? Self.autoQuality() }
-    )
+    if self.sourceType == .hls {
+      diskCachePrefetcher = M3u8DiskCachePrefetcher(
+        url: url,
+        headers: headers,
+        playerIdProvider: { [weak self] in self?.textureId ?? -1 },
+        eventSinkProvider: eventSinkProvider,
+        qualityProvider: { [weak self] in self?.selectedQuality ?? Self.autoQuality() }
+      )
+    } else {
+      diskCachePrefetcher = nil
+    }
     playerItem.add(videoOutput)
     player.actionAtItemEnd = .pause
     configureObservers()
@@ -164,7 +211,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   }
 
   func setQuality(_ quality: [String: Any]) {
-    guard !disposed else { return }
+    guard !disposed, sourceType == .hls else { return }
     selectedQuality = (quality["isAuto"] as? Bool ?? false)
       ? Self.autoQuality()
       : Self.qualityPayload(
@@ -392,8 +439,10 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     asset.resourceLoader.setDelegate(nil, queue: nil)
     let assetOptions: [String: Any]? =
       headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers]
-    asset = AVURLAsset(url: M3u8ResourceLoader.cachedUrl(for: url), options: assetOptions)
-    asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
+    asset = AVURLAsset(url: Self.assetUrl(for: url, sourceType: sourceType), options: assetOptions)
+    if sourceType == .hls {
+      asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
+    }
     playerItem = AVPlayerItem(asset: asset)
     videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
       kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
@@ -418,6 +467,10 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   }
 
   private func loadAvailableQualities() {
+    guard sourceType == .hls else {
+      availableQualities = []
+      return
+    }
     guard let data = try? M3u8IosCacheManager.shared.data(for: url, headers: headers),
       let text = String(data: data, encoding: .utf8)
     else {
@@ -615,6 +668,10 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
       "bitrate": 0,
       "isAuto": true,
     ]
+  }
+
+  private static func assetUrl(for url: URL, sourceType: M3u8SourceType) -> URL {
+    sourceType == .hls ? M3u8ResourceLoader.cachedUrl(for: url) : url
   }
 
   private static func qualityPayload(width: Int, height: Int, bitrate: Int) -> [String: Any] {

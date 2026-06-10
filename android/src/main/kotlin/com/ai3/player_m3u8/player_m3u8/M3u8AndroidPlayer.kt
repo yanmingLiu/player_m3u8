@@ -30,6 +30,7 @@ class M3u8AndroidPlayer(
     private val context: Context,
     private val url: String,
     private val headers: Map<String, String>,
+    sourceType: M3u8SourceType,
     private val initialPositionMs: Long,
     private var playbackSpeed: Float,
     private var volume: Float,
@@ -58,20 +59,26 @@ class M3u8AndroidPlayer(
     private var availableQualities = listOf<Map<String, Any?>>()
     private var selectedQuality = autoQuality()
     private var recoveryPolicy = recoveryPolicy.normalized()
+    private val resolvedSourceType = sourceType.resolve(url)
+    private val isHlsSource = resolvedSourceType == M3u8SourceType.HLS
     private var recoveryCount = 0
     private var lastRecoveryReason = ""
     private var lastRecoveredRebufferCount = 0
     private var lastRecoveryAtMs = 0L
     private val sourceDebugId = M3u8Log.sourceDebugId(url)
     private val videoTrackCompatLimit = videoTrackCompatLimit()
-    private val diskCachePrefetcher = M3u8DiskCachePrefetcher(
-        context = context,
-        url = url,
-        headers = headers,
-        playerIdProvider = { surfaceProducer.id() },
+    private val diskCachePrefetcher = if (isHlsSource) {
+        M3u8DiskCachePrefetcher(
+            context = context,
+            url = url,
+            headers = headers,
+            playerIdProvider = { surfaceProducer.id() },
             eventSinkProvider = eventSinkProvider,
             qualityProvider = { selectedQuality },
         )
+    } else {
+        null
+    }
 
     private val progressRunnable = object : Runnable {
         override fun run() {
@@ -87,14 +94,18 @@ class M3u8AndroidPlayer(
         runOnMain {
             logInfo(
                 "init playerId=${surfaceProducer.id()} source=$sourceDebugId " +
-                    "headerCount=${headers.size} decoderFallback=true " +
+                    "sourceType=$resolvedSourceType headerCount=${headers.size} decoderFallback=true " +
                     "trackCompat=${videoTrackCompatLimit?.name ?: "none"} " +
                     "device=${Build.MANUFACTURER}/${Build.MODEL} sdk=${Build.VERSION.SDK_INT}",
             )
             surfaceProducer.setCallback(this)
-            loadAvailableQualities()
+            if (isHlsSource) {
+                loadAvailableQualities()
+            } else {
+                availableQualities = emptyList()
+            }
             createPlayer()
-            diskCachePrefetcher.restartFrom(initialPositionMs)
+            diskCachePrefetcher?.restartFrom(initialPositionMs)
             mainHandler.post(progressRunnable)
         }
     }
@@ -123,12 +134,15 @@ class M3u8AndroidPlayer(
                     "positionMs=${positionMs.coerceAtLeast(0L)}",
             )
             player?.seekTo(positionMs)
-            diskCachePrefetcher.restartFrom(positionMs)
+            diskCachePrefetcher?.restartFrom(positionMs)
             sendProgress(force = true)
         }
     }
 
-    fun setQuality(quality: Map<String, Any?>) {
+    fun setQuality(quality: Map<String, Any?>): Boolean {
+        if (!isHlsSource) {
+            return false
+        }
         runOnMain {
             val isAuto = quality["isAuto"] as? Boolean ?: false
             selectedQuality = if (isAuto) {
@@ -142,9 +156,10 @@ class M3u8AndroidPlayer(
             }
             qualitySwitchCount += 1
             applySelectedQuality()
-            diskCachePrefetcher.restartFrom(player?.currentPosition?.coerceAtLeast(0L) ?: 0L)
+            diskCachePrefetcher?.restartFrom(player?.currentPosition?.coerceAtLeast(0L) ?: 0L)
             sendProgress(force = true)
         }
+        return true
     }
 
     fun setRecoveryPolicy(policy: M3u8RecoveryPolicy) {
@@ -194,7 +209,7 @@ class M3u8AndroidPlayer(
             logInfo("dispose playerId=${surfaceProducer.id()} source=$sourceDebugId")
             disposed = true
             mainHandler.removeCallbacks(progressRunnable)
-            diskCachePrefetcher.cancel()
+            diskCachePrefetcher?.cancel()
             player?.removeListener(this)
             player?.removeAnalyticsListener(this)
             player?.release()
@@ -371,10 +386,11 @@ class M3u8AndroidPlayer(
     }
 
     private fun createPlayer(state: SavedState? = null) {
-        val mediaItem = MediaItem.Builder()
-            .setUri(url)
-            .setMimeType(MimeTypes.APPLICATION_M3U8)
-            .build()
+        val mediaItemBuilder = MediaItem.Builder().setUri(url)
+        if (isHlsSource) {
+            mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
+        }
+        val mediaItem = mediaItemBuilder.build()
         val mediaSourceFactory = DefaultMediaSourceFactory(
             M3u8CacheManager.mediaDataSourceFactory(context, headers),
         )
@@ -393,7 +409,7 @@ class M3u8AndroidPlayer(
         applySelectedQuality(trackSelector)
         logInfo(
             "createPlayer playerId=${surfaceProducer.id()} source=$sourceDebugId " +
-                "initialPositionMs=$initialPositionMs restore=${state != null} " +
+                "sourceType=$resolvedSourceType initialPositionMs=$initialPositionMs restore=${state != null} " +
                 "restorePositionMs=${state?.positionMs ?: 0L} " +
                 "restorePlayWhenReady=${state?.playWhenReady} decoderFallback=true " +
                 "trackCompat=${videoTrackCompatLimit?.description() ?: "none"} " +
@@ -424,6 +440,10 @@ class M3u8AndroidPlayer(
     }
 
     private fun loadAvailableQualities() {
+        if (!isHlsSource) {
+            availableQualities = emptyList()
+            return
+        }
         try {
             val dataSource = M3u8CacheManager.mediaDataSourceFactory(context, headers)
                 .createDataSource()
@@ -526,7 +546,7 @@ class M3u8AndroidPlayer(
         )
         applySelectedQuality()
         currentPlayer.seekTo(positionMs)
-        diskCachePrefetcher.restartFrom(positionMs)
+        diskCachePrefetcher?.restartFrom(positionMs)
         if (currentPlayer.playbackState == Player.STATE_IDLE) {
             currentPlayer.prepare()
         }

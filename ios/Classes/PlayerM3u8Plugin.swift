@@ -80,6 +80,16 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
           )
           return
         }
+        guard player.supportsQualitySelection else {
+          result(
+            FlutterError(
+              code: "unsupported_source_type",
+              message: "Quality selection is only supported for HLS sources.",
+              details: nil
+            )
+          )
+          return
+        }
         player.setQuality(quality)
         result(nil)
       }
@@ -215,6 +225,7 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     let player = M3u8IosPlayer(
       url: url,
       headers: headers,
+      sourceType: M3u8SourceType.from(arguments["sourceType"]),
       initialPositionMs: initialPositionMs,
       playbackSpeed: validPlaybackSpeed(from: arguments["playbackSpeed"]),
       volume: validVolume(from: arguments["volume"]),
@@ -371,6 +382,17 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       return
     }
     let headers = arguments["headers"] as? [String: String] ?? [:]
+    let sourceType = M3u8SourceType.from(arguments["sourceType"]).resolve(url: url)
+    guard sourceType == .hls else {
+      result(
+        FlutterError(
+          code: "unsupported_source_type",
+          message: "Precache is only supported for HLS sources.",
+          details: nil
+        )
+      )
+      return
+    }
     let quality = arguments["quality"] as? [String: Any] ?? autoQuality()
     let taskId = UUID().uuidString
     let prefetcher = M3u8DiskCachePrefetcher(

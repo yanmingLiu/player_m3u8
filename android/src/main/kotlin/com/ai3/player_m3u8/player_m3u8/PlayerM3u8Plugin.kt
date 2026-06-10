@@ -112,6 +112,11 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
                 player.setMuted(isMuted)
                 result.success(null)
             }
+            "setSubtitle" -> withPlayer(call, result) { player ->
+                val subtitleId = call.argument<String>("subtitleId")
+                player.setSubtitle(subtitleId)
+                result.success(null)
+            }
             "dispose" -> {
                 val playerId = call.argument<Number>("playerId")?.toLong()
                 if (playerId == null) {
@@ -193,6 +198,8 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
             return
         }
         val isMuted = call.argument<Boolean>("isMuted") ?: false
+        val subtitles = call.argument<List<Map<String, Any?>>>("subtitles") ?: emptyList()
+        val selectedSubtitleId = call.argument<String>("selectedSubtitleId")
         val sourceType = M3u8SourceType.from(call.argument<String>("sourceType"))
         val surfaceProducer = textures.createSurfaceProducer()
         val player = M3u8AndroidPlayer(
@@ -204,6 +211,8 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
             playbackSpeed = playbackSpeed,
             volume = volume,
             isMuted = isMuted,
+            externalSubtitles = subtitles,
+            selectedSubtitleId = selectedSubtitleId,
             recoveryPolicy = recoveryPolicy,
             surfaceProducer = surfaceProducer,
             eventSinkProvider = { eventSink },

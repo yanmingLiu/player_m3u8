@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'm3u8_subtitle_track.dart';
 import 'm3u8_player_value.dart';
 
 enum M3u8PlayerEventType {
@@ -36,6 +37,9 @@ class M3u8PlayerEvent {
     this.playbackSpeed,
     this.volume,
     this.isMuted,
+    this.availableSubtitles,
+    this.selectedSubtitle,
+    this.subtitleText,
     this.recoveryCount,
     this.lastRecoveryReason,
     this.size,
@@ -67,6 +71,9 @@ class M3u8PlayerEvent {
       playbackSpeed: _asNullableDouble(map['playbackSpeed']),
       volume: _asNullableDouble(map['volume']),
       isMuted: map['isMuted'] as bool?,
+      availableSubtitles: _subtitlesFromMap(map['availableSubtitles']),
+      selectedSubtitle: _subtitleFromMap(map['selectedSubtitle']),
+      subtitleText: map['subtitleText'] as String?,
       recoveryCount: _asNullableInt(map['recoveryCount']),
       lastRecoveryReason: map['lastRecoveryReason'] as String?,
       size: _sizeFromMap(map),
@@ -101,6 +108,9 @@ class M3u8PlayerEvent {
   final double? playbackSpeed;
   final double? volume;
   final bool? isMuted;
+  final List<M3u8SubtitleTrack>? availableSubtitles;
+  final M3u8SubtitleTrack? selectedSubtitle;
+  final String? subtitleText;
   final int? recoveryCount;
   final String? lastRecoveryReason;
   final Size? size;
@@ -186,4 +196,23 @@ M3u8Quality? _qualityFromMap(Object? value) {
     return null;
   }
   return M3u8Quality.fromMap(Map<Object?, Object?>.from(value));
+}
+
+List<M3u8SubtitleTrack>? _subtitlesFromMap(Object? value) {
+  if (value is! List) {
+    return null;
+  }
+  return value
+      .whereType<Map>()
+      .map((map) => M3u8SubtitleTrack.fromMap(Map<Object?, Object?>.from(map)))
+      .where((track) => track.id.isNotEmpty)
+      .toList(growable: false);
+}
+
+M3u8SubtitleTrack? _subtitleFromMap(Object? value) {
+  if (value is! Map) {
+    return null;
+  }
+  final track = M3u8SubtitleTrack.fromMap(Map<Object?, Object?>.from(value));
+  return track.id.isEmpty ? null : track;
 }

@@ -11,6 +11,16 @@ const String sampleM3u8Url =
 const List<VideoSource> sampleVideos = <VideoSource>[
   VideoSource(title: 'Apple BipBop', url: sampleM3u8Url),
   VideoSource(
+    title: 'Apple BipBop Advanced (内嵌字幕)',
+    url:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
+  ),
+  VideoSource(
+    title: 'Elephant\'s Dream (VTT多语言字幕)',
+    url:
+        'https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8',
+  ),
+  VideoSource(
     title: 'Google Shaka Angel One',
     url:
         'https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8',
@@ -52,6 +62,15 @@ const List<VideoSource> sampleVideos = <VideoSource>[
     url:
         'https://interactive-examples.mdn.mozilla.net/media/cc0-videos/flower.mp4',
     sourceType: M3u8SourceType.progressive,
+    subtitles: [
+      M3u8SubtitleTrack(
+        id: 'flower-en',
+        label: 'English',
+        language: 'en',
+        url:
+            'https://interactive-examples.mdn.mozilla.net/media/examples/friday.vtt',
+      ),
+    ],
   ),
 ];
 
@@ -64,11 +83,13 @@ class VideoSource {
     required this.title,
     required this.url,
     this.sourceType = M3u8SourceType.auto,
+    this.subtitles = const <M3u8SubtitleTrack>[],
   });
 
   final String title;
   final String url;
   final M3u8SourceType sourceType;
+  final List<M3u8SubtitleTrack> subtitles;
 
   bool get supportsPrecache => sourceType != M3u8SourceType.progressive;
 }
@@ -115,6 +136,8 @@ class ExampleStrings {
   String get playbackSpeedLabel => _isZh ? '播放速度' : 'Playback speed';
   String get volumeLabel => _isZh ? '音量' : 'Volume';
   String get qualitySwitchesLabel => _isZh ? '清晰度切换' : 'Quality switches';
+  String get subtitlesLabel => _isZh ? '字幕' : 'Subtitles';
+  String get subtitlesOffLabel => _isZh ? '关闭字幕' : 'Off';
   String get recoveryLabel => _isZh ? '恢复次数' : 'Recovery';
   String get lastRecoveryLabel => _isZh ? '最近恢复' : 'Last recovery';
   String get videoBitrateLabel => _isZh ? '视频码率' : 'Video bitrate';
@@ -256,6 +279,10 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
       await _controller.initialize(
         sampleVideos[_currentVideoIndex].url,
         sourceType: sampleVideos[_currentVideoIndex].sourceType,
+        subtitles: sampleVideos[_currentVideoIndex].subtitles,
+        selectedSubtitleId: sampleVideos[_currentVideoIndex].subtitles.isEmpty
+            ? null
+            : sampleVideos[_currentVideoIndex].subtitles.first.id,
       );
       _controller.startQoeSampling(interval: const Duration(seconds: 5));
     } finally {
@@ -281,6 +308,10 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
       await _controller.setSource(
         sampleVideos[index].url,
         sourceType: sampleVideos[index].sourceType,
+        subtitles: sampleVideos[index].subtitles,
+        selectedSubtitleId: sampleVideos[index].subtitles.isEmpty
+            ? null
+            : sampleVideos[index].subtitles.first.id,
         autoPlay: true,
       );
       _qoeSnapshots.clear();
@@ -701,7 +732,56 @@ class _Controls extends StatelessWidget {
           isSupported: sourceType != M3u8SourceType.progressive,
           strings: strings,
         ),
+        const SizedBox(height: 8),
+        _SubtitleSelector(
+          controller: controller,
+          value: value,
+          strings: strings,
+        ),
       ],
+    );
+  }
+}
+
+class _SubtitleSelector extends StatelessWidget {
+  const _SubtitleSelector({
+    required this.controller,
+    required this.value,
+    required this.strings,
+  });
+
+  final M3u8PlayerController controller;
+  final M3u8PlayerValue value;
+  final ExampleStrings strings;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitles = value.availableSubtitles;
+    return DropdownButtonFormField<String>(
+      key: ValueKey<String>(value.selectedSubtitle?.id ?? 'off'),
+      initialValue: value.selectedSubtitle?.id ?? 'off',
+      isExpanded: true,
+      decoration: InputDecoration(
+        border: const OutlineInputBorder(),
+        isDense: true,
+        labelText: strings.subtitlesLabel,
+      ),
+      items: [
+        DropdownMenuItem<String>(
+          value: 'off',
+          child: Text(strings.subtitlesOffLabel),
+        ),
+        for (final subtitle in subtitles)
+          DropdownMenuItem<String>(
+            value: subtitle.id,
+            child: Text(subtitle.label, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: value.isInitialized
+          ? (String? subtitleId) {
+              controller.setSubtitle(subtitleId == 'off' ? null : subtitleId);
+            }
+          : null,
     );
   }
 }

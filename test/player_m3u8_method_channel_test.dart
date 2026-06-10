@@ -46,6 +46,16 @@ void main() {
         playbackSpeed: 1.25,
         volume: 0.75,
         isMuted: true,
+        subtitles: const [
+          M3u8SubtitleTrack(
+            id: 'en',
+            label: 'English',
+            language: 'en',
+            url: 'https://example.com/en.vtt',
+            mimeType: 'text/vtt',
+          ),
+        ],
+        selectedSubtitleId: 'en',
       );
 
       expect(playerId, 3);
@@ -64,6 +74,17 @@ void main() {
         'playbackSpeed': 1.25,
         'volume': 0.75,
         'isMuted': true,
+        'subtitles': [
+          {
+            'id': 'en',
+            'label': 'English',
+            'language': 'en',
+            'url': 'https://example.com/en.vtt',
+            'mimeType': 'text/vtt',
+            'headers': <String, String>{},
+          },
+        ],
+        'selectedSubtitleId': 'en',
       });
     },
   );
@@ -132,6 +153,17 @@ void main() {
 
     expect(log.single.method, 'setMuted');
     expect(log.single.arguments, {'playerId': 3, 'isMuted': true});
+  });
+
+  test('setSubtitle sends player id and nullable subtitle id', () async {
+    await platform.setSubtitle(3, 'en');
+
+    expect(log.single.method, 'setSubtitle');
+    expect(log.single.arguments, {'playerId': 3, 'subtitleId': 'en'});
+
+    log.clear();
+    await platform.setSubtitle(3, null);
+    expect(log.single.arguments, {'playerId': 3, 'subtitleId': null});
   });
 
   test('setQuality sends player id and quality payload', () async {

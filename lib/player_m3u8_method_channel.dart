@@ -10,6 +10,7 @@ import 'src/m3u8_player_event.dart';
 import 'src/m3u8_player_value.dart';
 import 'src/m3u8_recovery_policy.dart';
 import 'src/m3u8_source_type.dart';
+import 'src/m3u8_subtitle_track.dart';
 
 class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
   @visibleForTesting
@@ -66,6 +67,8 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
     double playbackSpeed = 1.0,
     double volume = 1.0,
     bool isMuted = false,
+    List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
+    String? selectedSubtitleId,
   }) async {
     recoveryPolicy.debugAssertValid();
     _debugAssertValidPosition(initialPosition);
@@ -81,6 +84,8 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'playbackSpeed': playbackSpeed,
         'volume': volume,
         'isMuted': isMuted,
+        'subtitles': subtitles.map((track) => track.toMap()).toList(),
+        'selectedSubtitleId': selectedSubtitleId,
       });
       if (playerId == null) {
         throw PlayerM3u8PlatformException(
@@ -176,6 +181,18 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
       await methodChannel.invokeMethod<void>('setMuted', {
         'playerId': playerId,
         'isMuted': isMuted,
+      });
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
+  Future<void> setSubtitle(int playerId, String? subtitleId) async {
+    try {
+      await methodChannel.invokeMethod<void>('setSubtitle', {
+        'playerId': playerId,
+        'subtitleId': subtitleId,
       });
     } on PlatformException catch (error) {
       throw PlayerM3u8PlatformException.fromPlatformException(error);

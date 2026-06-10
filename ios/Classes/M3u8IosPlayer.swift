@@ -69,7 +69,7 @@ struct M3u8RecoveryPolicy {
   }
 }
 
-final class M3u8IosPlayer: NSObject, FlutterTexture {
+final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPushDelegate {
   var textureId: Int64 = -1 {
     didSet {
       displayLink?.isPaused = false
@@ -86,6 +86,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   private let player: AVPlayer
   private var playerItem: AVPlayerItem
   private var videoOutput: AVPlayerItemVideoOutput
+  private var legibleOutput: AVPlayerItemLegibleOutput
   private let resourceLoader: M3u8ResourceLoader
   private var diskCachePrefetcher: M3u8DiskCachePrefetcher?
   private var displayLink: CADisplayLink?
@@ -110,6 +111,10 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   private var wasLikelyPlayingBeforeWaiting = false
   private var availableQualities = [[String: Any]]()
   private var selectedQuality: [String: Any] = M3u8IosPlayer.autoQuality()
+  private var availableSubtitles: [[String: Any]]
+  private var selectedSubtitleId: String?
+  private var selectedSubtitle: [String: Any]?
+  private var subtitleText = ""
   private var playbackSpeed: Double
   private var volume: Double
   private var isMuted: Bool
@@ -129,6 +134,8 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     playbackSpeed: Double,
     volume: Double,
     isMuted: Bool,
+    externalSubtitles: [[String: Any]],
+    selectedSubtitleId: String?,
     recoveryPolicy: M3u8RecoveryPolicy,
     textureRegistry: FlutterTextureRegistry,
     eventSinkProvider: @escaping () -> FlutterEventSink?
@@ -141,6 +148,9 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     self.playbackSpeed = min(max(playbackSpeed, 0.25), 2.0)
     self.volume = min(max(volume, 0), 1)
     self.isMuted = isMuted
+    self.availableSubtitles = Self.normalizeExternalSubtitles(externalSubtitles)
+    self.selectedSubtitleId = selectedSubtitleId
+    self.selectedSubtitle = availableSubtitles.first { $0["id"] as? String == selectedSubtitleId }
     self.recoveryPolicy = recoveryPolicy
     self.resourceLoader = M3u8ResourceLoader(headers: headers)
     let assetOptions: [String: Any]? =
@@ -154,6 +164,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     self.videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
       kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
     ])
+    self.legibleOutput = AVPlayerItemLegibleOutput()
     self.player = AVPlayer(playerItem: playerItem)
     self.player.volume = Float(self.volume)
     self.player.isMuted = isMuted
@@ -182,6 +193,8 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
       diskCachePrefetcher = nil
     }
     playerItem.add(videoOutput)
+    legibleOutput.setDelegate(self, queue: DispatchQueue.main)
+    playerItem.add(legibleOutput)
     player.actionAtItemEnd = .pause
     configureObservers()
     configureTimers()
@@ -261,6 +274,17 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     sendProgress()
   }
 
+  func setSubtitle(_ subtitleId: String?) {
+    guard !disposed else { return }
+    selectedSubtitleId = subtitleId
+    selectedSubtitle = availableSubtitles.first { $0["id"] as? String == subtitleId }
+    subtitleText = ""
+    applySelectedSubtitle()
+    var payload = playbackPayload(event: "progress")
+    payload["subtitleText"] = ""
+    sendEvent(payload)
+  }
+
   func dispose() {
     guard !disposed else { return }
     disposed = true
@@ -277,8 +301,24 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     player.pause()
     player.replaceCurrentItem(with: nil)
     asset.resourceLoader.setDelegate(nil, queue: nil)
+    playerItem.remove(legibleOutput)
     playerItem.remove(videoOutput)
     latestPixelBuffer = nil
+  }
+
+  func legibleOutput(
+    _ output: AVPlayerItemLegibleOutput,
+    didOutput attributedStrings: [NSAttributedString],
+    nativeSampleBuffers: [Any],
+    forItemTime itemTime: CMTime
+  ) {
+    subtitleText = attributedStrings
+      .map { $0.string.trimmingCharacters(in: .whitespacesAndNewlines) }
+      .filter { !$0.isEmpty }
+      .joined(separator: "\n")
+    var payload = playbackPayload(event: "progress")
+    payload["subtitleText"] = subtitleText
+    sendEvent(payload)
   }
 
   func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
@@ -436,6 +476,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   private func replacePlayerItem() {
     clearItemObservers()
     playerItem.remove(videoOutput)
+    playerItem.remove(legibleOutput)
     asset.resourceLoader.setDelegate(nil, queue: nil)
     let assetOptions: [String: Any]? =
       headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers]
@@ -447,11 +488,15 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
       kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
     ])
+    legibleOutput = AVPlayerItemLegibleOutput()
+    legibleOutput.setDelegate(self, queue: DispatchQueue.main)
     playerItem.add(videoOutput)
+    playerItem.add(legibleOutput)
     player.replaceCurrentItem(with: playerItem)
     initialized = false
     latestPixelBuffer = nil
     configureItemObservers()
+    applySelectedSubtitle()
   }
 
   private func configureTimers() {
@@ -510,6 +555,8 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     guard size.width > 0, size.height > 0 else { return }
     initialized = true
     updateQualityMetrics()
+    updateAvailableSubtitles()
+    applySelectedSubtitle()
     var payload = playbackPayload(event: "initialized")
     payload["width"] = size.width
     payload["height"] = size.height
@@ -557,6 +604,9 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
       "playbackSpeed": playbackSpeed,
       "volume": volume,
       "isMuted": isMuted,
+      "availableSubtitles": availableSubtitles,
+      "selectedSubtitle": selectedSubtitle as Any,
+      "subtitleText": subtitleText,
       "recoveryCount": recoveryCount,
       "lastRecoveryReason": lastRecoveryReason,
     ]
@@ -635,6 +685,66 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     }
   }
 
+  private func updateAvailableSubtitles() {
+    var merged: [String: [String: Any]] = [:]
+    for subtitle in availableSubtitles {
+      if let id = subtitle["id"] as? String {
+        merged[id] = subtitle
+      }
+    }
+    guard let group = playerItem.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) else {
+      availableSubtitles = Array(merged.values)
+      selectedSubtitle = selectedSubtitleId.flatMap { merged[$0] }
+      return
+    }
+    for (index, option) in group.options.enumerated() {
+      let id = option.propertyList() as? String ?? "legible:\(index)"
+      let language = option.locale?.identifier
+      let label = option.displayName
+      merged[id] = [
+        "id": id,
+        "label": label.isEmpty ? (language ?? "Subtitle \(index + 1)") : label,
+        "language": language as Any,
+        "url": NSNull(),
+        "mimeType": NSNull(),
+        "headers": [:],
+      ]
+    }
+    availableSubtitles = Array(merged.values).sorted {
+      ($0["label"] as? String ?? "") < ($1["label"] as? String ?? "")
+    }
+    selectedSubtitle = selectedSubtitleId.flatMap { merged[$0] }
+  }
+
+  private func applySelectedSubtitle() {
+    updateAvailableSubtitles()
+    guard let group = playerItem.asset.mediaSelectionGroup(forMediaCharacteristic: .legible) else {
+      selectedSubtitle = nil
+      return
+    }
+    guard let subtitleId = selectedSubtitleId else {
+      playerItem.select(nil, in: group)
+      selectedSubtitle = nil
+      return
+    }
+    for (index, option) in group.options.enumerated() {
+      let id = option.propertyList() as? String ?? "legible:\(index)"
+      if id == subtitleId {
+        playerItem.select(option, in: group)
+        selectedSubtitle = [
+          "id": id,
+          "label": option.displayName,
+          "language": option.locale?.identifier as Any,
+          "url": NSNull(),
+          "mimeType": NSNull(),
+          "headers": [:],
+        ]
+        return
+      }
+    }
+    selectedSubtitle = nil
+  }
+
   private func finishRebufferTiming() {
     guard let startedAt = rebufferStartedAt else { return }
     rebufferDurationMs += max(Int64(Date().timeIntervalSince(startedAt) * 1000), 0)
@@ -668,6 +778,25 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
       "bitrate": 0,
       "isAuto": true,
     ]
+  }
+
+  private static func normalizeExternalSubtitles(_ subtitles: [[String: Any]]) -> [[String: Any]] {
+    subtitles.enumerated().map { index, subtitle in
+      let id = (subtitle["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ??
+        (subtitle["language"] as? String).flatMap { $0.isEmpty ? nil : $0 } ??
+        "external:\(index)"
+      let label = (subtitle["label"] as? String).flatMap { $0.isEmpty ? nil : $0 } ??
+        (subtitle["language"] as? String).flatMap { $0.isEmpty ? nil : $0 } ??
+        "Subtitle \(index + 1)"
+      return [
+        "id": id,
+        "label": label,
+        "language": subtitle["language"] as Any,
+        "url": subtitle["url"] as Any,
+        "mimeType": subtitle["mimeType"] as Any,
+        "headers": subtitle["headers"] as? [String: String] ?? [:],
+      ]
+    }
   }
 
   private static func assetUrl(for url: URL, sourceType: M3u8SourceType) -> URL {

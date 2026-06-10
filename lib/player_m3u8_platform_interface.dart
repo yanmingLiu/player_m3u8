@@ -8,6 +8,7 @@ import 'src/m3u8_player_event.dart';
 import 'src/m3u8_player_value.dart';
 import 'src/m3u8_recovery_policy.dart';
 import 'src/m3u8_source_type.dart';
+import 'src/m3u8_subtitle_track.dart';
 
 abstract class PlayerM3u8Platform extends PlatformInterface {
   PlayerM3u8Platform() : super(token: _token);
@@ -40,6 +41,8 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
     double playbackSpeed = 1.0,
     double volume = 1.0,
     bool isMuted = false,
+    List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
+    String? selectedSubtitleId,
   }) {
     throw UnimplementedError('create() has not been implemented.');
   }
@@ -77,6 +80,10 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
 
   Future<void> setMuted(int playerId, bool isMuted) {
     throw UnimplementedError('setMuted() has not been implemented.');
+  }
+
+  Future<void> setSubtitle(int playerId, String? subtitleId) {
+    throw UnimplementedError('setSubtitle() has not been implemented.');
   }
 
   Future<void> disposePlayer(int playerId) {

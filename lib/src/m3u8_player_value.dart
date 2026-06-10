@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 
+import 'm3u8_subtitle_track.dart';
+
 @immutable
 class M3u8PlayerValue {
   const M3u8PlayerValue({
@@ -28,6 +30,9 @@ class M3u8PlayerValue {
     this.playbackSpeed = 1.0,
     this.volume = 1.0,
     this.isMuted = false,
+    this.availableSubtitles = const <M3u8SubtitleTrack>[],
+    this.selectedSubtitle,
+    this.subtitleText = '',
     this.recoveryCount = 0,
     this.lastRecoveryReason = '',
     this.size = Size.zero,
@@ -57,6 +62,9 @@ class M3u8PlayerValue {
   final double playbackSpeed;
   final double volume;
   final bool isMuted;
+  final List<M3u8SubtitleTrack> availableSubtitles;
+  final M3u8SubtitleTrack? selectedSubtitle;
+  final String subtitleText;
   final int recoveryCount;
   final String lastRecoveryReason;
   final Size size;
@@ -107,6 +115,9 @@ class M3u8PlayerValue {
     double? playbackSpeed,
     double? volume,
     bool? isMuted,
+    List<M3u8SubtitleTrack>? availableSubtitles,
+    Object? selectedSubtitle = _sentinel,
+    String? subtitleText,
     int? recoveryCount,
     String? lastRecoveryReason,
     Size? size,
@@ -137,6 +148,11 @@ class M3u8PlayerValue {
       playbackSpeed: playbackSpeed ?? this.playbackSpeed,
       volume: volume ?? this.volume,
       isMuted: isMuted ?? this.isMuted,
+      availableSubtitles: availableSubtitles ?? this.availableSubtitles,
+      selectedSubtitle: identical(selectedSubtitle, _sentinel)
+          ? this.selectedSubtitle
+          : selectedSubtitle as M3u8SubtitleTrack?,
+      subtitleText: subtitleText ?? this.subtitleText,
       recoveryCount: recoveryCount ?? this.recoveryCount,
       lastRecoveryReason: lastRecoveryReason ?? this.lastRecoveryReason,
       size: size ?? this.size,
@@ -172,6 +188,9 @@ class M3u8PlayerValue {
         'playbackSpeed: $playbackSpeed, '
         'volume: $volume, '
         'isMuted: $isMuted, '
+        'availableSubtitles: $availableSubtitles, '
+        'selectedSubtitle: $selectedSubtitle, '
+        'subtitleText: $subtitleText, '
         'recoveryCount: $recoveryCount, '
         'lastRecoveryReason: $lastRecoveryReason, '
         'size: $size, '

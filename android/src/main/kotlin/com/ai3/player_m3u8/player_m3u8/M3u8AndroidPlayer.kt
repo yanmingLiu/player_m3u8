@@ -6,13 +6,16 @@ import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import androidx.media3.common.C
+import androidx.media3.common.Format
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.common.text.CueGroup
 import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
@@ -35,6 +38,8 @@ class M3u8AndroidPlayer(
     private var playbackSpeed: Float,
     private var volume: Float,
     private var isMuted: Boolean,
+    private val externalSubtitles: List<Map<String, Any?>>,
+    private var selectedSubtitleId: String?,
     recoveryPolicy: M3u8RecoveryPolicy,
     private val surfaceProducer: TextureRegistry.SurfaceProducer,
     private val eventSinkProvider: () -> EventChannel.EventSink?,
@@ -58,6 +63,8 @@ class M3u8AndroidPlayer(
     private var wasPlayingBeforeBuffering = false
     private var availableQualities = listOf<Map<String, Any?>>()
     private var selectedQuality = autoQuality()
+    private var availableSubtitles = normalizeExternalSubtitles(externalSubtitles)
+    private var selectedSubtitle = availableSubtitles.firstOrNull { it["id"] == selectedSubtitleId }
     private var recoveryPolicy = recoveryPolicy.normalized()
     private val resolvedSourceType = sourceType.resolve(url)
     private val isHlsSource = resolvedSourceType == M3u8SourceType.HLS
@@ -193,6 +200,19 @@ class M3u8AndroidPlayer(
         }
     }
 
+    fun setSubtitle(subtitleId: String?) {
+        runOnMain {
+            selectedSubtitleId = subtitleId
+            selectedSubtitle = availableSubtitles.firstOrNull { it["id"] == subtitleId }
+            applySelectedSubtitle()
+            if (subtitleId == null) {
+                sendEvent(playbackPayload("progress") + mapOf("subtitleText" to ""))
+            } else {
+                sendProgress(force = true)
+            }
+        }
+    }
+
     private fun applyVolume() {
         player?.volume = effectiveVolume()
     }
@@ -323,7 +343,18 @@ class M3u8AndroidPlayer(
             ?.bitrate
             ?.takeIf { it > 0 }
             ?: videoBitrate
+        mergeTextTracks(tracks)
+        selectedSubtitle = availableSubtitles.firstOrNull { it["id"] == selectedSubtitleId }
+        applySelectedSubtitle()
         sendProgress(force = true)
+    }
+
+    override fun onCues(cueGroup: CueGroup) {
+        val text = cueGroup.cues
+            .mapNotNull { cue -> cue.text?.toString()?.trim() }
+            .filter { it.isNotEmpty() }
+            .joinToString(separator = "\n")
+        sendEvent(playbackPayload("progress") + mapOf("subtitleText" to text))
     }
 
     override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -390,6 +421,12 @@ class M3u8AndroidPlayer(
         if (isHlsSource) {
             mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
         }
+        val subtitleConfigurations = availableSubtitles
+            .filter { it["url"] is String }
+            .mapNotNull { subtitleConfiguration(it) }
+        if (subtitleConfigurations.isNotEmpty()) {
+            mediaItemBuilder.setSubtitleConfigurations(subtitleConfigurations)
+        }
         val mediaItem = mediaItemBuilder.build()
         val mediaSourceFactory = DefaultMediaSourceFactory(
             M3u8CacheManager.mediaDataSourceFactory(context, headers),
@@ -407,6 +444,7 @@ class M3u8AndroidPlayer(
         val trackSelector = DefaultTrackSelector(context)
         this.trackSelector = trackSelector
         applySelectedQuality(trackSelector)
+        applySelectedSubtitle(trackSelector)
         logInfo(
             "createPlayer playerId=${surfaceProducer.id()} source=$sourceDebugId " +
                 "sourceType=$resolvedSourceType initialPositionMs=$initialPositionMs restore=${state != null} " +
@@ -511,6 +549,118 @@ class M3u8AndroidPlayer(
         }
         builder.setMaxVideoBitrate(if (bitrate > 0) bitrate else Int.MAX_VALUE)
         currentSelector.setParameters(builder)
+    }
+
+    private fun applySelectedSubtitle(selector: DefaultTrackSelector? = trackSelector) {
+        val currentSelector = selector ?: return
+        val builder = currentSelector.buildUponParameters()
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+        val subtitleId = selectedSubtitleId
+        if (subtitleId == null) {
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            currentSelector.setParameters(builder)
+            return
+        }
+        builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+        val override = textTrackOverride(subtitleId)
+        if (override != null) {
+            builder.setOverrideForType(override)
+        } else {
+            val language = selectedSubtitle?.get("language") as? String
+            if (!language.isNullOrBlank()) {
+                builder.setPreferredTextLanguage(language)
+            }
+        }
+        currentSelector.setParameters(builder)
+    }
+
+    private fun textTrackOverride(subtitleId: String): TrackSelectionOverride? {
+        val currentPlayer = player ?: return null
+        for (group in currentPlayer.currentTracks.groups) {
+            if (group.type() != C.TRACK_TYPE_TEXT) {
+                continue
+            }
+            for (index in 0 until group.length) {
+                val track = subtitlePayload(group, index)
+                if (track["id"] == subtitleId && group.isTrackSupported(index, true)) {
+                    return TrackSelectionOverride(group.mediaTrackGroup, index)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun mergeTextTracks(tracks: Tracks) {
+        val merged = linkedMapOf<String, Map<String, Any?>>()
+        for (subtitle in normalizeExternalSubtitles(externalSubtitles)) {
+            merged[subtitle["id"] as String] = subtitle
+        }
+        for (group in tracks.groups) {
+            if (group.type() != C.TRACK_TYPE_TEXT) {
+                continue
+            }
+            for (index in 0 until group.length) {
+                if (!group.isTrackSupported(index, true)) {
+                    continue
+                }
+                val subtitle = subtitlePayload(group, index)
+                merged[subtitle["id"] as String] = subtitle
+            }
+        }
+        availableSubtitles = merged.values.toList()
+    }
+
+    private fun subtitlePayload(group: Tracks.Group, index: Int): Map<String, Any?> {
+        val format = group.getTrackFormat(index)
+        val id = format.id?.takeIf { it.isNotBlank() }
+            ?: "text:${format.language ?: "und"}:$index"
+        val label = format.label?.takeIf { it.isNotBlank() }
+            ?: format.language?.takeIf { it.isNotBlank() }
+            ?: "Subtitle ${index + 1}"
+        return mapOf(
+            "id" to id,
+            "label" to label,
+            "language" to format.language,
+            "url" to null,
+            "mimeType" to format.sampleMimeType,
+            "headers" to emptyMap<String, String>(),
+        )
+    }
+
+    private fun Tracks.Group.type(): Int {
+        return getTrackFormat(0).sampleMimeType?.let { MimeTypes.getTrackType(it) }
+            ?: mediaTrackGroup.type
+    }
+
+    private fun subtitleConfiguration(subtitle: Map<String, Any?>): MediaItem.SubtitleConfiguration? {
+        val subtitleUrl = subtitle["url"] as? String ?: return null
+        val builder = MediaItem.SubtitleConfiguration.Builder(Uri.parse(subtitleUrl))
+            .setId(subtitle["id"] as? String)
+            .setLabel(subtitle["label"] as? String)
+            .setLanguage(subtitle["language"] as? String)
+            .setMimeType((subtitle["mimeType"] as? String) ?: MimeTypes.TEXT_VTT)
+        return builder.build()
+    }
+
+    private fun normalizeExternalSubtitles(subtitles: List<Map<String, Any?>>): List<Map<String, Any?>> {
+        return subtitles.mapIndexedNotNull { index, subtitle ->
+            val id = (subtitle["id"] as? String)?.takeIf { it.isNotBlank() }
+                ?: (subtitle["language"] as? String)?.takeIf { it.isNotBlank() }
+                ?: "external:$index"
+            val label = (subtitle["label"] as? String)?.takeIf { it.isNotBlank() }
+                ?: (subtitle["language"] as? String)?.takeIf { it.isNotBlank() }
+                ?: "Subtitle ${index + 1}"
+            mapOf(
+                "id" to id,
+                "label" to label,
+                "language" to (subtitle["language"] as? String),
+                "url" to (subtitle["url"] as? String),
+                "mimeType" to ((subtitle["mimeType"] as? String) ?: MimeTypes.TEXT_VTT),
+                "headers" to ((subtitle["headers"] as? Map<*, *>) ?: emptyMap<Any, Any>())
+                    .mapKeys { it.key.toString() }
+                    .mapValues { it.value.toString() },
+            )
+        }.distinctBy { it["id"] }
     }
 
     private fun constrainedDimension(selected: Int, compatLimit: Int?): Int {
@@ -657,7 +807,7 @@ class M3u8AndroidPlayer(
         sendEvent(playbackPayload("progress"))
     }
 
-    private fun playbackPayload(event: String): Map<String, Any> {
+    private fun playbackPayload(event: String): Map<String, Any?> {
         val currentPlayer = player
         val duration = currentPlayer?.duration?.takeIf { it >= 0L } ?: 0L
         return mapOf(
@@ -677,6 +827,9 @@ class M3u8AndroidPlayer(
             "playbackSpeed" to playbackSpeed.toDouble(),
             "volume" to volume.toDouble(),
             "isMuted" to isMuted,
+            "availableSubtitles" to availableSubtitles,
+            "selectedSubtitle" to selectedSubtitle,
+            "subtitleText" to "",
             "recoveryCount" to recoveryCount,
             "lastRecoveryReason" to lastRecoveryReason,
         )

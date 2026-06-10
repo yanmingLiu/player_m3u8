@@ -23,6 +23,9 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   double? playbackSpeed;
   double? volume;
   bool? isMuted;
+  List<M3u8SubtitleTrack>? subtitles;
+  String? selectedSubtitleId;
+  String? selectedSubtitleCommand;
   int? playedPlayerId;
   int? pausedPlayerId;
   int? disposedPlayerId;
@@ -60,6 +63,8 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
     double playbackSpeed = 1.0,
     double volume = 1.0,
     bool isMuted = false,
+    List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
+    String? selectedSubtitleId,
   }) async {
     createdUrl = url;
     createdHeaders = headers;
@@ -69,6 +74,8 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
     this.playbackSpeed = playbackSpeed;
     this.volume = volume;
     this.isMuted = isMuted;
+    this.subtitles = subtitles;
+    this.selectedSubtitleId = selectedSubtitleId;
     createdPlayerId = nextPlayerId;
     return nextPlayerId++;
   }
@@ -114,6 +121,11 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   @override
   Future<void> setMuted(int playerId, bool isMuted) async {
     selectedMuted = isMuted;
+  }
+
+  @override
+  Future<void> setSubtitle(int playerId, String? subtitleId) async {
+    selectedSubtitleCommand = subtitleId;
   }
 
   @override
@@ -256,6 +268,15 @@ void main() {
       playbackSpeed: 1.25,
       volume: 0.75,
       isMuted: true,
+      subtitles: const [
+        M3u8SubtitleTrack(
+          id: 'en',
+          label: 'English',
+          language: 'en',
+          url: 'https://example.com/en.vtt',
+        ),
+      ],
+      selectedSubtitleId: 'en',
     );
 
     expect(controller.playerId, 7);
@@ -266,6 +287,8 @@ void main() {
     expect(platform.playbackSpeed, 1.25);
     expect(platform.volume, 0.75);
     expect(platform.isMuted, true);
+    expect(platform.subtitles?.single.id, 'en');
+    expect(platform.selectedSubtitleId, 'en');
     expect(platform.recoveryPolicy?.rebufferThreshold, 2);
     expect(
       platform.recoveryPolicy?.minimumRecoveryInterval,
@@ -291,6 +314,15 @@ void main() {
         playbackSpeed: 1.25,
         volume: 0.75,
         isMuted: true,
+        availableSubtitles: [
+          M3u8SubtitleTrack(id: 'en', label: 'English', language: 'en'),
+        ],
+        selectedSubtitle: M3u8SubtitleTrack(
+          id: 'en',
+          label: 'English',
+          language: 'en',
+        ),
+        subtitleText: 'Hello',
         recoveryCount: 2,
         lastRecoveryReason: 'error:SOURCE',
         availableQualities: [
@@ -325,6 +357,9 @@ void main() {
     expect(controller.value.playbackSpeed, 1.25);
     expect(controller.value.volume, 0.75);
     expect(controller.value.isMuted, true);
+    expect(controller.value.availableSubtitles.single.id, 'en');
+    expect(controller.value.selectedSubtitle?.id, 'en');
+    expect(controller.value.subtitleText, 'Hello');
     expect(controller.value.recoveryCount, 2);
     expect(controller.value.lastRecoveryReason, 'error:SOURCE');
     expect(controller.value.availableQualities.single.height, 720);
@@ -412,6 +447,11 @@ void main() {
     expect(platform.selectedMuted, false);
     expect(controller.value.isMuted, false);
 
+    await controller.clearSubtitle();
+    expect(platform.selectedSubtitleCommand, isNull);
+    expect(controller.value.selectedSubtitle, isNull);
+    expect(controller.value.subtitleText, '');
+
     controller.dispose();
     await pumpEventQueue();
     expect(platform.disposedPlayerId, 7);
@@ -467,6 +507,10 @@ void main() {
       playbackSpeed: 1.5,
       volume: 0.4,
       isMuted: true,
+      subtitles: const [
+        M3u8SubtitleTrack(id: 'zh', label: '中文', language: 'zh'),
+      ],
+      selectedSubtitleId: 'zh',
     );
 
     expect(platform.disposedPlayerId, 7);
@@ -478,6 +522,8 @@ void main() {
     expect(platform.playbackSpeed, 1.5);
     expect(platform.volume, 0.4);
     expect(platform.isMuted, true);
+    expect(platform.subtitles?.single.id, 'zh');
+    expect(platform.selectedSubtitleId, 'zh');
     expect(platform.recoveryPolicy?.rebufferThreshold, 4);
     expect(controller.value.isInitialized, false);
     expect(controller.value.duration, Duration.zero);
@@ -746,6 +792,8 @@ class _EagerEventPlatform extends FakePlayerM3u8Platform {
     double playbackSpeed = 1.0,
     double volume = 1.0,
     bool isMuted = false,
+    List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
+    String? selectedSubtitleId,
   }) async {
     final playerId = await super.create(
       url: url,
@@ -756,6 +804,8 @@ class _EagerEventPlatform extends FakePlayerM3u8Platform {
       playbackSpeed: playbackSpeed,
       volume: volume,
       isMuted: isMuted,
+      subtitles: subtitles,
+      selectedSubtitleId: selectedSubtitleId,
     );
     eventController.add(
       M3u8PlayerEvent(

@@ -156,6 +156,12 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         player.setMuted(isMuted)
         result(nil)
       }
+    case "setSubtitle":
+      withPlayer(call: call, result: result) { player in
+        let arguments = call.arguments as? [String: Any]
+        player.setSubtitle(arguments?["subtitleId"] as? String)
+        result(nil)
+      }
     case "dispose":
       guard
         let arguments = call.arguments as? [String: Any],
@@ -230,6 +236,8 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       playbackSpeed: validPlaybackSpeed(from: arguments["playbackSpeed"]),
       volume: validVolume(from: arguments["volume"]),
       isMuted: arguments["isMuted"] as? Bool ?? false,
+      externalSubtitles: arguments["subtitles"] as? [[String: Any]] ?? [],
+      selectedSubtitleId: arguments["selectedSubtitleId"] as? String,
       recoveryPolicy: M3u8RecoveryPolicy.from(arguments["recoveryPolicy"] as? [String: Any]),
       textureRegistry: textureRegistry,
       eventSinkProvider: { [weak self] in self?.eventSink }

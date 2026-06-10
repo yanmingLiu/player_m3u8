@@ -34,10 +34,40 @@ class M3u8Player extends StatelessWidget {
 
         return ColoredBox(
           color: backgroundColor,
-          child: FittedBox(
-            fit: fit,
-            clipBehavior: Clip.hardEdge,
-            child: sizedTexture,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              FittedBox(
+                fit: fit,
+                clipBehavior: Clip.hardEdge,
+                child: sizedTexture,
+              ),
+              if (value.subtitleText.isNotEmpty)
+                PositionedDirectional(
+                  start: 16,
+                  end: 16,
+                  bottom: 20,
+                  child: IgnorePointer(
+                    child: Text(
+                      value.subtitleText,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        color: Color(0xFFFFFFFF),
+                        fontSize: 16,
+                        height: 1.25,
+                        fontWeight: FontWeight.w600,
+                        shadows: <Shadow>[
+                          Shadow(
+                            color: Color(0xE6000000),
+                            blurRadius: 4,
+                            offset: Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
         );
       },

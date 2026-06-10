@@ -5,6 +5,8 @@ import 'package:flutter/services.dart';
 
 import 'player_m3u8_platform_interface.dart';
 import 'src/m3u8_player_event.dart';
+import 'src/m3u8_player_value.dart';
+import 'src/m3u8_recovery_policy.dart';
 
 class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
   @visibleForTesting
@@ -37,11 +39,14 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
   Future<int> create({
     required String url,
     Map<String, String> headers = const <String, String>{},
+    M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
   }) async {
+    recoveryPolicy.debugAssertValid();
     try {
       final playerId = await methodChannel.invokeMethod<int>('create', {
         'url': url,
         'headers': headers,
+        'recoveryPolicy': recoveryPolicy.toMap(),
       });
       if (playerId == null) {
         throw PlayerM3u8PlatformException(
@@ -75,6 +80,34 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
 
   @override
   Future<void> disposePlayer(int playerId) => _invokeVoid('dispose', playerId);
+
+  @override
+  Future<void> setQuality(int playerId, M3u8Quality quality) async {
+    try {
+      await methodChannel.invokeMethod<void>('setQuality', {
+        'playerId': playerId,
+        'quality': quality.toMap(),
+      });
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
+  Future<void> setRecoveryPolicy(
+    int playerId,
+    M3u8RecoveryPolicy recoveryPolicy,
+  ) async {
+    recoveryPolicy.debugAssertValid();
+    try {
+      await methodChannel.invokeMethod<void>('setRecoveryPolicy', {
+        'playerId': playerId,
+        'recoveryPolicy': recoveryPolicy.toMap(),
+      });
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
 
   @override
   Future<void> configureCache({required int maxSizeBytes}) async {

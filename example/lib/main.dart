@@ -1,4 +1,8 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:player_m3u8/player_m3u8.dart';
 
 const String sampleM3u8Url =
@@ -77,6 +81,8 @@ class PlayerExamplePage extends StatefulWidget {
 
 class _PlayerExamplePageState extends State<PlayerExamplePage> {
   late final M3u8PlayerController _controller;
+  StreamSubscription<M3u8QoeSnapshot>? _qoeSubscription;
+  final List<M3u8QoeSnapshot> _qoeSnapshots = <M3u8QoeSnapshot>[];
   bool _initializing = true;
   bool _switching = false;
   int _currentVideoIndex = 0;
@@ -85,6 +91,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   void initState() {
     super.initState();
     _controller = widget.controllerFactory?.call() ?? M3u8PlayerController();
+    _qoeSubscription = _controller.qoeSnapshots.listen(_handleQoeSnapshot);
     if (widget.autoInitialize) {
       _initialize();
     } else {
@@ -94,6 +101,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
 
   @override
   void dispose() {
+    _qoeSubscription?.cancel();
     _controller.dispose();
     super.dispose();
   }
@@ -101,6 +109,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   Future<void> _initialize() async {
     try {
       await _controller.initialize(sampleVideos[_currentVideoIndex].url);
+      _controller.startQoeSampling(interval: const Duration(seconds: 5));
     } finally {
       if (mounted) {
         setState(() {
@@ -120,6 +129,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     });
     try {
       await _controller.setSource(sampleVideos[index].url, autoPlay: true);
+      _qoeSnapshots.clear();
     } finally {
       if (mounted) {
         setState(() {
@@ -127,6 +137,34 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
         });
       }
     }
+  }
+
+  void _handleQoeSnapshot(M3u8QoeSnapshot snapshot) {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _qoeSnapshots.insert(0, snapshot);
+      if (_qoeSnapshots.length > 6) {
+        _qoeSnapshots.removeRange(6, _qoeSnapshots.length);
+      }
+    });
+  }
+
+  Future<void> _copyLatestQoeSnapshot() async {
+    if (_qoeSnapshots.isEmpty) {
+      return;
+    }
+    const encoder = JsonEncoder.withIndent('  ');
+    await Clipboard.setData(
+      ClipboardData(text: encoder.convert(_qoeSnapshots.first.toMap())),
+    );
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('QoE snapshot copied')));
   }
 
   @override
@@ -165,6 +203,11 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                     _Controls(controller: _controller, value: value),
                     const SizedBox(height: 16),
                     _PlaybackStats(value: value),
+                    const SizedBox(height: 16),
+                    _QoePanel(
+                      snapshots: _qoeSnapshots,
+                      onCopyLatest: _copyLatestQoeSnapshot,
+                    ),
                   ],
                 );
               },
@@ -270,7 +313,49 @@ class _Controls extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 8),
+        _QualitySelector(controller: controller, value: value),
       ],
+    );
+  }
+}
+
+class _QualitySelector extends StatelessWidget {
+  const _QualitySelector({required this.controller, required this.value});
+
+  final M3u8PlayerController controller;
+  final M3u8PlayerValue value;
+
+  @override
+  Widget build(BuildContext context) {
+    final qualities = <M3u8Quality>[
+      M3u8Quality.auto,
+      ...value.availableQualities,
+    ];
+    return DropdownButtonFormField<String>(
+      key: ValueKey<String>(value.selectedQuality.id),
+      initialValue: value.selectedQuality.id,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        border: OutlineInputBorder(),
+        isDense: true,
+      ),
+      items: [
+        for (final quality in qualities)
+          DropdownMenuItem<String>(
+            value: quality.id,
+            child: Text(quality.label, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: value.isInitialized
+          ? (String? qualityId) {
+              final quality = qualities.firstWhere(
+                (item) => item.id == qualityId,
+                orElse: () => M3u8Quality.auto,
+              );
+              controller.setQuality(quality);
+            }
+          : null,
     );
   }
 }
@@ -562,11 +647,77 @@ class _PlaybackStats extends StatelessWidget {
           Text(
             'Buffer ahead: ${_formatDuration(_positiveDuration(bufferAhead))}',
           ),
+          Text('Startup: ${value.startupTime.inMilliseconds} ms'),
+          Text('Rebuffers: ${value.rebufferCount}'),
+          Text('Rebuffer time: ${value.rebufferDuration.inMilliseconds} ms'),
+          Text('Dropped frames: ${value.droppedFrames}'),
+          Text('Quality switches: ${value.qualitySwitchCount}'),
+          Text('Recovery: ${value.recoveryCount}'),
+          if (value.lastRecoveryReason.isNotEmpty)
+            Text('Last recovery: ${value.lastRecoveryReason}'),
+          Text('Video bitrate: ${_formatBitrate(value.videoBitrate)}'),
+          Text('Observed bitrate: ${_formatBitrate(value.observedBitrate)}'),
           Text(
             'Size: ${value.size.width.toInt()} x ${value.size.height.toInt()}',
           ),
         ],
       ),
+    );
+  }
+}
+
+class _QoePanel extends StatelessWidget {
+  const _QoePanel({required this.snapshots, required this.onCopyLatest});
+
+  final List<M3u8QoeSnapshot> snapshots;
+  final VoidCallback onCopyLatest;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final latest = snapshots.isEmpty ? null : snapshots.first;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text('QoE snapshots', style: textTheme.titleMedium),
+            ),
+            IconButton.outlined(
+              tooltip: 'Copy latest QoE snapshot',
+              onPressed: latest == null ? null : onCopyLatest,
+              icon: const Icon(Icons.copy),
+            ),
+          ],
+        ),
+        if (latest == null)
+          Text('QoE waiting for first sample', style: textTheme.bodyMedium)
+        else ...[
+          Text(
+            'Latest QoE: rebuffer ratio '
+            '${(latest.rebufferRatio * 100).toStringAsFixed(1)}%',
+          ),
+          Text(
+            'QoE deltas: rebuffer +${latest.rebufferCountDelta}, '
+            'drop +${latest.droppedFramesDelta}, '
+            'recover +${latest.recoveryCountDelta}, '
+            'quality +${latest.qualitySwitchCountDelta}',
+          ),
+          Text(
+            'QoE bitrate: ${_formatBitrate(latest.videoBitrate)} / '
+            '${_formatBitrate(latest.observedBitrate)}',
+          ),
+          const SizedBox(height: 8),
+          for (final snapshot in snapshots.take(3))
+            Text(
+              '${snapshot.endedAt.toIso8601String()} '
+              'r=${(snapshot.rebufferRatio * 100).toStringAsFixed(1)}% '
+              'q=${snapshot.selectedQuality.label}',
+              style: textTheme.bodySmall,
+            ),
+        ],
+      ],
     );
   }
 }
@@ -611,4 +762,14 @@ Duration _positiveDuration(Duration duration) {
     return Duration.zero;
   }
   return duration;
+}
+
+String _formatBitrate(int bitrate) {
+  if (bitrate <= 0) {
+    return 'unknown';
+  }
+  if (bitrate >= 1000 * 1000) {
+    return '${(bitrate / (1000 * 1000)).toStringAsFixed(1)} Mbps';
+  }
+  return '${(bitrate / 1000).round()} Kbps';
 }

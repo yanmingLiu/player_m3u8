@@ -20,6 +20,8 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   int? pausedPlayerId;
   int? disposedPlayerId;
   Duration? seekPosition;
+  M3u8Quality? selectedQuality;
+  M3u8RecoveryPolicy? recoveryPolicy;
   int? configuredCacheBytes;
   bool cacheCleared = false;
 
@@ -30,9 +32,11 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   Future<int> create({
     required String url,
     Map<String, String> headers = const <String, String>{},
+    M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
   }) async {
     createdUrl = url;
     createdHeaders = headers;
+    this.recoveryPolicy = recoveryPolicy;
     createdPlayerId = nextPlayerId;
     return nextPlayerId++;
   }
@@ -50,6 +54,19 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   @override
   Future<void> seekTo(int playerId, Duration position) async {
     seekPosition = position;
+  }
+
+  @override
+  Future<void> setQuality(int playerId, M3u8Quality quality) async {
+    selectedQuality = quality;
+  }
+
+  @override
+  Future<void> setRecoveryPolicy(
+    int playerId,
+    M3u8RecoveryPolicy recoveryPolicy,
+  ) async {
+    this.recoveryPolicy = recoveryPolicy;
   }
 
   @override
@@ -78,6 +95,25 @@ void main() {
       'diskCachePosition': 30000,
       'diskCachePercent': 50.0,
       'isDiskCacheComplete': false,
+      'startupTime': 1200,
+      'rebufferCount': 2,
+      'rebufferDuration': 3400,
+      'droppedFrames': 3,
+      'videoBitrate': 2200000,
+      'observedBitrate': 1800000,
+      'qualitySwitchCount': 2,
+      'recoveryCount': 1,
+      'lastRecoveryReason': 'rebuffer',
+      'availableQualities': [
+        {
+          'id': '1080p',
+          'label': '1080p',
+          'width': 1920,
+          'height': 1080,
+          'bitrate': 2200000,
+        },
+      ],
+      'selectedQuality': {'id': 'auto', 'label': 'Auto', 'isAuto': true},
     });
 
     expect(event.playerId, 4);
@@ -87,6 +123,18 @@ void main() {
     expect(event.diskCachePosition, const Duration(seconds: 30));
     expect(event.diskCachePercent, 50.0);
     expect(event.isDiskCacheComplete, false);
+    expect(event.startupTime, const Duration(milliseconds: 1200));
+    expect(event.rebufferCount, 2);
+    expect(event.rebufferDuration, const Duration(milliseconds: 3400));
+    expect(event.droppedFrames, 3);
+    expect(event.videoBitrate, 2200000);
+    expect(event.observedBitrate, 1800000);
+    expect(event.qualitySwitchCount, 2);
+    expect(event.recoveryCount, 1);
+    expect(event.lastRecoveryReason, 'rebuffer');
+    expect(event.availableQualities, hasLength(1));
+    expect(event.availableQualities!.single.height, 1080);
+    expect(event.selectedQuality, M3u8Quality.auto);
   });
 
   test('controller initializes and applies player events', () async {
@@ -96,11 +144,22 @@ void main() {
     await controller.initialize(
       'https://example.com/index.m3u8',
       headers: const {'Authorization': 'token'},
+      recoveryPolicy: const M3u8RecoveryPolicy(
+        rebufferThreshold: 2,
+        minimumRecoveryInterval: Duration(seconds: 5),
+        minimumAutoQualityHeight: 480,
+      ),
     );
 
     expect(controller.playerId, 7);
     expect(platform.createdUrl, 'https://example.com/index.m3u8');
     expect(platform.createdHeaders, const {'Authorization': 'token'});
+    expect(platform.recoveryPolicy?.rebufferThreshold, 2);
+    expect(
+      platform.recoveryPolicy?.minimumRecoveryInterval,
+      const Duration(seconds: 5),
+    );
+    expect(platform.recoveryPolicy?.minimumAutoQualityHeight, 480);
 
     platform.eventController.add(
       const M3u8PlayerEvent(
@@ -110,6 +169,25 @@ void main() {
         bufferedPosition: Duration(seconds: 10),
         diskCacheStartPosition: Duration.zero,
         diskCachePosition: Duration(seconds: 30),
+        startupTime: Duration(milliseconds: 900),
+        rebufferCount: 1,
+        rebufferDuration: Duration(milliseconds: 1500),
+        droppedFrames: 4,
+        videoBitrate: 1500000,
+        observedBitrate: 1200000,
+        qualitySwitchCount: 3,
+        recoveryCount: 2,
+        lastRecoveryReason: 'error:SOURCE',
+        availableQualities: [
+          M3u8Quality(
+            id: '720p',
+            label: '720p',
+            width: 1280,
+            height: 720,
+            bitrate: 1500000,
+          ),
+        ],
+        selectedQuality: M3u8Quality.auto,
         size: Size(1920, 1080),
       ),
     );
@@ -119,6 +197,20 @@ void main() {
     expect(controller.value.duration, const Duration(seconds: 120));
     expect(controller.value.bufferedPosition, const Duration(seconds: 10));
     expect(controller.value.diskCachePosition, const Duration(seconds: 30));
+    expect(controller.value.startupTime, const Duration(milliseconds: 900));
+    expect(controller.value.rebufferCount, 1);
+    expect(
+      controller.value.rebufferDuration,
+      const Duration(milliseconds: 1500),
+    );
+    expect(controller.value.droppedFrames, 4);
+    expect(controller.value.videoBitrate, 1500000);
+    expect(controller.value.observedBitrate, 1200000);
+    expect(controller.value.qualitySwitchCount, 3);
+    expect(controller.value.recoveryCount, 2);
+    expect(controller.value.lastRecoveryReason, 'error:SOURCE');
+    expect(controller.value.availableQualities.single.height, 720);
+    expect(controller.value.selectedQuality, M3u8Quality.auto);
     expect(controller.value.size, const Size(1920, 1080));
 
     platform.eventController.add(
@@ -168,6 +260,14 @@ void main() {
     await controller.seekTo(const Duration(seconds: 30));
     expect(platform.seekPosition, const Duration(seconds: 30));
 
+    await controller.setQuality(controller.value.availableQualities.single);
+    expect(platform.selectedQuality?.height, 720);
+    expect(controller.value.selectedQuality.height, 720);
+
+    await controller.setRecoveryPolicy(M3u8RecoveryPolicy.disabled);
+    expect(controller.recoveryPolicy.isEnabled, false);
+    expect(platform.recoveryPolicy, M3u8RecoveryPolicy.disabled);
+
     controller.dispose();
     await pumpEventQueue();
     expect(platform.disposedPlayerId, 7);
@@ -200,6 +300,10 @@ void main() {
     await controller.initialize('https://example.com/one.m3u8');
     expect(controller.playerId, 7);
 
+    await controller.setRecoveryPolicy(
+      const M3u8RecoveryPolicy(rebufferThreshold: 4),
+    );
+
     platform.eventController.add(
       const M3u8PlayerEvent(
         playerId: 7,
@@ -217,6 +321,7 @@ void main() {
     expect(controller.playerId, 8);
     expect(platform.playedPlayerId, 8);
     expect(platform.createdUrl, 'https://example.com/two.m3u8');
+    expect(platform.recoveryPolicy?.rebufferThreshold, 4);
     expect(controller.value.isInitialized, false);
     expect(controller.value.duration, Duration.zero);
 
@@ -258,6 +363,91 @@ void main() {
     await platform.eventController.close();
   });
 
+  test('qoe snapshot computes window deltas', () {
+    final startedAt = DateTime.utc(2026, 1, 1, 0, 0, 0);
+    final endedAt = startedAt.add(const Duration(seconds: 5));
+    final previous = const M3u8PlayerValue(
+      rebufferCount: 1,
+      rebufferDuration: Duration(milliseconds: 500),
+      droppedFrames: 2,
+      recoveryCount: 1,
+      qualitySwitchCount: 1,
+    );
+    final current = const M3u8PlayerValue(
+      isPlaying: true,
+      position: Duration(seconds: 30),
+      duration: Duration(minutes: 2),
+      bufferedPosition: Duration(seconds: 40),
+      diskCachePosition: Duration(seconds: 60),
+      startupTime: Duration(milliseconds: 900),
+      rebufferCount: 3,
+      rebufferDuration: Duration(milliseconds: 1500),
+      droppedFrames: 7,
+      recoveryCount: 2,
+      qualitySwitchCount: 4,
+      videoBitrate: 1500000,
+      observedBitrate: 1200000,
+      selectedQuality: M3u8Quality(
+        id: '720p',
+        label: '720p',
+        height: 720,
+        bitrate: 1500000,
+      ),
+    );
+
+    final snapshot = M3u8QoeSnapshot.fromValues(
+      playerId: 7,
+      startedAt: startedAt,
+      endedAt: endedAt,
+      previous: previous,
+      current: current,
+    );
+
+    expect(snapshot.rebufferCountDelta, 2);
+    expect(snapshot.rebufferDurationDelta, const Duration(seconds: 1));
+    expect(snapshot.rebufferRatio, 0.2);
+    expect(snapshot.droppedFramesDelta, 5);
+    expect(snapshot.recoveryCountDelta, 1);
+    expect(snapshot.qualitySwitchCountDelta, 3);
+    expect(snapshot.toMap()['selectedQuality'], containsPair('id', '720p'));
+  });
+
+  test('controller emits qoe snapshots', () async {
+    final platform = FakePlayerM3u8Platform();
+    final controller = M3u8PlayerController(platform: platform);
+    final snapshots = <M3u8QoeSnapshot>[];
+    final subscription = controller.qoeSnapshots.listen(snapshots.add);
+
+    await controller.initialize('https://example.com/index.m3u8');
+    controller.startQoeSampling(emitImmediately: true);
+    await pumpEventQueue();
+
+    platform.eventController.add(
+      const M3u8PlayerEvent(
+        playerId: 7,
+        type: M3u8PlayerEventType.progress,
+        position: Duration(seconds: 10),
+        rebufferCount: 2,
+        rebufferDuration: Duration(milliseconds: 900),
+        droppedFrames: 4,
+        recoveryCount: 1,
+        qualitySwitchCount: 2,
+      ),
+    );
+    await pumpEventQueue();
+    controller.startQoeSampling(emitImmediately: true);
+    await pumpEventQueue();
+
+    expect(snapshots, hasLength(2));
+    expect(snapshots.last.playerId, 7);
+    expect(snapshots.last.position, const Duration(seconds: 10));
+    expect(snapshots.last.rebufferCount, 2);
+
+    controller.dispose();
+    await subscription.cancel();
+    await platform.eventController.close();
+  });
+
   test('cache wrapper delegates configuration and clear calls', () async {
     final platform = FakePlayerM3u8Platform();
 
@@ -284,8 +474,13 @@ class _EagerEventPlatform extends FakePlayerM3u8Platform {
   Future<int> create({
     required String url,
     Map<String, String> headers = const <String, String>{},
+    M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
   }) async {
-    final playerId = await super.create(url: url, headers: headers);
+    final playerId = await super.create(
+      url: url,
+      headers: headers,
+      recoveryPolicy: recoveryPolicy,
+    );
     eventController.add(
       M3u8PlayerEvent(
         playerId: playerId,

@@ -58,6 +58,31 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         player.seek(to: position.int64Value)
         result(nil)
       }
+    case "setQuality":
+      withPlayer(call: call, result: result) { player in
+        guard
+          let arguments = call.arguments as? [String: Any],
+          let quality = arguments["quality"] as? [String: Any]
+        else {
+          result(
+            FlutterError(
+              code: "invalid_quality",
+              message: "quality is required.",
+              details: nil
+            )
+          )
+          return
+        }
+        player.setQuality(quality)
+        result(nil)
+      }
+    case "setRecoveryPolicy":
+      withPlayer(call: call, result: result) { player in
+        let arguments = call.arguments as? [String: Any]
+        let policy = arguments?["recoveryPolicy"] as? [String: Any]
+        player.setRecoveryPolicy(M3u8RecoveryPolicy.from(policy))
+        result(nil)
+      }
     case "dispose":
       guard
         let arguments = call.arguments as? [String: Any],
@@ -110,6 +135,7 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     let player = M3u8IosPlayer(
       url: url,
       headers: headers,
+      recoveryPolicy: M3u8RecoveryPolicy.from(arguments["recoveryPolicy"] as? [String: Any]),
       textureRegistry: textureRegistry,
       eventSinkProvider: { [weak self] in self?.eventSink }
     )

@@ -13,6 +13,7 @@ void main() {
     expect(find.byIcon(Icons.skip_previous), findsOneWidget);
     expect(find.byIcon(Icons.skip_next), findsOneWidget);
     expect(find.text('Nifty VOD'), findsOneWidget);
+    expect(find.text('Auto'), findsOneWidget);
 
     await tester.drag(find.byType(ListView), const Offset(0, -240));
     await tester.pumpAndSettle();
@@ -20,5 +21,22 @@ void main() {
     expect(find.textContaining('Position:'), findsOneWidget);
     expect(find.textContaining('Player buffer:'), findsOneWidget);
     expect(find.textContaining('Disk cache:'), findsOneWidget);
+    expect(find.textContaining('Startup:'), findsOneWidget);
+    expect(find.textContaining('Rebuffers:'), findsOneWidget);
+    expect(find.textContaining('Rebuffer time:'), findsOneWidget);
+    expect(find.textContaining('Quality switches:'), findsOneWidget);
+    expect(find.textContaining('Recovery:'), findsOneWidget);
+    expect(find.textContaining('Video bitrate:'), findsOneWidget);
+
+    await tester.scrollUntilVisible(
+      find.text('QoE snapshots'),
+      120,
+      scrollable: find.byType(Scrollable),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('QoE snapshots'), findsOneWidget);
+    expect(find.text('QoE waiting for first sample'), findsOneWidget);
+    expect(find.byIcon(Icons.copy), findsOneWidget);
   });
 }

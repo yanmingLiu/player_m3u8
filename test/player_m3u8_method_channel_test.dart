@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:player_m3u8/player_m3u8.dart';
 import 'package:player_m3u8/player_m3u8_method_channel.dart';
 
 void main() {
@@ -37,6 +38,12 @@ void main() {
     expect(log.single.arguments, {
       'url': 'https://example.com/index.m3u8',
       'headers': {'User-Agent': 'test'},
+      'recoveryPolicy': {
+        'isEnabled': true,
+        'rebufferThreshold': 3,
+        'minimumRecoveryIntervalMs': 10000,
+        'minimumAutoQualityHeight': 0,
+      },
     });
   });
 
@@ -45,6 +52,55 @@ void main() {
 
     expect(log.single.method, 'seekTo');
     expect(log.single.arguments, {'playerId': 3, 'position': 8000});
+  });
+
+  test('setQuality sends player id and quality payload', () async {
+    await platform.setQuality(
+      3,
+      const M3u8Quality(
+        id: '720p',
+        label: '720p',
+        width: 1280,
+        height: 720,
+        bitrate: 1500000,
+      ),
+    );
+
+    expect(log.single.method, 'setQuality');
+    expect(log.single.arguments, {
+      'playerId': 3,
+      'quality': {
+        'id': '720p',
+        'label': '720p',
+        'width': 1280,
+        'height': 720,
+        'bitrate': 1500000,
+        'isAuto': false,
+      },
+    });
+  });
+
+  test('setRecoveryPolicy sends player id and policy payload', () async {
+    await platform.setRecoveryPolicy(
+      3,
+      const M3u8RecoveryPolicy(
+        isEnabled: false,
+        rebufferThreshold: 2,
+        minimumRecoveryInterval: Duration(seconds: 5),
+        minimumAutoQualityHeight: 480,
+      ),
+    );
+
+    expect(log.single.method, 'setRecoveryPolicy');
+    expect(log.single.arguments, {
+      'playerId': 3,
+      'recoveryPolicy': {
+        'isEnabled': false,
+        'rebufferThreshold': 2,
+        'minimumRecoveryIntervalMs': 5000,
+        'minimumAutoQualityHeight': 480,
+      },
+    });
   });
 
   test('dispose sends player id', () async {

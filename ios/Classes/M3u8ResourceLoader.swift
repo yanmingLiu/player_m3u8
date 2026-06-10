@@ -6,12 +6,16 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
 
   private let headers: [String: String]
   private let cacheManager: M3u8IosCacheManager
+  var qualityProvider: () -> [String: Any] = { ["isAuto": true] }
   private let queue = DispatchQueue(label: "player_m3u8_resource_loader")
   private let cancellationLock = NSLock()
   private let cancelledRequests =
     NSHashTable<AVAssetResourceLoadingRequest>.weakObjects()
 
-  init(headers: [String: String], cacheManager: M3u8IosCacheManager = .shared) {
+  init(
+    headers: [String: String],
+    cacheManager: M3u8IosCacheManager = .shared
+  ) {
     self.headers = headers
     self.cacheManager = cacheManager
     super.init()
@@ -56,7 +60,11 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
         }
         let isPlaylist = self.isPlaylist(url: originalUrl, data: data)
         if isPlaylist {
-          data = self.rewritePlaylist(data: data, playlistUrl: originalUrl)
+          data = self.rewritePlaylist(
+            data: data,
+            playlistUrl: originalUrl,
+            selectedQuality: self.qualityProvider()
+          )
         }
         self.respond(to: loadingRequest, data: data, isPlaylist: isPlaylist)
         loadingRequest.finishLoading()
@@ -116,11 +124,24 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
     return prefix.contains("#EXTM3U")
   }
 
-  private func rewritePlaylist(data: Data, playlistUrl: URL) -> Data {
+  private func rewritePlaylist(
+    data: Data,
+    playlistUrl: URL,
+    selectedQuality: [String: Any]
+  ) -> Data {
     guard let text = String(data: data, encoding: .utf8) else { return data }
+    let selectedHeight = selectedQuality["height"] as? Int ?? 0
+    let selectedBitrate = selectedQuality["bitrate"] as? Int ?? 0
+    let shouldFilterVariant = !(selectedQuality["isAuto"] as? Bool ?? false) &&
+      (selectedHeight > 0 || selectedBitrate > 0)
+    var pendingStreamInf: String?
     let lines = text.components(separatedBy: .newlines).map { rawLine -> String in
       let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !line.isEmpty else { return rawLine }
+      if line.hasPrefix("#EXT-X-STREAM-INF:") {
+        pendingStreamInf = rawLine
+        return ""
+      }
       if line.hasPrefix("#EXT-X-KEY:") || line.hasPrefix("#EXT-X-MAP:") {
         return rewriteUriAttribute(in: rawLine, playlistUrl: playlistUrl)
       }
@@ -130,9 +151,48 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
       guard let originalUrl = URL(string: line, relativeTo: playlistUrl)?.absoluteURL else {
         return rawLine
       }
-      return Self.cachedUrl(for: originalUrl).absoluteString
+      let rewrittenUrl = Self.cachedUrl(for: originalUrl).absoluteString
+      guard let streamInf = pendingStreamInf else {
+        return rewrittenUrl
+      }
+      pendingStreamInf = nil
+      if shouldFilterVariant &&
+        !streamInfMatches(streamInf, height: selectedHeight, bitrate: selectedBitrate)
+      {
+        return ""
+      }
+      return "\(streamInf)\n\(rewrittenUrl)"
     }
-    return Data(lines.joined(separator: "\n").utf8)
+    return Data(lines.filter { !$0.isEmpty }.joined(separator: "\n").utf8)
+  }
+
+  private func streamInfMatches(_ line: String, height: Int, bitrate: Int) -> Bool {
+    if height > 0,
+      let resolution = parseAttribute(line, name: "RESOLUTION"),
+      resolution.hasSuffix("x\(height)")
+    {
+      return true
+    }
+    if bitrate > 0,
+      let bandwidth = Int(parseAttribute(line, name: "BANDWIDTH") ?? ""),
+      bandwidth <= bitrate
+    {
+      return true
+    }
+    return false
+  }
+
+  private func parseAttribute(_ line: String, name: String) -> String? {
+    let pattern = "\(name)=([^,]+)"
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+    let range = NSRange(line.startIndex..<line.endIndex, in: line)
+    guard
+      let match = regex.firstMatch(in: line, range: range),
+      let valueRange = Range(match.range(at: 1), in: line)
+    else {
+      return nil
+    }
+    return String(line[valueRange]).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
   }
 
   private func rewriteUriAttribute(in line: String, playlistUrl: URL) -> String {

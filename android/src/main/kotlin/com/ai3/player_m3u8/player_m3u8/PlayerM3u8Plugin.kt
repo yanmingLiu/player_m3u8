@@ -46,6 +46,20 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
                 player.seekTo(position)
                 result.success(null)
             }
+            "setQuality" -> withPlayer(call, result) { player ->
+                val quality = call.argument<Map<String, Any?>>("quality")
+                if (quality == null) {
+                    result.error("invalid_quality", "quality is required.", null)
+                    return@withPlayer
+                }
+                player.setQuality(quality)
+                result.success(null)
+            }
+            "setRecoveryPolicy" -> withPlayer(call, result) { player ->
+                val policy = call.argument<Map<String, Any?>>("recoveryPolicy")
+                player.setRecoveryPolicy(M3u8RecoveryPolicy.fromMap(policy))
+                result.success(null)
+            }
             "dispose" -> {
                 val playerId = call.argument<Number>("playerId")?.toLong()
                 if (playerId == null) {
@@ -84,11 +98,15 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
             return
         }
         val headers = call.argument<Map<String, String>>("headers") ?: emptyMap()
+        val recoveryPolicy = M3u8RecoveryPolicy.fromMap(
+            call.argument<Map<String, Any?>>("recoveryPolicy"),
+        )
         val surfaceProducer = textures.createSurfaceProducer()
         val player = M3u8AndroidPlayer(
             context = context,
             url = url,
             headers = headers,
+            recoveryPolicy = recoveryPolicy,
             surfaceProducer = surfaceProducer,
             eventSinkProvider = { eventSink },
         )

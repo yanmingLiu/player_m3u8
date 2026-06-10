@@ -15,6 +15,9 @@
 - 播放、暂停、seek、dispose。
 - 播放列表切换：`setSource(...)`。
 - 播放状态、进度、时长、播放器缓冲、磁盘缓存、视频尺寸、错误事件。
+- 播放健康指标：首帧耗时、rebuffer 次数和总时长、丢帧数、当前码率、观测带宽、清晰度切换次数。
+- HLS 清晰度列表和 Auto/手动清晰度选择。
+- 连续 rebuffer 或播放错误时自动降到下一档清晰度并尝试恢复当前位置。
 - 有界播放器内存缓冲，避免用超大 forward buffer 导致 OOM。
 - 可配置磁盘缓存容量，并支持清理磁盘缓存。
 - 当前视频磁盘预取：播放暂停时仍可继续缓存，切换视频时停止旧视频主动缓存。
@@ -99,6 +102,51 @@ await M3u8PlayerCache.clear();
 
 配置和清理都要求当前没有活跃 native player。Android 会重建 Media3 `SimpleCache` 并保留符合上限的数据；iOS 会调整 app caches 目录的 LRU 清理上限。
 
+### 清晰度选择
+
+播放器会在状态中暴露 HLS master playlist 中的可用清晰度：
+
+```dart
+final qualities = controller.value.availableQualities;
+await controller.setQuality(M3u8Quality.auto);
+await controller.setQuality(qualities.first);
+```
+
+`M3u8Quality.auto` 使用平台播放器的自适应选择。手动清晰度会对 Android ExoPlayer 施加 track selector 约束；iOS 会在 `AVAssetResourceLoader` 返回给 AVPlayer 的 master playlist 中过滤到目标 variant。连续 rebuffer 或播放错误时，如果存在更低档 variant，播放器会自动降到下一档并尝试恢复到原播放位置；`recoveryCount` 和 `lastRecoveryReason` 可用于 UI 提示或埋点。
+
+### 自动恢复策略
+
+默认策略是启用自动恢复、连续 3 次 rebuffer 后触发降档、两次恢复至少间隔 10 秒。可以在初始化、切换 source 或播放中调整：
+
+```dart
+await controller.initialize(
+  url,
+  recoveryPolicy: const M3u8RecoveryPolicy(
+    rebufferThreshold: 2,
+    minimumRecoveryInterval: Duration(seconds: 6),
+    minimumAutoQualityHeight: 480,
+  ),
+);
+
+await controller.setRecoveryPolicy(M3u8RecoveryPolicy.disabled);
+```
+
+`minimumAutoQualityHeight` 用于限制自动恢复时最低降到哪一档；例如设为 480 时，自动降级不会主动选择低于 480p 的 variant。
+
+### QoE 快照
+
+业务层可以订阅周期性 QoE 快照，用于真实设备压测或埋点上报：
+
+```dart
+final subscription = controller.qoeSnapshots.listen((snapshot) {
+  analytics.logEvent('player_qoe', snapshot.toMap());
+});
+
+controller.startQoeSampling(interval: const Duration(seconds: 5));
+```
+
+`M3u8QoeSnapshot` 会输出窗口起止时间、当前播放位置、缓冲/磁盘缓存位置、首帧耗时、rebuffer 次数和窗口增量、rebuffer 总时长和窗口增量、丢帧增量、恢复增量、清晰度切换增量、当前码率、观测带宽和当前清晰度。
+
 ### 状态监听
 
 `M3u8PlayerController` 是 `ValueNotifier<M3u8PlayerValue>`：
@@ -131,6 +179,17 @@ ValueListenableBuilder<M3u8PlayerValue>(
 - `diskCachePosition`
 - `diskCachePercent`
 - `isDiskCacheComplete`
+- `startupTime`
+- `rebufferCount`
+- `rebufferDuration`
+- `droppedFrames`
+- `videoBitrate`
+- `observedBitrate`
+- `qualitySwitchCount`
+- `availableQualities`
+- `selectedQuality`
+- `recoveryCount`
+- `lastRecoveryReason`
 - `size`
 - `error`
 
@@ -171,12 +230,16 @@ example/
 - dispose 或 source 切换时释放 player、surface/texture、observer/timer、预取任务。
 - Android 预取使用 Media3 `HlsPlaylistParser` 解析 HLS，并通过 Media3 `CacheWriter` 写入 `SimpleCache`，播放器可复用缓存数据。
 - iOS 播放通过 `AVAssetResourceLoader` 读取自定义 scheme，playlist、key、map、segment 请求会优先命中 app caches；缺失时下载并写入缓存。
+- Android 通过 ExoPlayer track/analytics 上报首帧、rebuffer、丢帧、当前码率和带宽估计；iOS 通过 AVPlayer access log 和视频轨道信息上报对应指标。rebuffer 总时长和清晰度切换次数可用于真实设备 QoE 统计。
+- Android 手动清晰度通过 `DefaultTrackSelector` 约束最高视频尺寸和码率；iOS 手动清晰度通过 ResourceLoader 过滤 HLS master variants。
+- 连续 rebuffer 或播放错误触发自动降级恢复，保留当前位置；没有更低档可降时才向 Dart 上报播放错误。
 - seek 后会取消当前主动预取，并从目标时间对应的分片开始向后预取；已写入磁盘的数据保留复用。
 
 ### 当前限制
 
 - 仅支持网络 HLS/m3u8 VOD。
-- 暂不支持字幕、倍速、清晰度切换、后台播放、DRM。
+- 暂不支持字幕、倍速、后台播放、DRM。
+- 当前已支持手动清晰度约束，但尚未暴露自定义自动码率策略。
 - iOS HLS 解析仍是轻量实现，适合常见 VOD playlist；复杂 HLS 特性仍需继续补测试。
 - 磁盘缓存配置和清理必须在没有活跃播放器时调用。
 
@@ -190,6 +253,8 @@ example 内置多个 HLS 源用于切换测试：
 - `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`
 - `https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8`
 - `https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8`
+
+example 页面还包含播放健康指标和 QoE 快照面板，可在真机调试时观察最近采样窗口的 rebuffer ratio、丢帧增量、恢复增量、清晰度切换增量，并复制最新快照 JSON。
 
 ### 本地验证
 
@@ -246,6 +311,9 @@ It is designed for Flutter apps that need HLS/m3u8 VOD playback, playback/buffer
 - Play, pause, seek, and dispose.
 - Playlist source switching through `setSource(...)`.
 - Playback state, progress, duration, player buffer, disk cache, video size, and error events.
+- Playback health metrics: startup time, rebuffer count and duration, dropped frames, current video bitrate, observed bitrate, and quality switch count.
+- HLS quality list plus Auto/manual quality selection.
+- Automatic lower-quality recovery after repeated rebuffering or playback errors.
 - Bounded in-memory player buffering to avoid OOM.
 - Configurable disk cache size and disk cache clearing.
 - Disk prefetch for the current source. Prefetch can continue while playback is paused and is stopped when switching away from the source.
@@ -330,6 +398,51 @@ await M3u8PlayerCache.clear();
 
 Both operations require no active native players. Android rebuilds Media3 `SimpleCache` with the configured LRU limit; iOS applies the LRU limit to the app caches directory.
 
+### Quality Selection
+
+The player exposes variants from the HLS master playlist:
+
+```dart
+final qualities = controller.value.availableQualities;
+await controller.setQuality(M3u8Quality.auto);
+await controller.setQuality(qualities.first);
+```
+
+`M3u8Quality.auto` uses the platform player's adaptive selection. Manual quality constrains Android ExoPlayer through the track selector; iOS filters the master playlist returned by `AVAssetResourceLoader` to the target variant. After repeated rebuffering or playback errors, the player automatically steps down to a lower variant when one is available and tries to resume at the previous position. Use `recoveryCount` and `lastRecoveryReason` for UI hints or analytics.
+
+### Recovery Policy
+
+The default policy enables automatic recovery, steps down after 3 rebuffers, and keeps at least 10 seconds between recovery attempts. Configure it during initialization, source switching, or playback:
+
+```dart
+await controller.initialize(
+  url,
+  recoveryPolicy: const M3u8RecoveryPolicy(
+    rebufferThreshold: 2,
+    minimumRecoveryInterval: Duration(seconds: 6),
+    minimumAutoQualityHeight: 480,
+  ),
+);
+
+await controller.setRecoveryPolicy(M3u8RecoveryPolicy.disabled);
+```
+
+`minimumAutoQualityHeight` limits how far automatic recovery can step down. For example, `480` prevents automatic recovery from selecting variants below 480p.
+
+### QoE Snapshots
+
+Apps can subscribe to periodic QoE snapshots for real-device profiling or analytics:
+
+```dart
+final subscription = controller.qoeSnapshots.listen((snapshot) {
+  analytics.logEvent('player_qoe', snapshot.toMap());
+});
+
+controller.startQoeSampling(interval: const Duration(seconds: 5));
+```
+
+`M3u8QoeSnapshot` includes the window start/end time, playback position, buffer/disk-cache position, startup time, rebuffer totals and window deltas, rebuffer duration totals and window deltas, dropped-frame deltas, recovery deltas, quality-switch deltas, current bitrate, observed bitrate, and selected quality.
+
 ### State Listening
 
 `M3u8PlayerController` is a `ValueNotifier<M3u8PlayerValue>`:
@@ -362,6 +475,17 @@ Common fields:
 - `diskCachePosition`
 - `diskCachePercent`
 - `isDiskCacheComplete`
+- `startupTime`
+- `rebufferCount`
+- `rebufferDuration`
+- `droppedFrames`
+- `videoBitrate`
+- `observedBitrate`
+- `qualitySwitchCount`
+- `availableQualities`
+- `selectedQuality`
+- `recoveryCount`
+- `lastRecoveryReason`
 - `size`
 - `error`
 
@@ -405,12 +529,16 @@ example/
 - dispose and source switching release native players, surfaces/textures, observers/timers, and active prefetch tasks.
 - Android prefetch uses Media3 `HlsPlaylistParser` for HLS parsing and Media3 `CacheWriter` to write into `SimpleCache`, which ExoPlayer can reuse.
 - iOS playback uses `AVAssetResourceLoader` with a custom scheme. Playlist, key, map, and segment requests read from app caches first; missing resources are downloaded and stored.
+- Android reports startup, rebuffer, dropped-frame, bitrate, and bandwidth metrics through ExoPlayer tracks/analytics. iOS reports the same metric class through AVPlayer access logs and video track data. Total rebuffer duration and quality switch count are available for real-device QoE analytics.
+- Android manual quality constrains maximum video size and bitrate through `DefaultTrackSelector`; iOS manual quality filters HLS master variants through ResourceLoader.
+- Repeated rebuffering or playback errors trigger automatic lower-quality recovery and preserve the playback position. Playback errors are reported to Dart only when no lower variant is available.
 - After seek, active prefetch is canceled and restarted from the segment that matches the target time. Already cached data remains reusable.
 
 ### Current Limitations
 
 - Network HLS/m3u8 VOD only.
-- No subtitles, playback speed, quality switching, background playback, or DRM yet.
+- No subtitles, playback speed, background playback, or DRM yet.
+- Manual quality constraints are supported, but custom automatic bitrate policy controls are not exposed yet.
 - iOS HLS parsing remains lightweight and targets common VOD playlists; complex HLS features need additional validation.
 - Disk cache configuration and clearing must be called only when no players are active.
 
@@ -424,6 +552,8 @@ The example app includes multiple HLS sources for switching tests:
 - `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`
 - `https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8`
 - `https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8`
+
+The example page also includes playback-health stats and a QoE snapshot panel for real-device debugging. It shows recent rebuffer ratio, dropped-frame deltas, recovery deltas, quality-switch deltas, and can copy the latest snapshot JSON.
 
 ### Local Verification
 

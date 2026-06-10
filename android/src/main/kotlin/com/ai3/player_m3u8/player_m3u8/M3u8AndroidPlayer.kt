@@ -1,20 +1,27 @@
 package com.ai3.player_m3u8.player_m3u8
 
 import android.content.Context
+import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
+import androidx.media3.exoplayer.analytics.AnalyticsListener
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
+import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParser
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
+import androidx.media3.exoplayer.upstream.ParsingLoadable
 import io.flutter.plugin.common.EventChannel
 import io.flutter.view.TextureRegistry
 
@@ -22,15 +29,34 @@ class M3u8AndroidPlayer(
     private val context: Context,
     private val url: String,
     private val headers: Map<String, String>,
+    recoveryPolicy: M3u8RecoveryPolicy,
     private val surfaceProducer: TextureRegistry.SurfaceProducer,
     private val eventSinkProvider: () -> EventChannel.EventSink?,
-) : TextureRegistry.SurfaceProducer.Callback, Player.Listener {
+) : TextureRegistry.SurfaceProducer.Callback, Player.Listener, AnalyticsListener {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var player: ExoPlayer? = null
+    private var trackSelector: DefaultTrackSelector? = null
     private var disposed = false
     private var savedState: SavedState? = null
     private var lastProgressSentAt = 0L
     private var initialized = false
+    private val createdAtMs = android.os.SystemClock.elapsedRealtime()
+    private var startupTimeMs = 0L
+    private var rebufferCount = 0
+    private var rebufferDurationMs = 0L
+    private var rebufferStartedAtMs = 0L
+    private var droppedFrames = 0
+    private var videoBitrate = 0
+    private var observedBitrate = 0
+    private var qualitySwitchCount = 0
+    private var wasPlayingBeforeBuffering = false
+    private var availableQualities = listOf<Map<String, Any?>>()
+    private var selectedQuality = autoQuality()
+    private var recoveryPolicy = recoveryPolicy.normalized()
+    private var recoveryCount = 0
+    private var lastRecoveryReason = ""
+    private var lastRecoveredRebufferCount = 0
+    private var lastRecoveryAtMs = 0L
     private val sourceDebugId = M3u8Log.sourceDebugId(url)
     private val videoTrackCompatLimit = videoTrackCompatLimit()
     private val diskCachePrefetcher = M3u8DiskCachePrefetcher(
@@ -60,6 +86,7 @@ class M3u8AndroidPlayer(
                     "device=${Build.MANUFACTURER}/${Build.MODEL} sdk=${Build.VERSION.SDK_INT}",
             )
             surfaceProducer.setCallback(this)
+            loadAvailableQualities()
             createPlayer()
             diskCachePrefetcher.start()
             mainHandler.post(progressRunnable)
@@ -94,6 +121,31 @@ class M3u8AndroidPlayer(
         }
     }
 
+    fun setQuality(quality: Map<String, Any?>) {
+        runOnMain {
+            val isAuto = quality["isAuto"] as? Boolean ?: false
+            selectedQuality = if (isAuto) {
+                autoQuality()
+            } else {
+                qualityPayload(
+                    width = (quality["width"] as? Number)?.toInt() ?: 0,
+                    height = (quality["height"] as? Number)?.toInt() ?: 0,
+                    bitrate = (quality["bitrate"] as? Number)?.toInt() ?: 0,
+                )
+            }
+            qualitySwitchCount += 1
+            applySelectedQuality()
+            sendProgress(force = true)
+        }
+    }
+
+    fun setRecoveryPolicy(policy: M3u8RecoveryPolicy) {
+        runOnMain {
+            recoveryPolicy = policy.normalized()
+            sendProgress(force = true)
+        }
+    }
+
     fun dispose() {
         runOnMain {
             if (disposed) {
@@ -104,6 +156,7 @@ class M3u8AndroidPlayer(
             mainHandler.removeCallbacks(progressRunnable)
             diskCachePrefetcher.cancel()
             player?.removeListener(this)
+            player?.removeAnalyticsListener(this)
             player?.release()
             player = null
             surfaceProducer.setCallback(null)
@@ -139,6 +192,7 @@ class M3u8AndroidPlayer(
                 playWhenReady = currentPlayer.playWhenReady,
             )
             currentPlayer.removeListener(this)
+            currentPlayer.removeAnalyticsListener(this)
             currentPlayer.release()
             player = null
             initialized = false
@@ -154,8 +208,23 @@ class M3u8AndroidPlayer(
                 "playWhenReady=${player?.playWhenReady}",
         )
         when (playbackState) {
-            Player.STATE_BUFFERING -> sendPlaybackEvent("buffering")
+            Player.STATE_BUFFERING -> {
+                if (initialized && wasPlayingBeforeBuffering) {
+                    rebufferCount += 1
+                    if (rebufferStartedAtMs == 0L) {
+                        rebufferStartedAtMs = android.os.SystemClock.elapsedRealtime()
+                    }
+                    if (
+                        recoveryPolicy.isEnabled &&
+                        rebufferCount - lastRecoveredRebufferCount >= recoveryPolicy.rebufferThreshold
+                    ) {
+                        attemptRecovery("rebuffer")
+                    }
+                }
+                sendPlaybackEvent("buffering")
+            }
             Player.STATE_READY -> {
+                finishRebufferTiming()
                 if (!initialized) {
                     initialized = true
                     sendInitialized()
@@ -166,9 +235,14 @@ class M3u8AndroidPlayer(
                     sendPlaybackEvent("paused")
                 }
             }
-            Player.STATE_ENDED -> sendPlaybackEvent("completed")
-            Player.STATE_IDLE -> Unit
+            Player.STATE_ENDED -> {
+                finishRebufferTiming()
+                sendPlaybackEvent("completed")
+            }
+            Player.STATE_IDLE -> finishRebufferTiming()
         }
+        wasPlayingBeforeBuffering = player?.isPlaying == true ||
+            (playbackState == Player.STATE_READY && player?.playWhenReady == true)
     }
 
     override fun onIsPlayingChanged(isPlaying: Boolean) {
@@ -177,6 +251,24 @@ class M3u8AndroidPlayer(
                 "value=$isPlaying positionMs=${player?.currentPosition?.coerceAtLeast(0L) ?: 0L}",
         )
         sendPlaybackEvent(if (isPlaying) "playing" else "paused")
+    }
+
+    override fun onTracksChanged(tracks: Tracks) {
+        videoBitrate = tracks.groups
+            .flatMap { group ->
+                (0 until group.length)
+                    .filter { group.isTrackSelected(it) }
+                    .map { group.getTrackFormat(it) }
+            }
+            .firstOrNull { format ->
+                format.sampleMimeType?.startsWith("video/") == true ||
+                    format.width > 0 ||
+                    format.height > 0
+            }
+            ?.bitrate
+            ?.takeIf { it > 0 }
+            ?: videoBitrate
+        sendProgress(force = true)
     }
 
     override fun onVideoSizeChanged(videoSize: VideoSize) {
@@ -193,12 +285,49 @@ class M3u8AndroidPlayer(
     override fun onPlayerError(error: PlaybackException) {
         val details = playbackErrorDetails(error)
         logPlayerError(error, details)
+        finishRebufferTiming()
+        if (attemptRecovery("error:${error.errorCodeName}")) {
+            return
+        }
         sendEvent(
             mapOf(
                 "event" to "error",
                 "error" to playbackErrorPayload(error, details),
             ),
         )
+    }
+
+    override fun onRenderedFirstFrame(
+        eventTime: AnalyticsListener.EventTime,
+        output: Any,
+        renderTimeMs: Long,
+    ) {
+        if (startupTimeMs == 0L) {
+            startupTimeMs = (android.os.SystemClock.elapsedRealtime() - createdAtMs)
+                .coerceAtLeast(0L)
+            sendProgress(force = true)
+        }
+    }
+
+    override fun onDroppedVideoFrames(
+        eventTime: AnalyticsListener.EventTime,
+        droppedFrames: Int,
+        elapsedMs: Long,
+    ) {
+        this.droppedFrames += droppedFrames.coerceAtLeast(0)
+        sendProgress(force = true)
+    }
+
+    override fun onBandwidthEstimate(
+        eventTime: AnalyticsListener.EventTime,
+        totalLoadTimeMs: Int,
+        totalBytesLoaded: Long,
+        bitrateEstimate: Long,
+    ) {
+        observedBitrate = bitrateEstimate
+            .coerceAtMost(Int.MAX_VALUE.toLong())
+            .toInt()
+            .coerceAtLeast(0)
     }
 
     private fun createPlayer(state: SavedState? = null) {
@@ -220,13 +349,8 @@ class M3u8AndroidPlayer(
         val renderersFactory = DefaultRenderersFactory(context)
             .setEnableDecoderFallback(true)
         val trackSelector = DefaultTrackSelector(context)
-        videoTrackCompatLimit?.let { limit ->
-            trackSelector.setParameters(
-                trackSelector.buildUponParameters()
-                    .setMaxVideoSize(limit.maxWidth, limit.maxHeight)
-                    .setExceedVideoConstraintsIfNecessary(true),
-            )
-        }
+        this.trackSelector = trackSelector
+        applySelectedQuality(trackSelector)
         logInfo(
             "createPlayer playerId=${surfaceProducer.id()} source=$sourceDebugId " +
                 "restore=${state != null} restorePositionMs=${state?.positionMs ?: 0L} " +
@@ -240,6 +364,7 @@ class M3u8AndroidPlayer(
             .setTrackSelector(trackSelector)
             .build()
         newPlayer.addListener(this)
+        newPlayer.addAnalyticsListener(this)
         newPlayer.setMediaItem(mediaItem)
         newPlayer.setVideoSurface(surfaceProducer.getSurface())
         if (state != null) {
@@ -249,6 +374,186 @@ class M3u8AndroidPlayer(
         newPlayer.prepare()
         player = newPlayer
         logInfo("prepare playerId=${surfaceProducer.id()} source=$sourceDebugId")
+    }
+
+    private fun loadAvailableQualities() {
+        try {
+            val dataSource = M3u8CacheManager.mediaDataSourceFactory(context, headers)
+                .createDataSource()
+            val playlist = ParsingLoadable.load(
+                dataSource,
+                HlsPlaylistParser(),
+                Uri.parse(url),
+                C.DATA_TYPE_MANIFEST,
+            )
+            availableQualities = when (playlist) {
+                is HlsMultivariantPlaylist -> playlist.variants
+                    .map { it.format }
+                    .filter { format ->
+                        format.height > 0 || format.width > 0 || format.bitrate > 0
+                    }
+                    .map { format ->
+                        qualityPayload(
+                            width = format.width.coerceAtLeast(0),
+                            height = format.height.coerceAtLeast(0),
+                            bitrate = format.bitrate.coerceAtLeast(0),
+                        )
+                    }
+                    .distinctBy { it["id"] }
+                    .sortedWith(
+                        compareByDescending<Map<String, Any?>> {
+                            it["height"] as? Int ?: 0
+                        }.thenByDescending {
+                            it["bitrate"] as? Int ?: 0
+                        },
+                    )
+                else -> emptyList()
+            }
+        } catch (_: Throwable) {
+            availableQualities = emptyList()
+        }
+    }
+
+    private fun applySelectedQuality(selector: DefaultTrackSelector? = trackSelector) {
+        val currentSelector = selector ?: return
+        val builder = currentSelector.buildUponParameters()
+        val isAuto = selectedQuality["isAuto"] == true
+        val selectedWidth = if (isAuto) {
+            0
+        } else {
+            selectedQuality["width"] as? Int ?: 0
+        }
+        val selectedHeight = if (isAuto) {
+            0
+        } else {
+            selectedQuality["height"] as? Int ?: 0
+        }
+        val limit = videoTrackCompatLimit
+        val constrainedWidth = constrainedDimension(selectedWidth, limit?.maxWidth)
+        val constrainedHeight = constrainedDimension(selectedHeight, limit?.maxHeight)
+        builder.clearVideoSizeConstraints()
+        builder.clearViewportSizeConstraints()
+        if (constrainedWidth > 0 && constrainedHeight > 0) {
+            builder.setMaxVideoSize(constrainedWidth, constrainedHeight)
+            builder.setExceedVideoConstraintsIfNecessary(true)
+        }
+        val bitrate = if (isAuto) {
+            Int.MAX_VALUE
+        } else {
+            selectedQuality["bitrate"] as? Int ?: 0
+        }
+        builder.setMaxVideoBitrate(if (bitrate > 0) bitrate else Int.MAX_VALUE)
+        currentSelector.setParameters(builder)
+    }
+
+    private fun constrainedDimension(selected: Int, compatLimit: Int?): Int {
+        return when {
+            selected > 0 && compatLimit != null -> minOf(selected, compatLimit)
+            selected > 0 -> selected
+            compatLimit != null -> compatLimit
+            else -> 0
+        }
+    }
+
+    private fun attemptRecovery(reason: String): Boolean {
+        if (!recoveryPolicy.isEnabled) {
+            return false
+        }
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (now - lastRecoveryAtMs < recoveryPolicy.minimumRecoveryIntervalMs) {
+            return false
+        }
+        val lowerQuality = nextLowerQuality() ?: return false
+        val currentPlayer = player ?: return false
+        val positionMs = currentPlayer.currentPosition.coerceAtLeast(0L)
+        val shouldPlay = currentPlayer.playWhenReady
+        recoveryCount += 1
+        lastRecoveryReason = reason
+        lastRecoveredRebufferCount = rebufferCount
+        lastRecoveryAtMs = now
+        selectedQuality = lowerQuality
+        qualitySwitchCount += 1
+        logInfo(
+            "recover playerId=${surfaceProducer.id()} source=$sourceDebugId " +
+                "reason=$reason quality=${lowerQuality["id"]} positionMs=$positionMs",
+        )
+        applySelectedQuality()
+        currentPlayer.seekTo(positionMs)
+        if (currentPlayer.playbackState == Player.STATE_IDLE) {
+            currentPlayer.prepare()
+        }
+        currentPlayer.playWhenReady = shouldPlay
+        sendProgress(force = true)
+        return true
+    }
+
+    private fun nextLowerQuality(): Map<String, Any?>? {
+        if (availableQualities.isEmpty()) {
+            return null
+        }
+        val isAuto = selectedQuality["isAuto"] == true
+        val currentHeight = if (isAuto) {
+            player?.videoSize?.height?.takeIf { it > 0 } ?: Int.MAX_VALUE
+        } else {
+            selectedQuality["height"] as? Int ?: Int.MAX_VALUE
+        }
+        val currentBitrate = if (isAuto) {
+            videoBitrate.takeIf { it > 0 } ?: Int.MAX_VALUE
+        } else {
+            selectedQuality["bitrate"] as? Int ?: Int.MAX_VALUE
+        }
+        return availableQualities
+            .filter { quality ->
+                val height = quality["height"] as? Int ?: 0
+                val bitrate = quality["bitrate"] as? Int ?: 0
+                (height > 0 || bitrate > 0) && (
+                    isAuto ||
+                        height < currentHeight ||
+                        (height == currentHeight && bitrate < currentBitrate)
+                    ) &&
+                    (recoveryPolicy.minimumAutoQualityHeight <= 0 ||
+                        height <= 0 ||
+                        height >= recoveryPolicy.minimumAutoQualityHeight)
+            }
+            .maxWithOrNull(
+                compareBy<Map<String, Any?>> {
+                    it["height"] as? Int ?: 0
+                }.thenBy {
+                    it["bitrate"] as? Int ?: 0
+                },
+            )
+    }
+
+    private fun autoQuality(): Map<String, Any?> {
+        return mapOf(
+            "id" to "auto",
+            "label" to "Auto",
+            "width" to 0,
+            "height" to 0,
+            "bitrate" to 0,
+            "isAuto" to true,
+        )
+    }
+
+    private fun qualityPayload(width: Int, height: Int, bitrate: Int): Map<String, Any?> {
+        val label = when {
+            height > 0 -> "${height}p"
+            bitrate > 0 -> "${bitrate / 1000} Kbps"
+            else -> "Unknown"
+        }
+        val id = when {
+            height > 0 -> "${height}p"
+            bitrate > 0 -> "${bitrate}bps"
+            else -> "unknown"
+        }
+        return mapOf(
+            "id" to id,
+            "label" to label,
+            "width" to width,
+            "height" to height,
+            "bitrate" to bitrate,
+            "isAuto" to false,
+        )
     }
 
     private fun sendInitialized() {
@@ -292,6 +597,17 @@ class M3u8AndroidPlayer(
             "position" to (currentPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L),
             "duration" to duration,
             "bufferedPosition" to (currentPlayer?.bufferedPosition?.coerceAtLeast(0L) ?: 0L),
+            "startupTime" to startupTimeMs,
+            "rebufferCount" to rebufferCount,
+            "rebufferDuration" to currentRebufferDurationMs(),
+            "droppedFrames" to droppedFrames,
+            "videoBitrate" to videoBitrate,
+            "observedBitrate" to observedBitrate,
+            "qualitySwitchCount" to qualitySwitchCount,
+            "availableQualities" to availableQualities,
+            "selectedQuality" to selectedQuality,
+            "recoveryCount" to recoveryCount,
+            "lastRecoveryReason" to lastRecoveryReason,
         )
     }
 
@@ -304,6 +620,25 @@ class M3u8AndroidPlayer(
             "message" to (error.message ?: "Playback failed."),
             "details" to details,
         )
+    }
+
+    private fun finishRebufferTiming() {
+        val startedAtMs = rebufferStartedAtMs
+        if (startedAtMs == 0L) {
+            return
+        }
+        rebufferDurationMs += (android.os.SystemClock.elapsedRealtime() - startedAtMs)
+            .coerceAtLeast(0L)
+        rebufferStartedAtMs = 0L
+    }
+
+    private fun currentRebufferDurationMs(): Long {
+        val startedAtMs = rebufferStartedAtMs
+        if (startedAtMs == 0L) {
+            return rebufferDurationMs
+        }
+        return rebufferDurationMs +
+            (android.os.SystemClock.elapsedRealtime() - startedAtMs).coerceAtLeast(0L)
     }
 
     private fun playbackErrorDetails(error: PlaybackException): Map<String, Any?> {

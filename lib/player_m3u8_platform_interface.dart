@@ -3,6 +3,8 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 
 import 'player_m3u8_method_channel.dart';
 import 'src/m3u8_player_event.dart';
+import 'src/m3u8_player_value.dart';
+import 'src/m3u8_recovery_policy.dart';
 
 abstract class PlayerM3u8Platform extends PlatformInterface {
   PlayerM3u8Platform() : super(token: _token);
@@ -25,6 +27,7 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
   Future<int> create({
     required String url,
     Map<String, String> headers = const <String, String>{},
+    M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
   }) {
     throw UnimplementedError('create() has not been implemented.');
   }
@@ -39,6 +42,17 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
 
   Future<void> seekTo(int playerId, Duration position) {
     throw UnimplementedError('seekTo() has not been implemented.');
+  }
+
+  Future<void> setQuality(int playerId, M3u8Quality quality) {
+    throw UnimplementedError('setQuality() has not been implemented.');
+  }
+
+  Future<void> setRecoveryPolicy(
+    int playerId,
+    M3u8RecoveryPolicy recoveryPolicy,
+  ) {
+    throw UnimplementedError('setRecoveryPolicy() has not been implemented.');
   }
 
   Future<void> disposePlayer(int playerId) {

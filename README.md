@@ -12,11 +12,13 @@
 
 - 网络 HLS/m3u8 播放。
 - iOS 和 Android 原生解码与 Texture 渲染。
-- 播放、暂停、seek、dispose。
+- 播放、暂停、seek、相对快进/快退、倍速、音量/静音、错误重试、dispose。
 - 播放列表切换：`setSource(...)`。
 - 播放状态、进度、时长、播放器缓冲、磁盘缓存、视频尺寸、错误事件。
 - 播放健康指标：首帧耗时、rebuffer 次数和总时长、丢帧数、当前码率、观测带宽、清晰度切换次数。
 - HLS 清晰度列表和 Auto/手动清晰度选择。
+- 播放倍速控制，支持 0.25x 到 2.0x。
+- 音量和静音控制，切换 source 后保留当前音频状态。
 - 连续 rebuffer 或播放错误时自动降到下一档清晰度并尝试恢复当前位置。
 - 有界播放器内存缓冲，避免用超大 forward buffer 导致 OOM。
 - 可配置磁盘缓存容量，并支持清理磁盘缓存。
@@ -59,6 +61,7 @@ await controller.initialize(
   'https://example.com/index.m3u8',
   headers: const {'User-Agent': 'MyApp'},
   autoPlay: true,
+  initialPosition: const Duration(seconds: 30),
 );
 
 M3u8Player(controller: controller);
@@ -82,12 +85,23 @@ void dispose() {
 await controller.setSource(nextUrl, autoPlay: true);
 ```
 
+如果要恢复历史播放进度或从推荐流跳转到指定时间，可以在创建 source 时传入初始位置：
+
+```dart
+await controller.setSource(
+  nextUrl,
+  autoPlay: true,
+  initialPosition: resumePosition,
+);
+```
+
 切换行为：
 
 - 旧 native player 会被释放。
 - 旧 source 的主动磁盘预取任务会停止。
 - 旧 source 已经写入磁盘的数据会保留，后续切回时可继续复用。
 - 新 source 会创建新的 native player，并按 `autoPlay` 决定是否自动播放。
+- 如传入 `initialPosition`，播放内核和主动磁盘预取都会优先从该位置开始。
 
 因此列表场景中不会出现多个视频同时后台下载的情况；只有当前 source 会继续播放和主动预取。
 
@@ -113,6 +127,52 @@ await controller.setQuality(qualities.first);
 ```
 
 `M3u8Quality.auto` 使用平台播放器的自适应选择。手动清晰度会对 Android ExoPlayer 施加 track selector 约束；iOS 会在 `AVAssetResourceLoader` 返回给 AVPlayer 的 master playlist 中过滤到目标 variant。连续 rebuffer 或播放错误时，如果存在更低档 variant，播放器会自动降到下一档并尝试恢复到原播放位置；`recoveryCount` 和 `lastRecoveryReason` 可用于 UI 提示或埋点。
+
+### 播放倍速
+
+初始化、切换 source 或播放中都可以设置倍速：
+
+```dart
+await controller.initialize(url, playbackSpeed: 1.25);
+await controller.setSource(nextUrl, playbackSpeed: 1.5);
+await controller.setPlaybackSpeed(2.0);
+```
+
+倍速范围是 0.25x 到 2.0x。Android 使用 ExoPlayer `PlaybackParameters`，iOS 使用 AVPlayer `rate`；切换清晰度或自动恢复后会保持当前倍速。
+
+### 音量和静音
+
+初始化、切换 source 或播放中都可以设置音频状态：
+
+```dart
+await controller.initialize(url, volume: 0.8, isMuted: false);
+await controller.setVolume(0.5);
+await controller.setMuted(true);
+```
+
+`volume` 范围是 0.0 到 1.0；`isMuted` 不会覆盖保存的音量值，取消静音后会恢复到当前 `volume`。
+
+### 快退和快进
+
+可以用绝对位置 seek，也可以用相对偏移快退/快进：
+
+```dart
+await controller.seekTo(const Duration(minutes: 3));
+await controller.seekBy(const Duration(seconds: -10));
+await controller.seekBy(const Duration(seconds: 10));
+```
+
+`seekBy` 会自动裁剪到 `0..duration` 范围内，底层仍调用平台 `seekTo`，因此主动磁盘预取会沿用 seek-aware 策略从新目标位置重启。
+
+### 错误重试
+
+播放错误后可以直接重建当前 source：
+
+```dart
+await controller.retry(autoPlay: true);
+```
+
+`retry` 会释放旧 native player，按当前播放位置重新创建 source，并保留恢复策略、倍速、音量和静音状态。
 
 ### 自动恢复策略
 
@@ -145,7 +205,7 @@ final subscription = controller.qoeSnapshots.listen((snapshot) {
 controller.startQoeSampling(interval: const Duration(seconds: 5));
 ```
 
-`M3u8QoeSnapshot` 会输出窗口起止时间、当前播放位置、缓冲/磁盘缓存位置、首帧耗时、rebuffer 次数和窗口增量、rebuffer 总时长和窗口增量、丢帧增量、恢复增量、清晰度切换增量、当前码率、观测带宽和当前清晰度。
+`M3u8QoeSnapshot` 会输出窗口起止时间、当前播放位置、缓冲/磁盘缓存位置、首帧耗时、rebuffer 次数和窗口增量、rebuffer 总时长和窗口增量、丢帧增量、恢复增量、清晰度切换增量、当前码率、观测带宽、当前清晰度和播放倍速。
 
 ### 状态监听
 
@@ -308,11 +368,13 @@ It is designed for Flutter apps that need HLS/m3u8 VOD playback, playback/buffer
 
 - Network HLS/m3u8 playback.
 - Native decoding and Flutter Texture rendering on iOS and Android.
-- Play, pause, seek, and dispose.
+- Play, pause, seek, relative skip, playback speed, volume/mute, error retry, and dispose.
 - Playlist source switching through `setSource(...)`.
 - Playback state, progress, duration, player buffer, disk cache, video size, and error events.
 - Playback health metrics: startup time, rebuffer count and duration, dropped frames, current video bitrate, observed bitrate, and quality switch count.
 - HLS quality list plus Auto/manual quality selection.
+- Playback speed control from 0.25x to 2.0x.
+- Volume and mute controls that survive source switching.
 - Automatic lower-quality recovery after repeated rebuffering or playback errors.
 - Bounded in-memory player buffering to avoid OOM.
 - Configurable disk cache size and disk cache clearing.
@@ -355,6 +417,7 @@ await controller.initialize(
   'https://example.com/index.m3u8',
   headers: const {'User-Agent': 'MyApp'},
   autoPlay: true,
+  initialPosition: const Duration(seconds: 30),
 );
 
 M3u8Player(controller: controller);
@@ -378,12 +441,23 @@ Reuse one controller and switch the source:
 await controller.setSource(nextUrl, autoPlay: true);
 ```
 
+To resume watch history or jump into a feed item at a specific timestamp, pass an initial position when creating the source:
+
+```dart
+await controller.setSource(
+  nextUrl,
+  autoPlay: true,
+  initialPosition: resumePosition,
+);
+```
+
 Switching behavior:
 
 - The previous native player is released.
 - The previous source's active disk prefetch task is stopped.
 - Disk data already cached by the previous source remains available for reuse.
 - A new native player is created for the new source and `autoPlay` controls playback start.
+- When `initialPosition` is supplied, playback and active disk prefetch both start from that position.
 
 Only the current source continues playback and active prefetch. Previous sources do not keep downloading in the background.
 
@@ -409,6 +483,52 @@ await controller.setQuality(qualities.first);
 ```
 
 `M3u8Quality.auto` uses the platform player's adaptive selection. Manual quality constrains Android ExoPlayer through the track selector; iOS filters the master playlist returned by `AVAssetResourceLoader` to the target variant. After repeated rebuffering or playback errors, the player automatically steps down to a lower variant when one is available and tries to resume at the previous position. Use `recoveryCount` and `lastRecoveryReason` for UI hints or analytics.
+
+### Playback Speed
+
+Set playback speed during initialization, source switching, or playback:
+
+```dart
+await controller.initialize(url, playbackSpeed: 1.25);
+await controller.setSource(nextUrl, playbackSpeed: 1.5);
+await controller.setPlaybackSpeed(2.0);
+```
+
+The supported range is 0.25x to 2.0x. Android uses ExoPlayer `PlaybackParameters`; iOS uses AVPlayer `rate`. Quality switching and automatic recovery preserve the current speed.
+
+### Volume And Mute
+
+Set audio state during initialization, source switching, or playback:
+
+```dart
+await controller.initialize(url, volume: 0.8, isMuted: false);
+await controller.setVolume(0.5);
+await controller.setMuted(true);
+```
+
+`volume` ranges from 0.0 to 1.0. `isMuted` does not overwrite the stored volume, so unmuting restores the current `volume`.
+
+### Skip Back And Forward
+
+Use absolute seeking or relative skip:
+
+```dart
+await controller.seekTo(const Duration(minutes: 3));
+await controller.seekBy(const Duration(seconds: -10));
+await controller.seekBy(const Duration(seconds: 10));
+```
+
+`seekBy` clamps to the `0..duration` range and still calls platform `seekTo`, so active disk prefetch keeps using the seek-aware restart policy.
+
+### Error Retry
+
+Recreate the current source after a playback error:
+
+```dart
+await controller.retry(autoPlay: true);
+```
+
+`retry` releases the previous native player, recreates the source at the current playback position, and keeps the recovery policy, playback speed, volume, and mute state.
 
 ### Recovery Policy
 
@@ -441,7 +561,7 @@ final subscription = controller.qoeSnapshots.listen((snapshot) {
 controller.startQoeSampling(interval: const Duration(seconds: 5));
 ```
 
-`M3u8QoeSnapshot` includes the window start/end time, playback position, buffer/disk-cache position, startup time, rebuffer totals and window deltas, rebuffer duration totals and window deltas, dropped-frame deltas, recovery deltas, quality-switch deltas, current bitrate, observed bitrate, and selected quality.
+`M3u8QoeSnapshot` includes the window start/end time, playback position, buffer/disk-cache position, startup time, rebuffer totals and window deltas, rebuffer duration totals and window deltas, dropped-frame deltas, recovery deltas, quality-switch deltas, current bitrate, observed bitrate, selected quality, and playback speed.
 
 ### State Listening
 
@@ -537,7 +657,7 @@ example/
 ### Current Limitations
 
 - Network HLS/m3u8 VOD only.
-- No subtitles, playback speed, background playback, or DRM yet.
+- No subtitles, background playback, or DRM yet.
 - Manual quality constraints are supported, but custom automatic bitrate policy controls are not exposed yet.
 - iOS HLS parsing remains lightweight and targets common VOD playlists; complex HLS features need additional validation.
 - Disk cache configuration and clearing must be called only when no players are active.

@@ -60,6 +60,41 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
                 player.setRecoveryPolicy(M3u8RecoveryPolicy.fromMap(policy))
                 result.success(null)
             }
+            "setPlaybackSpeed" -> withPlayer(call, result) { player ->
+                val speed = call.argument<Number>("speed")?.toFloat()
+                if (speed == null || speed.isNaN() || speed.isInfinite() || speed < 0.25f || speed > 2.0f) {
+                    result.error(
+                        "invalid_playback_speed",
+                        "speed must be finite and between 0.25 and 2.0.",
+                        null,
+                    )
+                    return@withPlayer
+                }
+                player.setPlaybackSpeed(speed)
+                result.success(null)
+            }
+            "setVolume" -> withPlayer(call, result) { player ->
+                val volume = call.argument<Number>("volume")?.toFloat()
+                if (volume == null || volume.isNaN() || volume.isInfinite() || volume < 0f || volume > 1f) {
+                    result.error(
+                        "invalid_volume",
+                        "volume must be finite and between 0.0 and 1.0.",
+                        null,
+                    )
+                    return@withPlayer
+                }
+                player.setVolume(volume)
+                result.success(null)
+            }
+            "setMuted" -> withPlayer(call, result) { player ->
+                val isMuted = call.argument<Boolean>("isMuted")
+                if (isMuted == null) {
+                    result.error("invalid_muted", "isMuted is required.", null)
+                    return@withPlayer
+                }
+                player.setMuted(isMuted)
+                result.success(null)
+            }
             "dispose" -> {
                 val playerId = call.argument<Number>("playerId")?.toLong()
                 if (playerId == null) {
@@ -98,14 +133,51 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
             return
         }
         val headers = call.argument<Map<String, String>>("headers") ?: emptyMap()
+        val initialPositionMs = call.argument<Number>("initialPosition")?.toLong() ?: 0L
+        if (initialPositionMs < 0L) {
+            result.error(
+                "invalid_initial_position",
+                "initialPosition must be a non-negative integer.",
+                null,
+            )
+            return
+        }
         val recoveryPolicy = M3u8RecoveryPolicy.fromMap(
             call.argument<Map<String, Any?>>("recoveryPolicy"),
         )
+        val playbackSpeed = call.argument<Number>("playbackSpeed")?.toFloat() ?: 1.0f
+        if (
+            playbackSpeed.isNaN() ||
+                playbackSpeed.isInfinite() ||
+                playbackSpeed < 0.25f ||
+                playbackSpeed > 2.0f
+        ) {
+            result.error(
+                "invalid_playback_speed",
+                "playbackSpeed must be finite and between 0.25 and 2.0.",
+                null,
+            )
+            return
+        }
+        val volume = call.argument<Number>("volume")?.toFloat() ?: 1.0f
+        if (volume.isNaN() || volume.isInfinite() || volume < 0f || volume > 1f) {
+            result.error(
+                "invalid_volume",
+                "volume must be finite and between 0.0 and 1.0.",
+                null,
+            )
+            return
+        }
+        val isMuted = call.argument<Boolean>("isMuted") ?: false
         val surfaceProducer = textures.createSurfaceProducer()
         val player = M3u8AndroidPlayer(
             context = context,
             url = url,
             headers = headers,
+            initialPositionMs = initialPositionMs,
+            playbackSpeed = playbackSpeed,
+            volume = volume,
+            isMuted = isMuted,
             recoveryPolicy = recoveryPolicy,
             surfaceProducer = surfaceProducer,
             eventSinkProvider = { eventSink },

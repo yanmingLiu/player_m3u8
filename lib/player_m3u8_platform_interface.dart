@@ -28,6 +28,10 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
     required String url,
     Map<String, String> headers = const <String, String>{},
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
+    Duration initialPosition = Duration.zero,
+    double playbackSpeed = 1.0,
+    double volume = 1.0,
+    bool isMuted = false,
   }) {
     throw UnimplementedError('create() has not been implemented.');
   }
@@ -53,6 +57,18 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
     M3u8RecoveryPolicy recoveryPolicy,
   ) {
     throw UnimplementedError('setRecoveryPolicy() has not been implemented.');
+  }
+
+  Future<void> setPlaybackSpeed(int playerId, double speed) {
+    throw UnimplementedError('setPlaybackSpeed() has not been implemented.');
+  }
+
+  Future<void> setVolume(int playerId, double volume) {
+    throw UnimplementedError('setVolume() has not been implemented.');
+  }
+
+  Future<void> setMuted(int playerId, bool isMuted) {
+    throw UnimplementedError('setMuted() has not been implemented.');
   }
 
   Future<void> disposePlayer(int playerId) {

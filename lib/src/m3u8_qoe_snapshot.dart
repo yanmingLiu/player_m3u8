@@ -26,6 +26,7 @@ class M3u8QoeSnapshot {
     required this.videoBitrate,
     required this.observedBitrate,
     required this.selectedQuality,
+    required this.playbackSpeed,
     required this.isBuffering,
     required this.isPlaying,
     required this.hasError,
@@ -75,6 +76,7 @@ class M3u8QoeSnapshot {
       videoBitrate: current.videoBitrate,
       observedBitrate: current.observedBitrate,
       selectedQuality: current.selectedQuality,
+      playbackSpeed: current.playbackSpeed,
       isBuffering: current.isBuffering,
       isPlaying: current.isPlaying,
       hasError: current.hasError,
@@ -102,6 +104,7 @@ class M3u8QoeSnapshot {
   final int videoBitrate;
   final int observedBitrate;
   final M3u8Quality selectedQuality;
+  final double playbackSpeed;
   final bool isBuffering;
   final bool isPlaying;
   final bool hasError;
@@ -141,6 +144,7 @@ class M3u8QoeSnapshot {
       'videoBitrate': videoBitrate,
       'observedBitrate': observedBitrate,
       'selectedQuality': selectedQuality.toMap(),
+      'playbackSpeed': playbackSpeed,
       'isBuffering': isBuffering,
       'isPlaying': isPlaying,
       'hasError': hasError,

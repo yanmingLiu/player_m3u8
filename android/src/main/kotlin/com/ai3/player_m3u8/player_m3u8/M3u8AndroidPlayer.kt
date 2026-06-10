@@ -9,6 +9,7 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
 import androidx.media3.common.Tracks
 import androidx.media3.common.VideoSize
@@ -29,6 +30,10 @@ class M3u8AndroidPlayer(
     private val context: Context,
     private val url: String,
     private val headers: Map<String, String>,
+    private val initialPositionMs: Long,
+    private var playbackSpeed: Float,
+    private var volume: Float,
+    private var isMuted: Boolean,
     recoveryPolicy: M3u8RecoveryPolicy,
     private val surfaceProducer: TextureRegistry.SurfaceProducer,
     private val eventSinkProvider: () -> EventChannel.EventSink?,
@@ -88,7 +93,7 @@ class M3u8AndroidPlayer(
             surfaceProducer.setCallback(this)
             loadAvailableQualities()
             createPlayer()
-            diskCachePrefetcher.start()
+            diskCachePrefetcher.restartFrom(initialPositionMs)
             mainHandler.post(progressRunnable)
         }
     }
@@ -96,6 +101,7 @@ class M3u8AndroidPlayer(
     fun play() {
         runOnMain {
             logInfo("play playerId=${surfaceProducer.id()} source=$sourceDebugId")
+            player?.playbackParameters = PlaybackParameters(playbackSpeed)
             player?.playWhenReady = true
             sendPlaybackEvent("playing")
         }
@@ -144,6 +150,38 @@ class M3u8AndroidPlayer(
             recoveryPolicy = policy.normalized()
             sendProgress(force = true)
         }
+    }
+
+    fun setPlaybackSpeed(speed: Float) {
+        runOnMain {
+            playbackSpeed = speed.coerceIn(0.25f, 2.0f)
+            player?.playbackParameters = PlaybackParameters(playbackSpeed)
+            sendProgress(force = true)
+        }
+    }
+
+    fun setVolume(volume: Float) {
+        runOnMain {
+            this.volume = volume.coerceIn(0f, 1f)
+            applyVolume()
+            sendProgress(force = true)
+        }
+    }
+
+    fun setMuted(isMuted: Boolean) {
+        runOnMain {
+            this.isMuted = isMuted
+            applyVolume()
+            sendProgress(force = true)
+        }
+    }
+
+    private fun applyVolume() {
+        player?.volume = effectiveVolume()
+    }
+
+    private fun effectiveVolume(): Float {
+        return if (isMuted) 0f else volume
     }
 
     fun dispose() {
@@ -353,7 +391,8 @@ class M3u8AndroidPlayer(
         applySelectedQuality(trackSelector)
         logInfo(
             "createPlayer playerId=${surfaceProducer.id()} source=$sourceDebugId " +
-                "restore=${state != null} restorePositionMs=${state?.positionMs ?: 0L} " +
+                "initialPositionMs=$initialPositionMs restore=${state != null} " +
+                "restorePositionMs=${state?.positionMs ?: 0L} " +
                 "restorePlayWhenReady=${state?.playWhenReady} decoderFallback=true " +
                 "trackCompat=${videoTrackCompatLimit?.description() ?: "none"} " +
                 "bufferMs=$MIN_BUFFER_MS-$MAX_BUFFER_MS",
@@ -365,7 +404,13 @@ class M3u8AndroidPlayer(
             .build()
         newPlayer.addListener(this)
         newPlayer.addAnalyticsListener(this)
-        newPlayer.setMediaItem(mediaItem)
+        newPlayer.playbackParameters = PlaybackParameters(playbackSpeed)
+        newPlayer.volume = effectiveVolume()
+        if (state == null && initialPositionMs > 0L) {
+            newPlayer.setMediaItem(mediaItem, initialPositionMs)
+        } else {
+            newPlayer.setMediaItem(mediaItem)
+        }
         newPlayer.setVideoSurface(surfaceProducer.getSurface())
         if (state != null) {
             newPlayer.seekTo(state.positionMs)
@@ -606,6 +651,9 @@ class M3u8AndroidPlayer(
             "qualitySwitchCount" to qualitySwitchCount,
             "availableQualities" to availableQualities,
             "selectedQuality" to selectedQuality,
+            "playbackSpeed" to playbackSpeed.toDouble(),
+            "volume" to volume.toDouble(),
+            "isMuted" to isMuted,
             "recoveryCount" to recoveryCount,
             "lastRecoveryReason" to lastRecoveryReason,
         )

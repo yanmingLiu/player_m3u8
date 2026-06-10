@@ -40,13 +40,24 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
     required String url,
     Map<String, String> headers = const <String, String>{},
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
+    Duration initialPosition = Duration.zero,
+    double playbackSpeed = 1.0,
+    double volume = 1.0,
+    bool isMuted = false,
   }) async {
     recoveryPolicy.debugAssertValid();
+    _debugAssertValidPosition(initialPosition);
+    _debugAssertValidPlaybackSpeed(playbackSpeed);
+    _debugAssertValidVolume(volume);
     try {
       final playerId = await methodChannel.invokeMethod<int>('create', {
         'url': url,
         'headers': headers,
         'recoveryPolicy': recoveryPolicy.toMap(),
+        'initialPosition': initialPosition.inMilliseconds,
+        'playbackSpeed': playbackSpeed,
+        'volume': volume,
+        'isMuted': isMuted,
       });
       if (playerId == null) {
         throw PlayerM3u8PlatformException(
@@ -68,6 +79,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
 
   @override
   Future<void> seekTo(int playerId, Duration position) async {
+    _debugAssertValidPosition(position);
     try {
       await methodChannel.invokeMethod<void>('seekTo', {
         'playerId': playerId,
@@ -110,6 +122,44 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
   }
 
   @override
+  Future<void> setPlaybackSpeed(int playerId, double speed) async {
+    _debugAssertValidPlaybackSpeed(speed);
+    try {
+      await methodChannel.invokeMethod<void>('setPlaybackSpeed', {
+        'playerId': playerId,
+        'speed': speed,
+      });
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
+  Future<void> setVolume(int playerId, double volume) async {
+    _debugAssertValidVolume(volume);
+    try {
+      await methodChannel.invokeMethod<void>('setVolume', {
+        'playerId': playerId,
+        'volume': volume,
+      });
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
+  Future<void> setMuted(int playerId, bool isMuted) async {
+    try {
+      await methodChannel.invokeMethod<void>('setMuted', {
+        'playerId': playerId,
+        'isMuted': isMuted,
+      });
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
   Future<void> configureCache({required int maxSizeBytes}) async {
     try {
       await methodChannel.invokeMethod<void>('configureCache', {
@@ -135,5 +185,35 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
     } on PlatformException catch (error) {
       throw PlayerM3u8PlatformException.fromPlatformException(error);
     }
+  }
+}
+
+void _debugAssertValidPosition(Duration position) {
+  if (position < Duration.zero) {
+    throw ArgumentError.value(
+      position,
+      'position',
+      'Must be greater than or equal to zero.',
+    );
+  }
+}
+
+void _debugAssertValidPlaybackSpeed(double speed) {
+  if (speed < 0.25 || speed > 2.0 || speed.isNaN || speed.isInfinite) {
+    throw ArgumentError.value(
+      speed,
+      'speed',
+      'Must be finite and between 0.25 and 2.0.',
+    );
+  }
+}
+
+void _debugAssertValidVolume(double volume) {
+  if (volume < 0 || volume > 1 || volume.isNaN || volume.isInfinite) {
+    throw ArgumentError.value(
+      volume,
+      'volume',
+      'Must be finite and between 0.0 and 1.0.',
+    );
   }
 }

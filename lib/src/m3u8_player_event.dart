@@ -33,6 +33,9 @@ class M3u8PlayerEvent {
     this.qualitySwitchCount,
     this.availableQualities,
     this.selectedQuality,
+    this.playbackSpeed,
+    this.volume,
+    this.isMuted,
     this.recoveryCount,
     this.lastRecoveryReason,
     this.size,
@@ -61,6 +64,9 @@ class M3u8PlayerEvent {
       qualitySwitchCount: _asNullableInt(map['qualitySwitchCount']),
       availableQualities: _qualitiesFromMap(map['availableQualities']),
       selectedQuality: _qualityFromMap(map['selectedQuality']),
+      playbackSpeed: _asNullableDouble(map['playbackSpeed']),
+      volume: _asNullableDouble(map['volume']),
+      isMuted: map['isMuted'] as bool?,
       recoveryCount: _asNullableInt(map['recoveryCount']),
       lastRecoveryReason: map['lastRecoveryReason'] as String?,
       size: _sizeFromMap(map),
@@ -92,6 +98,9 @@ class M3u8PlayerEvent {
   final int? qualitySwitchCount;
   final List<M3u8Quality>? availableQualities;
   final M3u8Quality? selectedQuality;
+  final double? playbackSpeed;
+  final double? volume;
+  final bool? isMuted;
   final int? recoveryCount;
   final String? lastRecoveryReason;
   final Size? size;

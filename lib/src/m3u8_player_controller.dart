@@ -17,6 +17,9 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
 
   int? _playerId;
   M3u8RecoveryPolicy _recoveryPolicy = M3u8RecoveryPolicy.defaults;
+  double _playbackSpeed = 1.0;
+  double _volume = 1.0;
+  bool _isMuted = false;
   StreamSubscription<M3u8PlayerEvent>? _eventSubscription;
   final List<M3u8PlayerEvent> _pendingEvents = <M3u8PlayerEvent>[];
   final StreamController<M3u8QoeSnapshot> _qoeSnapshotController =
@@ -24,12 +27,21 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   Timer? _qoeTimer;
   M3u8PlayerValue _lastQoeValue = const M3u8PlayerValue();
   DateTime? _lastQoeSampleAt;
+  String? _sourceUrl;
+  Map<String, String> _sourceHeaders = const <String, String>{};
+  bool _sourceAutoPlay = false;
   bool _disposed = false;
   bool _isChangingSource = false;
 
   int? get playerId => _playerId;
 
   M3u8RecoveryPolicy get recoveryPolicy => _recoveryPolicy;
+
+  double get playbackSpeed => _playbackSpeed;
+
+  double get volume => _volume;
+
+  bool get isMuted => _isMuted;
 
   Stream<M3u8QoeSnapshot> get qoeSnapshots => _qoeSnapshotController.stream;
 
@@ -74,14 +86,32 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     Map<String, String> headers = const <String, String>{},
     bool autoPlay = false,
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
+    Duration initialPosition = Duration.zero,
+    double playbackSpeed = 1.0,
+    double volume = 1.0,
+    bool isMuted = false,
   }) async {
     _debugAssertNotDisposed();
     if (_playerId != null || _isChangingSource) {
       throw StateError('M3u8PlayerController is already initialized.');
     }
     recoveryPolicy.debugAssertValid();
+    _debugAssertValidPosition(initialPosition);
+    _debugAssertValidPlaybackSpeed(playbackSpeed);
+    _debugAssertValidVolume(volume);
     _recoveryPolicy = recoveryPolicy;
-    await _createSource(url, headers: headers, autoPlay: autoPlay);
+    _playbackSpeed = playbackSpeed;
+    _volume = volume;
+    _isMuted = isMuted;
+    _sourceUrl = url;
+    _sourceHeaders = Map<String, String>.unmodifiable(headers);
+    _sourceAutoPlay = autoPlay;
+    await _createSource(
+      url,
+      headers: headers,
+      autoPlay: autoPlay,
+      initialPosition: initialPosition,
+    );
   }
 
   Future<void> setSource(
@@ -89,8 +119,19 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     Map<String, String> headers = const <String, String>{},
     bool autoPlay = false,
     M3u8RecoveryPolicy? recoveryPolicy,
+    Duration initialPosition = Duration.zero,
+    double? playbackSpeed,
+    double? volume,
+    bool? isMuted,
   }) async {
     _debugAssertNotDisposed();
+    _debugAssertValidPosition(initialPosition);
+    if (playbackSpeed != null) {
+      _debugAssertValidPlaybackSpeed(playbackSpeed);
+    }
+    if (volume != null) {
+      _debugAssertValidVolume(volume);
+    }
     if (_isChangingSource) {
       throw StateError('M3u8PlayerController is already changing source.');
     }
@@ -105,10 +146,27 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         recoveryPolicy.debugAssertValid();
         _recoveryPolicy = recoveryPolicy;
       }
+      if (playbackSpeed != null) {
+        _playbackSpeed = playbackSpeed;
+      }
+      if (volume != null) {
+        _volume = volume;
+      }
+      if (isMuted != null) {
+        _isMuted = isMuted;
+      }
       if (previousPlayerId != null) {
         await _platform.disposePlayer(previousPlayerId);
       }
-      await _createSource(url, headers: headers, autoPlay: autoPlay);
+      _sourceUrl = url;
+      _sourceHeaders = Map<String, String>.unmodifiable(headers);
+      _sourceAutoPlay = autoPlay;
+      await _createSource(
+        url,
+        headers: headers,
+        autoPlay: autoPlay,
+        initialPosition: initialPosition,
+      );
     } finally {
       _isChangingSource = false;
     }
@@ -128,8 +186,22 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
 
   Future<void> seekTo(Duration position) async {
     _debugAssertNotDisposed();
+    _debugAssertValidPosition(position);
     final playerId = _requirePlayerId();
     await _platform.seekTo(playerId, position);
+  }
+
+  Future<void> seekBy(Duration offset) {
+    _debugAssertNotDisposed();
+    final duration = value.duration;
+    final target = value.position + offset;
+    if (target <= Duration.zero) {
+      return seekTo(Duration.zero);
+    }
+    if (duration > Duration.zero && target > duration) {
+      return seekTo(duration);
+    }
+    return seekTo(target);
   }
 
   Future<void> setQuality(M3u8Quality quality) async {
@@ -146,6 +218,70 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     final playerId = _playerId;
     if (playerId != null) {
       await _platform.setRecoveryPolicy(playerId, recoveryPolicy);
+    }
+  }
+
+  Future<void> setPlaybackSpeed(double speed) async {
+    _debugAssertNotDisposed();
+    _debugAssertValidPlaybackSpeed(speed);
+    _playbackSpeed = speed;
+    final playerId = _requirePlayerId();
+    await _platform.setPlaybackSpeed(playerId, speed);
+    value = value.copyWith(playbackSpeed: speed);
+  }
+
+  Future<void> setVolume(double volume) async {
+    _debugAssertNotDisposed();
+    _debugAssertValidVolume(volume);
+    _volume = volume;
+    final playerId = _requirePlayerId();
+    await _platform.setVolume(playerId, volume);
+    value = value.copyWith(volume: volume);
+  }
+
+  Future<void> setMuted(bool isMuted) async {
+    _debugAssertNotDisposed();
+    _isMuted = isMuted;
+    final playerId = _requirePlayerId();
+    await _platform.setMuted(playerId, isMuted);
+    value = value.copyWith(isMuted: isMuted);
+  }
+
+  Future<void> retry({bool? autoPlay, Duration? initialPosition}) async {
+    _debugAssertNotDisposed();
+    final url = _sourceUrl;
+    if (url == null) {
+      throw StateError('M3u8PlayerController has no source to retry.');
+    }
+    if (_isChangingSource) {
+      throw StateError('M3u8PlayerController is already changing source.');
+    }
+    final retryPosition = initialPosition ?? value.position;
+    _debugAssertValidPosition(retryPosition);
+    _isChangingSource = true;
+    try {
+      final previousPlayerId = _playerId;
+      _playerId = null;
+      _pendingEvents.clear();
+      value = value.copyWith(
+        isInitialized: false,
+        isPlaying: false,
+        isBuffering: true,
+        isCompleted: false,
+        error: null,
+      );
+      _resetQoeBaseline();
+      if (previousPlayerId != null) {
+        await _platform.disposePlayer(previousPlayerId);
+      }
+      await _createSource(
+        url,
+        headers: _sourceHeaders,
+        autoPlay: autoPlay ?? _sourceAutoPlay,
+        initialPosition: retryPosition,
+      );
+    } finally {
+      _isChangingSource = false;
     }
   }
 
@@ -172,6 +308,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     String url, {
     required Map<String, String> headers,
     required bool autoPlay,
+    required Duration initialPosition,
   }) async {
     _ensureEventSubscription();
     try {
@@ -179,6 +316,10 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         url: url,
         headers: headers,
         recoveryPolicy: _recoveryPolicy,
+        initialPosition: initialPosition,
+        playbackSpeed: _playbackSpeed,
+        volume: _volume,
+        isMuted: _isMuted,
       );
       _playerId = playerId;
       _flushPendingEventsFor(playerId);
@@ -376,6 +517,9 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       qualitySwitchCount: event.qualitySwitchCount,
       availableQualities: event.availableQualities,
       selectedQuality: event.selectedQuality,
+      playbackSpeed: event.playbackSpeed,
+      volume: event.volume,
+      isMuted: event.isMuted,
       recoveryCount: event.recoveryCount,
       lastRecoveryReason: event.lastRecoveryReason,
     );
@@ -408,6 +552,36 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   void _debugAssertNotDisposed() {
     if (_disposed) {
       throw StateError('M3u8PlayerController has been disposed.');
+    }
+  }
+
+  void _debugAssertValidPosition(Duration position) {
+    if (position < Duration.zero) {
+      throw ArgumentError.value(
+        position,
+        'position',
+        'Must be greater than or equal to zero.',
+      );
+    }
+  }
+
+  void _debugAssertValidPlaybackSpeed(double speed) {
+    if (speed < 0.25 || speed > 2.0 || speed.isNaN || speed.isInfinite) {
+      throw ArgumentError.value(
+        speed,
+        'speed',
+        'Must be finite and between 0.25 and 2.0.',
+      );
+    }
+  }
+
+  void _debugAssertValidVolume(double volume) {
+    if (volume < 0 || volume > 1 || volume.isNaN || volume.isInfinite) {
+      throw ArgumentError.value(
+        volume,
+        'volume',
+        'Must be finite and between 0.0 and 1.0.',
+      );
     }
   }
 }

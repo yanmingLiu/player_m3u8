@@ -77,6 +77,9 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   private var wasLikelyPlayingBeforeWaiting = false
   private var availableQualities = [[String: Any]]()
   private var selectedQuality: [String: Any] = M3u8IosPlayer.autoQuality()
+  private var playbackSpeed: Double
+  private var volume: Double
+  private var isMuted: Bool
   private var recoveryPolicy: M3u8RecoveryPolicy
   private var recoveryCount = 0
   private var lastRecoveryReason = ""
@@ -86,6 +89,10 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   init(
     url: URL,
     headers: [String: String],
+    initialPositionMs: Int64,
+    playbackSpeed: Double,
+    volume: Double,
+    isMuted: Bool,
     recoveryPolicy: M3u8RecoveryPolicy,
     textureRegistry: FlutterTextureRegistry,
     eventSinkProvider: @escaping () -> FlutterEventSink?
@@ -94,6 +101,9 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     self.eventSinkProvider = eventSinkProvider
     self.url = url
     self.headers = headers
+    self.playbackSpeed = min(max(playbackSpeed, 0.25), 2.0)
+    self.volume = min(max(volume, 0), 1)
+    self.isMuted = isMuted
     self.recoveryPolicy = recoveryPolicy
     self.resourceLoader = M3u8ResourceLoader(headers: headers)
     let assetOptions: [String: Any]? =
@@ -106,11 +116,17 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
       kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
     ])
     self.player = AVPlayer(playerItem: playerItem)
+    self.player.volume = Float(self.volume)
+    self.player.isMuted = isMuted
     super.init()
     resourceLoader.qualityProvider = { [weak self] in
       self?.selectedQuality ?? Self.autoQuality()
     }
     loadAvailableQualities()
+    if initialPositionMs > 0 {
+      let seconds = Double(initialPositionMs) / 1000.0
+      player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
+    }
     diskCachePrefetcher = M3u8DiskCachePrefetcher(
       url: url,
       headers: headers,
@@ -121,12 +137,12 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     player.actionAtItemEnd = .pause
     configureObservers()
     configureTimers()
-    diskCachePrefetcher?.start()
+    diskCachePrefetcher?.restart(from: initialPositionMs)
   }
 
   func play() {
     guard !disposed else { return }
-    player.play()
+    player.rate = Float(playbackSpeed)
     sendPlaybackEvent("playing")
   }
 
@@ -161,7 +177,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     replacePlayerItem()
     player.seek(to: position) { [weak self] _ in
       if shouldPlay {
-        self?.player.play()
+        self?.player.rate = Float(self?.playbackSpeed ?? 1.0)
       }
       self?.sendProgress()
     }
@@ -170,6 +186,29 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   func setRecoveryPolicy(_ policy: M3u8RecoveryPolicy) {
     guard !disposed else { return }
     recoveryPolicy = policy
+    sendProgress()
+  }
+
+  func setPlaybackSpeed(_ speed: Double) {
+    guard !disposed else { return }
+    playbackSpeed = min(max(speed, 0.25), 2.0)
+    if player.rate > 0 || player.timeControlStatus == .waitingToPlayAtSpecifiedRate {
+      player.rate = Float(playbackSpeed)
+    }
+    sendProgress()
+  }
+
+  func setVolume(_ volume: Double) {
+    guard !disposed else { return }
+    self.volume = min(max(volume, 0), 1)
+    player.volume = Float(self.volume)
+    sendProgress()
+  }
+
+  func setMuted(_ isMuted: Bool) {
+    guard !disposed else { return }
+    self.isMuted = isMuted
+    player.isMuted = isMuted
     sendProgress()
   }
 
@@ -460,6 +499,9 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
       "qualitySwitchCount": qualitySwitchCount,
       "availableQualities": availableQualities,
       "selectedQuality": selectedQuality,
+      "playbackSpeed": playbackSpeed,
+      "volume": volume,
+      "isMuted": isMuted,
       "recoveryCount": recoveryCount,
       "lastRecoveryReason": lastRecoveryReason,
     ]
@@ -485,7 +527,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     replacePlayerItem()
     player.seek(to: position) { [weak self] _ in
       if shouldPlay {
-        self?.player.play()
+        self?.player.rate = Float(self?.playbackSpeed ?? 1.0)
       }
       self?.sendProgress()
     }

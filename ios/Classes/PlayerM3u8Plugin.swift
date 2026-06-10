@@ -83,6 +83,62 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         player.setRecoveryPolicy(M3u8RecoveryPolicy.from(policy))
         result(nil)
       }
+    case "setPlaybackSpeed":
+      withPlayer(call: call, result: result) { player in
+        guard
+          let arguments = call.arguments as? [String: Any],
+          let speed = arguments["speed"] as? NSNumber,
+          speed.doubleValue.isFinite,
+          speed.doubleValue >= 0.25,
+          speed.doubleValue <= 2.0
+        else {
+          result(
+            FlutterError(
+              code: "invalid_playback_speed",
+              message: "speed must be finite and between 0.25 and 2.0.",
+              details: nil
+            )
+          )
+          return
+        }
+        player.setPlaybackSpeed(speed.doubleValue)
+        result(nil)
+      }
+    case "setVolume":
+      withPlayer(call: call, result: result) { player in
+        guard
+          let arguments = call.arguments as? [String: Any],
+          let volume = arguments["volume"] as? NSNumber,
+          volume.doubleValue.isFinite,
+          volume.doubleValue >= 0,
+          volume.doubleValue <= 1
+        else {
+          result(
+            FlutterError(
+              code: "invalid_volume",
+              message: "volume must be finite and between 0.0 and 1.0.",
+              details: nil
+            )
+          )
+          return
+        }
+        player.setVolume(volume.doubleValue)
+        result(nil)
+      }
+    case "setMuted":
+      withPlayer(call: call, result: result) { player in
+        guard
+          let arguments = call.arguments as? [String: Any],
+          let isMuted = arguments["isMuted"] as? Bool
+        else {
+          result(
+            FlutterError(code: "invalid_muted", message: "isMuted is required.", details: nil)
+          )
+          return
+        }
+        player.setMuted(isMuted)
+        result(nil)
+      }
     case "dispose":
       guard
         let arguments = call.arguments as? [String: Any],
@@ -132,9 +188,24 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       return
     }
     let headers = arguments["headers"] as? [String: String] ?? [:]
+    let initialPositionMs = (arguments["initialPosition"] as? NSNumber)?.int64Value ?? 0
+    guard initialPositionMs >= 0 else {
+      result(
+        FlutterError(
+          code: "invalid_initial_position",
+          message: "initialPosition must be a non-negative integer.",
+          details: nil
+        )
+      )
+      return
+    }
     let player = M3u8IosPlayer(
       url: url,
       headers: headers,
+      initialPositionMs: initialPositionMs,
+      playbackSpeed: validPlaybackSpeed(from: arguments["playbackSpeed"]),
+      volume: validVolume(from: arguments["volume"]),
+      isMuted: arguments["isMuted"] as? Bool ?? false,
       recoveryPolicy: M3u8RecoveryPolicy.from(arguments["recoveryPolicy"] as? [String: Any]),
       textureRegistry: textureRegistry,
       eventSinkProvider: { [weak self] in self?.eventSink }
@@ -143,6 +214,28 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     player.textureId = textureId
     players[textureId] = player
     result(textureId)
+  }
+
+  private func validPlaybackSpeed(from value: Any?) -> Double {
+    guard let speed = (value as? NSNumber)?.doubleValue,
+      speed.isFinite,
+      speed >= 0.25,
+      speed <= 2.0
+    else {
+      return 1.0
+    }
+    return speed
+  }
+
+  private func validVolume(from value: Any?) -> Double {
+    guard let volume = (value as? NSNumber)?.doubleValue,
+      volume.isFinite,
+      volume >= 0,
+      volume <= 1
+    else {
+      return 1.0
+    }
+    return volume
   }
 
   private func configureCache(call: FlutterMethodCall, result: @escaping FlutterResult) {

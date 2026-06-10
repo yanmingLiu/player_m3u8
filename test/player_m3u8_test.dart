@@ -16,11 +16,18 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   int? createdPlayerId;
   String? createdUrl;
   Map<String, String>? createdHeaders;
+  Duration? initialPosition;
+  double? playbackSpeed;
+  double? volume;
+  bool? isMuted;
   int? playedPlayerId;
   int? pausedPlayerId;
   int? disposedPlayerId;
   Duration? seekPosition;
   M3u8Quality? selectedQuality;
+  double? selectedPlaybackSpeed;
+  double? selectedVolume;
+  bool? selectedMuted;
   M3u8RecoveryPolicy? recoveryPolicy;
   int? configuredCacheBytes;
   bool cacheCleared = false;
@@ -33,10 +40,18 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
     required String url,
     Map<String, String> headers = const <String, String>{},
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
+    Duration initialPosition = Duration.zero,
+    double playbackSpeed = 1.0,
+    double volume = 1.0,
+    bool isMuted = false,
   }) async {
     createdUrl = url;
     createdHeaders = headers;
     this.recoveryPolicy = recoveryPolicy;
+    this.initialPosition = initialPosition;
+    this.playbackSpeed = playbackSpeed;
+    this.volume = volume;
+    this.isMuted = isMuted;
     createdPlayerId = nextPlayerId;
     return nextPlayerId++;
   }
@@ -67,6 +82,21 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
     M3u8RecoveryPolicy recoveryPolicy,
   ) async {
     this.recoveryPolicy = recoveryPolicy;
+  }
+
+  @override
+  Future<void> setPlaybackSpeed(int playerId, double speed) async {
+    selectedPlaybackSpeed = speed;
+  }
+
+  @override
+  Future<void> setVolume(int playerId, double volume) async {
+    selectedVolume = volume;
+  }
+
+  @override
+  Future<void> setMuted(int playerId, bool isMuted) async {
+    selectedMuted = isMuted;
   }
 
   @override
@@ -149,11 +179,19 @@ void main() {
         minimumRecoveryInterval: Duration(seconds: 5),
         minimumAutoQualityHeight: 480,
       ),
+      initialPosition: const Duration(seconds: 12),
+      playbackSpeed: 1.25,
+      volume: 0.75,
+      isMuted: true,
     );
 
     expect(controller.playerId, 7);
     expect(platform.createdUrl, 'https://example.com/index.m3u8');
     expect(platform.createdHeaders, const {'Authorization': 'token'});
+    expect(platform.initialPosition, const Duration(seconds: 12));
+    expect(platform.playbackSpeed, 1.25);
+    expect(platform.volume, 0.75);
+    expect(platform.isMuted, true);
     expect(platform.recoveryPolicy?.rebufferThreshold, 2);
     expect(
       platform.recoveryPolicy?.minimumRecoveryInterval,
@@ -176,6 +214,9 @@ void main() {
         videoBitrate: 1500000,
         observedBitrate: 1200000,
         qualitySwitchCount: 3,
+        playbackSpeed: 1.25,
+        volume: 0.75,
+        isMuted: true,
         recoveryCount: 2,
         lastRecoveryReason: 'error:SOURCE',
         availableQualities: [
@@ -207,6 +248,9 @@ void main() {
     expect(controller.value.videoBitrate, 1500000);
     expect(controller.value.observedBitrate, 1200000);
     expect(controller.value.qualitySwitchCount, 3);
+    expect(controller.value.playbackSpeed, 1.25);
+    expect(controller.value.volume, 0.75);
+    expect(controller.value.isMuted, true);
     expect(controller.value.recoveryCount, 2);
     expect(controller.value.lastRecoveryReason, 'error:SOURCE');
     expect(controller.value.availableQualities.single.height, 720);
@@ -260,6 +304,20 @@ void main() {
     await controller.seekTo(const Duration(seconds: 30));
     expect(platform.seekPosition, const Duration(seconds: 30));
 
+    platform.eventController.add(
+      const M3u8PlayerEvent(
+        playerId: 7,
+        type: M3u8PlayerEventType.progress,
+        position: Duration(seconds: 110),
+        duration: Duration(seconds: 120),
+      ),
+    );
+    await pumpEventQueue();
+    await controller.seekBy(const Duration(seconds: 20));
+    expect(platform.seekPosition, const Duration(seconds: 120));
+    await controller.seekBy(const Duration(seconds: -200));
+    expect(platform.seekPosition, Duration.zero);
+
     await controller.setQuality(controller.value.availableQualities.single);
     expect(platform.selectedQuality?.height, 720);
     expect(controller.value.selectedQuality.height, 720);
@@ -267,6 +325,18 @@ void main() {
     await controller.setRecoveryPolicy(M3u8RecoveryPolicy.disabled);
     expect(controller.recoveryPolicy.isEnabled, false);
     expect(platform.recoveryPolicy, M3u8RecoveryPolicy.disabled);
+
+    await controller.setPlaybackSpeed(1.5);
+    expect(platform.selectedPlaybackSpeed, 1.5);
+    expect(controller.value.playbackSpeed, 1.5);
+
+    await controller.setVolume(0.4);
+    expect(platform.selectedVolume, 0.4);
+    expect(controller.value.volume, 0.4);
+
+    await controller.setMuted(false);
+    expect(platform.selectedMuted, false);
+    expect(controller.value.isMuted, false);
 
     controller.dispose();
     await pumpEventQueue();
@@ -315,12 +385,23 @@ void main() {
     await pumpEventQueue();
     expect(controller.value.isInitialized, true);
 
-    await controller.setSource('https://example.com/two.m3u8', autoPlay: true);
+    await controller.setSource(
+      'https://example.com/two.m3u8',
+      autoPlay: true,
+      initialPosition: const Duration(seconds: 18),
+      playbackSpeed: 1.5,
+      volume: 0.4,
+      isMuted: true,
+    );
 
     expect(platform.disposedPlayerId, 7);
     expect(controller.playerId, 8);
     expect(platform.playedPlayerId, 8);
     expect(platform.createdUrl, 'https://example.com/two.m3u8');
+    expect(platform.initialPosition, const Duration(seconds: 18));
+    expect(platform.playbackSpeed, 1.5);
+    expect(platform.volume, 0.4);
+    expect(platform.isMuted, true);
     expect(platform.recoveryPolicy?.rebufferThreshold, 4);
     expect(controller.value.isInitialized, false);
     expect(controller.value.duration, Duration.zero);
@@ -363,6 +444,69 @@ void main() {
     await platform.eventController.close();
   });
 
+  test('retry recreates last source from current position', () async {
+    final platform = FakePlayerM3u8Platform();
+    final controller = M3u8PlayerController(platform: platform);
+
+    await controller.initialize('https://example.com/index.m3u8');
+    platform.eventController.add(
+      const M3u8PlayerEvent(
+        playerId: 7,
+        type: M3u8PlayerEventType.progress,
+        position: Duration(seconds: 42),
+      ),
+    );
+    platform.eventController.add(
+      const M3u8PlayerEvent(
+        playerId: 7,
+        type: M3u8PlayerEventType.error,
+        error: M3u8PlayerError(code: 'source', message: 'failed'),
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(controller.value.hasError, true);
+
+    await controller.retry(autoPlay: true);
+
+    expect(platform.disposedPlayerId, 7);
+    expect(controller.playerId, 8);
+    expect(platform.createdUrl, 'https://example.com/index.m3u8');
+    expect(platform.initialPosition, const Duration(seconds: 42));
+    expect(platform.playedPlayerId, 8);
+    expect(controller.value.hasError, false);
+
+    controller.dispose();
+    await platform.eventController.close();
+  });
+
+  test('controller rejects invalid positions and playback speeds', () async {
+    final platform = FakePlayerM3u8Platform();
+    final controller = M3u8PlayerController(platform: platform);
+
+    expect(
+      controller.initialize(
+        'https://example.com/index.m3u8',
+        initialPosition: const Duration(milliseconds: -1),
+      ),
+      throwsArgumentError,
+    );
+
+    await controller.initialize('https://example.com/index.m3u8');
+
+    expect(
+      controller.seekTo(const Duration(milliseconds: -1)),
+      throwsArgumentError,
+    );
+    expect(controller.setPlaybackSpeed(0.1), throwsArgumentError);
+    expect(controller.setPlaybackSpeed(2.5), throwsArgumentError);
+    expect(controller.setVolume(-0.1), throwsArgumentError);
+    expect(controller.setVolume(1.1), throwsArgumentError);
+
+    controller.dispose();
+    await platform.eventController.close();
+  });
+
   test('qoe snapshot computes window deltas', () {
     final startedAt = DateTime.utc(2026, 1, 1, 0, 0, 0);
     final endedAt = startedAt.add(const Duration(seconds: 5));
@@ -387,6 +531,7 @@ void main() {
       qualitySwitchCount: 4,
       videoBitrate: 1500000,
       observedBitrate: 1200000,
+      playbackSpeed: 1.5,
       selectedQuality: M3u8Quality(
         id: '720p',
         label: '720p',
@@ -409,7 +554,9 @@ void main() {
     expect(snapshot.droppedFramesDelta, 5);
     expect(snapshot.recoveryCountDelta, 1);
     expect(snapshot.qualitySwitchCountDelta, 3);
+    expect(snapshot.playbackSpeed, 1.5);
     expect(snapshot.toMap()['selectedQuality'], containsPair('id', '720p'));
+    expect(snapshot.toMap()['playbackSpeed'], 1.5);
   });
 
   test('controller emits qoe snapshots', () async {
@@ -475,11 +622,19 @@ class _EagerEventPlatform extends FakePlayerM3u8Platform {
     required String url,
     Map<String, String> headers = const <String, String>{},
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
+    Duration initialPosition = Duration.zero,
+    double playbackSpeed = 1.0,
+    double volume = 1.0,
+    bool isMuted = false,
   }) async {
     final playerId = await super.create(
       url: url,
       headers: headers,
       recoveryPolicy: recoveryPolicy,
+      initialPosition: initialPosition,
+      playbackSpeed: playbackSpeed,
+      volume: volume,
+      isMuted: isMuted,
     );
     eventController.add(
       M3u8PlayerEvent(

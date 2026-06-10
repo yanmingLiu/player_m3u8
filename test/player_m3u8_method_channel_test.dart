@@ -27,24 +27,45 @@ void main() {
         .setMockMethodCallHandler(channel, null);
   });
 
-  test('create sends url and headers', () async {
-    final playerId = await platform.create(
-      url: 'https://example.com/index.m3u8',
-      headers: const {'User-Agent': 'test'},
-    );
+  test(
+    'create sends url headers initial position and playback speed',
+    () async {
+      final playerId = await platform.create(
+        url: 'https://example.com/index.m3u8',
+        headers: const {'User-Agent': 'test'},
+        initialPosition: const Duration(seconds: 15),
+        playbackSpeed: 1.25,
+        volume: 0.75,
+        isMuted: true,
+      );
 
-    expect(playerId, 3);
-    expect(log.single.method, 'create');
-    expect(log.single.arguments, {
-      'url': 'https://example.com/index.m3u8',
-      'headers': {'User-Agent': 'test'},
-      'recoveryPolicy': {
-        'isEnabled': true,
-        'rebufferThreshold': 3,
-        'minimumRecoveryIntervalMs': 10000,
-        'minimumAutoQualityHeight': 0,
-      },
-    });
+      expect(playerId, 3);
+      expect(log.single.method, 'create');
+      expect(log.single.arguments, {
+        'url': 'https://example.com/index.m3u8',
+        'headers': {'User-Agent': 'test'},
+        'recoveryPolicy': {
+          'isEnabled': true,
+          'rebufferThreshold': 3,
+          'minimumRecoveryIntervalMs': 10000,
+          'minimumAutoQualityHeight': 0,
+        },
+        'initialPosition': 15000,
+        'playbackSpeed': 1.25,
+        'volume': 0.75,
+        'isMuted': true,
+      });
+    },
+  );
+
+  test('create rejects negative initial position', () {
+    expect(
+      platform.create(
+        url: 'https://example.com/index.m3u8',
+        initialPosition: const Duration(milliseconds: -1),
+      ),
+      throwsArgumentError,
+    );
   });
 
   test('seekTo sends player id and position milliseconds', () async {
@@ -52,6 +73,44 @@ void main() {
 
     expect(log.single.method, 'seekTo');
     expect(log.single.arguments, {'playerId': 3, 'position': 8000});
+  });
+
+  test('seekTo rejects negative position', () {
+    expect(
+      platform.seekTo(3, const Duration(milliseconds: -1)),
+      throwsArgumentError,
+    );
+  });
+
+  test('setPlaybackSpeed sends player id and speed', () async {
+    await platform.setPlaybackSpeed(3, 1.5);
+
+    expect(log.single.method, 'setPlaybackSpeed');
+    expect(log.single.arguments, {'playerId': 3, 'speed': 1.5});
+  });
+
+  test('setPlaybackSpeed rejects invalid speed', () {
+    expect(platform.setPlaybackSpeed(3, 0.1), throwsArgumentError);
+    expect(platform.setPlaybackSpeed(3, 2.5), throwsArgumentError);
+  });
+
+  test('setVolume sends player id and volume', () async {
+    await platform.setVolume(3, 0.4);
+
+    expect(log.single.method, 'setVolume');
+    expect(log.single.arguments, {'playerId': 3, 'volume': 0.4});
+  });
+
+  test('setVolume rejects invalid volume', () {
+    expect(platform.setVolume(3, -0.1), throwsArgumentError);
+    expect(platform.setVolume(3, 1.1), throwsArgumentError);
+  });
+
+  test('setMuted sends player id and muted flag', () async {
+    await platform.setMuted(3, true);
+
+    expect(log.single.method, 'setMuted');
+    expect(log.single.arguments, {'playerId': 3, 'isMuted': true});
   });
 
   test('setQuality sends player id and quality payload', () async {

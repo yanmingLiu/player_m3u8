@@ -188,7 +188,10 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                           if (_initializing || _switching || value.isBuffering)
                             const Center(child: CircularProgressIndicator()),
                           if (value.hasError)
-                            _ErrorOverlay(error: value.error!),
+                            _ErrorOverlay(
+                              error: value.error!,
+                              onRetry: () => _controller.retry(autoPlay: true),
+                            ),
                         ],
                       ),
                     ),
@@ -307,6 +310,21 @@ class _Controls extends StatelessWidget {
                   : null,
               icon: Icon(value.isPlaying ? Icons.pause : Icons.play_arrow),
             ),
+            const SizedBox(width: 8),
+            IconButton.outlined(
+              tooltip: 'Seek back 10 seconds',
+              onPressed: value.isInitialized
+                  ? () => controller.seekBy(const Duration(seconds: -10))
+                  : null,
+              icon: const Icon(Icons.replay_10),
+            ),
+            IconButton.outlined(
+              tooltip: 'Seek forward 10 seconds',
+              onPressed: value.isInitialized
+                  ? () => controller.seekBy(const Duration(seconds: 10))
+                  : null,
+              icon: const Icon(Icons.forward_10),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: _BufferedSeekBar(controller: controller, value: value),
@@ -314,9 +332,83 @@ class _Controls extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 8),
+        _SpeedSelector(controller: controller, value: value),
+        const SizedBox(height: 8),
+        _VolumeControl(controller: controller, value: value),
+        const SizedBox(height: 8),
         _QualitySelector(controller: controller, value: value),
       ],
     );
+  }
+}
+
+class _VolumeControl extends StatelessWidget {
+  const _VolumeControl({required this.controller, required this.value});
+
+  final M3u8PlayerController controller;
+  final M3u8PlayerValue value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        IconButton.outlined(
+          tooltip: value.isMuted ? 'Unmute' : 'Mute',
+          onPressed: value.isInitialized
+              ? () => controller.setMuted(!value.isMuted)
+              : null,
+          icon: Icon(
+            value.isMuted || value.volume == 0
+                ? Icons.volume_off
+                : Icons.volume_up,
+          ),
+        ),
+        Expanded(
+          child: Slider(
+            value: value.volume.clamp(0.0, 1.0),
+            onChanged: value.isInitialized
+                ? (double volume) {
+                    controller.setVolume(volume);
+                  }
+                : null,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SpeedSelector extends StatelessWidget {
+  const _SpeedSelector({required this.controller, required this.value});
+
+  final M3u8PlayerController controller;
+  final M3u8PlayerValue value;
+
+  static const List<double> _speeds = <double>[0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+
+  @override
+  Widget build(BuildContext context) {
+    return SegmentedButton<double>(
+      segments: [
+        for (final speed in _speeds)
+          ButtonSegment<double>(value: speed, label: Text(_speedLabel(speed))),
+      ],
+      selected: <double>{_nearestSpeed(value.playbackSpeed)},
+      onSelectionChanged: value.isInitialized
+          ? (Set<double> speeds) {
+              controller.setPlaybackSpeed(speeds.single);
+            }
+          : null,
+      showSelectedIcon: false,
+    );
+  }
+
+  double _nearestSpeed(double speed) {
+    return _speeds.reduce((double previous, double next) {
+      final previousDelta = (previous - speed).abs();
+      final nextDelta = (next - speed).abs();
+      return nextDelta < previousDelta ? next : previous;
+    });
   }
 }
 
@@ -422,7 +514,7 @@ class _BufferedSeekBarState extends State<_BufferedSeekBar> {
                   }
                 : null,
             onHorizontalDragEnd: enabled ? (_) => _endScrub() : null,
-            onHorizontalDragCancel: enabled ? _endScrub : null,
+            onHorizontalDragCancel: enabled ? _cancelScrub : null,
             child: Semantics(
               label: 'Playback progress',
               value:
@@ -452,7 +544,6 @@ class _BufferedSeekBarState extends State<_BufferedSeekBar> {
       _isScrubbing = true;
       _scrubFraction = _fractionForDx(dx, width);
     });
-    _seekToFraction(_scrubFraction);
   }
 
   void _updateScrub(double dx, double width) {
@@ -460,10 +551,21 @@ class _BufferedSeekBarState extends State<_BufferedSeekBar> {
     setState(() {
       _scrubFraction = fraction;
     });
-    _seekToFraction(fraction);
   }
 
   void _endScrub() {
+    if (!_isScrubbing) {
+      return;
+    }
+    final fraction = _scrubFraction;
+    setState(() {
+      _isScrubbing = false;
+      _scrubFraction = null;
+    });
+    _seekToFraction(fraction);
+  }
+
+  void _cancelScrub() {
     if (!_isScrubbing) {
       return;
     }
@@ -651,6 +753,11 @@ class _PlaybackStats extends StatelessWidget {
           Text('Rebuffers: ${value.rebufferCount}'),
           Text('Rebuffer time: ${value.rebufferDuration.inMilliseconds} ms'),
           Text('Dropped frames: ${value.droppedFrames}'),
+          Text('Playback speed: ${_speedLabel(value.playbackSpeed)}'),
+          Text(
+            'Volume: ${(value.volume * 100).round()}%'
+            '${value.isMuted ? ' muted' : ''}',
+          ),
           Text('Quality switches: ${value.qualitySwitchCount}'),
           Text('Recovery: ${value.recoveryCount}'),
           if (value.lastRecoveryReason.isNotEmpty)
@@ -723,9 +830,10 @@ class _QoePanel extends StatelessWidget {
 }
 
 class _ErrorOverlay extends StatelessWidget {
-  const _ErrorOverlay({required this.error});
+  const _ErrorOverlay({required this.error, required this.onRetry});
 
   final M3u8PlayerError error;
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -734,12 +842,23 @@ class _ErrorOverlay extends StatelessWidget {
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(20),
-          child: Text(
-            error.message,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: Colors.white),
-            textAlign: TextAlign.center,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                error.message,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
           ),
         ),
       ),
@@ -755,6 +874,13 @@ String _formatDuration(Duration duration) {
     return '${hours.toString().padLeft(2, '0')}:$minutes:$seconds';
   }
   return '$minutes:$seconds';
+}
+
+String _speedLabel(double speed) {
+  if (speed == speed.roundToDouble()) {
+    return '${speed.toStringAsFixed(0)}x';
+  }
+  return '${speed.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '')}x';
 }
 
 Duration _positiveDuration(Duration duration) {

@@ -25,6 +25,9 @@ class M3u8PlayerValue {
     this.qualitySwitchCount = 0,
     this.availableQualities = const <M3u8Quality>[],
     this.selectedQuality = M3u8Quality.auto,
+    this.playbackSpeed = 1.0,
+    this.volume = 1.0,
+    this.isMuted = false,
     this.recoveryCount = 0,
     this.lastRecoveryReason = '',
     this.size = Size.zero,
@@ -51,6 +54,9 @@ class M3u8PlayerValue {
   final int qualitySwitchCount;
   final List<M3u8Quality> availableQualities;
   final M3u8Quality selectedQuality;
+  final double playbackSpeed;
+  final double volume;
+  final bool isMuted;
   final int recoveryCount;
   final String lastRecoveryReason;
   final Size size;
@@ -98,6 +104,9 @@ class M3u8PlayerValue {
     int? qualitySwitchCount,
     List<M3u8Quality>? availableQualities,
     M3u8Quality? selectedQuality,
+    double? playbackSpeed,
+    double? volume,
+    bool? isMuted,
     int? recoveryCount,
     String? lastRecoveryReason,
     Size? size,
@@ -125,6 +134,9 @@ class M3u8PlayerValue {
       qualitySwitchCount: qualitySwitchCount ?? this.qualitySwitchCount,
       availableQualities: availableQualities ?? this.availableQualities,
       selectedQuality: selectedQuality ?? this.selectedQuality,
+      playbackSpeed: playbackSpeed ?? this.playbackSpeed,
+      volume: volume ?? this.volume,
+      isMuted: isMuted ?? this.isMuted,
       recoveryCount: recoveryCount ?? this.recoveryCount,
       lastRecoveryReason: lastRecoveryReason ?? this.lastRecoveryReason,
       size: size ?? this.size,
@@ -157,6 +169,9 @@ class M3u8PlayerValue {
         'qualitySwitchCount: $qualitySwitchCount, '
         'availableQualities: $availableQualities, '
         'selectedQuality: $selectedQuality, '
+        'playbackSpeed: $playbackSpeed, '
+        'volume: $volume, '
+        'isMuted: $isMuted, '
         'recoveryCount: $recoveryCount, '
         'lastRecoveryReason: $lastRecoveryReason, '
         'size: $size, '

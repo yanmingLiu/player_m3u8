@@ -317,18 +317,20 @@ example/
 - iOS HLS 解析仍是轻量实现，适合常见 VOD playlist；复杂 HLS 特性仍需继续补测试。
 - 磁盘缓存配置和清理必须在没有活跃播放器时调用。
 
-### 示例播放源
+### 示例工程
 
-example 内置多个 HLS 源用于切换测试：
+example 默认使用中文界面，顶部按钮可在中文和英文之间切换。示例内置多个公开 HLS 测试源用于切换播放、清晰度、缓存和 seek 后预取验证：
 
-- `https://prod-gg.niftyvaughanpxnew.com/movies/795bf902-1d7a-4811-af9e-239f0a232f3a-216100/index.m3u8`
-- `https://prod-gg.niftyvaughanpxnew.com/movies/7b318dc9-64cb-49dd-bdc0-d28b80f6ed53-292394/index.m3u8`
-- `https://prod-gg.niftyvaughanpxnew.com/movies/b6cf4a77-6fa1-4b15-b5ec-f440b923c281-198867/index.m3u8`
-- `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`
-- `https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8`
-- `https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8`
+| 名称 | 地址 |
+| --- | --- |
+| Apple BipBop | `https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8` |
+| Google Shaka Angel One | `https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8` |
+| Google Shaka Big Buck Bunny | `https://storage.googleapis.com/shaka-demo-assets/bbb-dark-truths-hls/hls.m3u8` |
+| Mux Tears of Steel | `https://test-streams.mux.dev/tos_ismc/main.m3u8` |
+| Akamai HLS Test | `https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8` |
+| AWS CloudFront Sintel | `https://d2zihajmogu5jn.cloudfront.net/sintel/master.m3u8` |
 
-example 页面还包含播放健康指标和 QoE 快照面板，可在真机调试时观察最近采样窗口的 rebuffer ratio、丢帧增量、恢复增量、清晰度切换增量，并复制最新快照 JSON。
+example 页面还包含播放控制、播放列表切换、独立磁盘预取控制、播放健康指标和 QoE 快照面板，可在真机调试时观察最近采样窗口的 rebuffer ratio、丢帧增量、恢复增量、清晰度切换增量，并复制最新快照 JSON。
 
 ### 本地验证
 
@@ -690,18 +692,20 @@ example/
 - iOS HLS parsing remains lightweight and targets common VOD playlists; complex HLS features need additional validation.
 - Disk cache configuration and clearing must be called only when no players are active.
 
-### Example Sources
+### Example App
 
-The example app includes multiple HLS sources for switching tests:
+The example app uses Chinese by default and provides a top-bar language button to switch between Chinese and English. It includes multiple public HLS test sources for playback switching, quality selection, cache, and seek-aware prefetch validation:
 
-- `https://prod-gg.niftyvaughanpxnew.com/movies/795bf902-1d7a-4811-af9e-239f0a232f3a-216100/index.m3u8`
-- `https://prod-gg.niftyvaughanpxnew.com/movies/7b318dc9-64cb-49dd-bdc0-d28b80f6ed53-292394/index.m3u8`
-- `https://prod-gg.niftyvaughanpxnew.com/movies/b6cf4a77-6fa1-4b15-b5ec-f440b923c281-198867/index.m3u8`
-- `https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8`
-- `https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8`
-- `https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8`
+| Name | URL |
+| --- | --- |
+| Apple BipBop | `https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8` |
+| Google Shaka Angel One | `https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8` |
+| Google Shaka Big Buck Bunny | `https://storage.googleapis.com/shaka-demo-assets/bbb-dark-truths-hls/hls.m3u8` |
+| Mux Tears of Steel | `https://test-streams.mux.dev/tos_ismc/main.m3u8` |
+| Akamai HLS Test | `https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8` |
+| AWS CloudFront Sintel | `https://d2zihajmogu5jn.cloudfront.net/sintel/master.m3u8` |
 
-The example page also includes playback-health stats and a QoE snapshot panel for real-device debugging. It shows recent rebuffer ratio, dropped-frame deltas, recovery deltas, quality-switch deltas, and can copy the latest snapshot JSON.
+The example page also includes playback controls, playlist switching, standalone disk prefetch controls, playback-health stats, and a QoE snapshot panel for real-device debugging. It shows recent rebuffer ratio, dropped-frame deltas, recovery deltas, quality-switch deltas, and can copy the latest snapshot JSON.
 
 ### Local Verification
 

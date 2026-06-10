@@ -6,33 +6,31 @@ import 'package:flutter/services.dart';
 import 'package:player_m3u8/player_m3u8.dart';
 
 const String sampleM3u8Url =
-    'https://prod-gg.niftyvaughanpxnew.com/movies/795bf902-1d7a-4811-af9e-239f0a232f3a-216100/index.m3u8';
+    'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8';
 
 const List<VideoSource> sampleVideos = <VideoSource>[
-  VideoSource(title: 'Nifty VOD', url: sampleM3u8Url),
+  VideoSource(title: 'Apple BipBop', url: sampleM3u8Url),
   VideoSource(
-    title: 'Nifty VOD 292394',
+    title: 'Google Shaka Angel One',
     url:
-        'https://prod-gg.niftyvaughanpxnew.com/movies/7b318dc9-64cb-49dd-bdc0-d28b80f6ed53-292394/index.m3u8',
+        'https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8',
   ),
   VideoSource(
-    title: 'Nifty VOD 198867',
+    title: 'Google Shaka Big Buck Bunny',
     url:
-        'https://prod-gg.niftyvaughanpxnew.com/movies/b6cf4a77-6fa1-4b15-b5ec-f440b923c281-198867/index.m3u8',
+        'https://storage.googleapis.com/shaka-demo-assets/bbb-dark-truths-hls/hls.m3u8',
   ),
   VideoSource(
-    title: 'Mux HLS Test',
-    url: 'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8',
+    title: 'Mux Tears of Steel',
+    url: 'https://test-streams.mux.dev/tos_ismc/main.m3u8',
   ),
   VideoSource(
-    title: 'Tears of Steel',
-    url:
-        'https://demo.unified-streaming.com/k8s/features/stable/video/tears-of-steel/tears-of-steel.ism/.m3u8',
+    title: 'Akamai HLS Test',
+    url: 'https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8',
   ),
   VideoSource(
-    title: 'Apple BipBop',
-    url:
-        'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8',
+    title: 'AWS CloudFront Sintel',
+    url: 'https://d2zihajmogu5jn.cloudfront.net/sintel/master.m3u8',
   ),
 ];
 
@@ -47,13 +45,121 @@ class VideoSource {
   final String url;
 }
 
+enum ExampleLanguage { zh, en }
+
+class ExampleStrings {
+  const ExampleStrings(this.language);
+
+  final ExampleLanguage language;
+
+  bool get _isZh => language == ExampleLanguage.zh;
+
+  String get appTitle => _isZh ? 'M3U8 播放器' : 'M3U8 Player';
+  String get languageButtonLabel => _isZh ? 'EN' : '中文';
+  String get languageButtonTooltip => _isZh ? '切换到英文' : 'Switch to Chinese';
+  String get qoeSnapshotCopied => _isZh ? 'QoE 快照已复制' : 'QoE snapshot copied';
+  String get previousVideoTooltip => _isZh ? '上一个视频' : 'Previous video';
+  String get nextVideoTooltip => _isZh ? '下一个视频' : 'Next video';
+  String get precacheCurrentSourceTooltip =>
+      _isZh ? '预取当前播放源' : 'Precache current source';
+  String get cancelPrecacheTooltip => _isZh ? '取消预取' : 'Cancel precache';
+  String get precacheIdle => _isZh ? '预取空闲' : 'Precache idle';
+  String get precacheCancelled => _isZh ? '预取已取消' : 'Precache cancelled';
+  String get playTooltip => _isZh ? '播放' : 'Play';
+  String get pauseTooltip => _isZh ? '暂停' : 'Pause';
+  String get seekBack10Tooltip => _isZh ? '后退 10 秒' : 'Seek back 10 seconds';
+  String get seekForward10Tooltip =>
+      _isZh ? '前进 10 秒' : 'Seek forward 10 seconds';
+  String get muteTooltip => _isZh ? '静音' : 'Mute';
+  String get unmuteTooltip => _isZh ? '取消静音' : 'Unmute';
+  String get playbackProgressSemantics => _isZh ? '播放进度' : 'Playback progress';
+  String get positionLabel => _isZh ? '位置' : 'Position';
+  String get durationLabel => _isZh ? '时长' : 'Duration';
+  String get playerBufferLabel => _isZh ? '播放器缓冲' : 'Player buffer';
+  String get diskCacheLabel => _isZh ? '磁盘缓存' : 'Disk cache';
+  String get bufferAheadLabel => _isZh ? '前向缓冲' : 'Buffer ahead';
+  String get startupLabel => _isZh ? '启动耗时' : 'Startup';
+  String get rebuffersLabel => _isZh ? '卡顿次数' : 'Rebuffers';
+  String get rebufferTimeLabel => _isZh ? '卡顿时长' : 'Rebuffer time';
+  String get droppedFramesLabel => _isZh ? '丢帧' : 'Dropped frames';
+  String get playbackSpeedLabel => _isZh ? '播放速度' : 'Playback speed';
+  String get volumeLabel => _isZh ? '音量' : 'Volume';
+  String get qualitySwitchesLabel => _isZh ? '清晰度切换' : 'Quality switches';
+  String get recoveryLabel => _isZh ? '恢复次数' : 'Recovery';
+  String get lastRecoveryLabel => _isZh ? '最近恢复' : 'Last recovery';
+  String get videoBitrateLabel => _isZh ? '视频码率' : 'Video bitrate';
+  String get observedBitrateLabel => _isZh ? '观测码率' : 'Observed bitrate';
+  String get sizeLabel => _isZh ? '尺寸' : 'Size';
+  String get completeSuffix => _isZh ? ' 完成' : ' complete';
+  String get mutedSuffix => _isZh ? ' 静音' : ' muted';
+  String get qoeSnapshotsTitle => _isZh ? 'QoE 快照' : 'QoE snapshots';
+  String get copyLatestQoeSnapshotTooltip =>
+      _isZh ? '复制最新 QoE 快照' : 'Copy latest QoE snapshot';
+  String get qoeWaitingForFirstSample =>
+      _isZh ? '等待首个 QoE 采样' : 'QoE waiting for first sample';
+  String get retryLabel => _isZh ? '重试' : 'Retry';
+  String get autoQualityLabel => _isZh ? '自动' : 'Auto';
+  String get unknown => _isZh ? '未知' : 'unknown';
+
+  String playbackProgressValue(Duration position, Duration duration) {
+    if (_isZh) {
+      return '${_formatDuration(position)} / ${_formatDuration(duration)}';
+    }
+    return '${_formatDuration(position)} of ${_formatDuration(duration)}';
+  }
+
+  String precacheComplete(String qualitySuffix) {
+    return _isZh ? '预取完成$qualitySuffix' : 'Precache complete$qualitySuffix';
+  }
+
+  String precacheFailed(String error) {
+    return _isZh ? '预取失败：$error' : 'Precache failed: $error';
+  }
+
+  String precaching(String qualitySuffix, String suffix) {
+    return _isZh
+        ? '正在预取$qualitySuffix$suffix'
+        : 'Precaching$qualitySuffix$suffix';
+  }
+
+  String latestQoeRebufferRatio(String percent) {
+    return _isZh
+        ? '最新 QoE：卡顿占比 $percent'
+        : 'Latest QoE: rebuffer ratio $percent';
+  }
+
+  String qoeDeltas({
+    required int rebufferCountDelta,
+    required int droppedFramesDelta,
+    required int recoveryCountDelta,
+    required int qualitySwitchCountDelta,
+  }) {
+    if (_isZh) {
+      return 'QoE 增量：卡顿 +$rebufferCountDelta，'
+          '丢帧 +$droppedFramesDelta，'
+          '恢复 +$recoveryCountDelta，'
+          '清晰度 +$qualitySwitchCountDelta';
+    }
+    return 'QoE deltas: rebuffer +$rebufferCountDelta, '
+        'drop +$droppedFramesDelta, '
+        'recover +$recoveryCountDelta, '
+        'quality +$qualitySwitchCountDelta';
+  }
+
+  String qoeBitrate(String videoBitrate, String observedBitrate) {
+    return _isZh
+        ? 'QoE 码率：$videoBitrate / $observedBitrate'
+        : 'QoE bitrate: $videoBitrate / $observedBitrate';
+  }
+}
+
 class PlayerM3u8ExampleApp extends StatelessWidget {
   const PlayerM3u8ExampleApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'M3U8 Player',
+      title: const ExampleStrings(ExampleLanguage.zh).appTitle,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0F766E)),
         useMaterial3: true,
@@ -84,11 +190,14 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   StreamSubscription<M3u8QoeSnapshot>? _qoeSubscription;
   StreamSubscription<M3u8CacheEvent>? _cacheSubscription;
   final List<M3u8QoeSnapshot> _qoeSnapshots = <M3u8QoeSnapshot>[];
+  ExampleLanguage _language = ExampleLanguage.zh;
   bool _initializing = true;
   bool _switching = false;
   int _currentVideoIndex = 0;
   String? _precacheTaskId;
   M3u8CacheEvent? _latestCacheEvent;
+
+  ExampleStrings get _strings => ExampleStrings(_language);
 
   @override
   void initState() {
@@ -236,13 +345,40 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     }
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('QoE snapshot copied')));
+    ).showSnackBar(SnackBar(content: Text(_strings.qoeSnapshotCopied)));
+  }
+
+  void _toggleLanguage() {
+    setState(() {
+      _language = _language == ExampleLanguage.zh
+          ? ExampleLanguage.en
+          : ExampleLanguage.zh;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final strings = _strings;
     return Scaffold(
-      appBar: AppBar(title: const Text('M3U8 Player')),
+      appBar: AppBar(
+        title: Text(strings.appTitle),
+        actions: [
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: 8),
+            child: Tooltip(
+              message: strings.languageButtonTooltip,
+              child: TextButton.icon(
+                onPressed: _toggleLanguage,
+                icon: const Icon(Icons.translate),
+                label: Text(strings.languageButtonLabel),
+                style: TextButton.styleFrom(
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: ValueListenableBuilder<M3u8PlayerValue>(
           valueListenable: _controller,
@@ -263,6 +399,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                             _ErrorOverlay(
                               error: value.error!,
                               onRetry: () => _controller.retry(autoPlay: true),
+                              strings: strings,
                             ),
                         ],
                       ),
@@ -273,6 +410,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                       currentIndex: _currentVideoIndex,
                       switching: _switching,
                       onSelected: _selectVideo,
+                      strings: strings,
                     ),
                     const SizedBox(height: 16),
                     _CacheTaskControls(
@@ -280,15 +418,21 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                       isRunning: _precacheTaskId != null,
                       onPrecache: _precacheCurrentSource,
                       onCancel: _cancelPrecacheTask,
+                      strings: strings,
                     ),
                     const SizedBox(height: 16),
-                    _Controls(controller: _controller, value: value),
+                    _Controls(
+                      controller: _controller,
+                      value: value,
+                      strings: strings,
+                    ),
                     const SizedBox(height: 16),
-                    _PlaybackStats(value: value),
+                    _PlaybackStats(value: value, strings: strings),
                     const SizedBox(height: 16),
                     _QoePanel(
                       snapshots: _qoeSnapshots,
                       onCopyLatest: _copyLatestQoeSnapshot,
+                      strings: strings,
                     ),
                   ],
                 );
@@ -305,12 +449,14 @@ class _PlaylistControls extends StatelessWidget {
     required this.currentIndex,
     required this.switching,
     required this.onSelected,
+    required this.strings,
   });
 
   final List<VideoSource> videos;
   final int currentIndex;
   final bool switching;
   final ValueChanged<int> onSelected;
+  final ExampleStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -319,7 +465,7 @@ class _PlaylistControls extends StatelessWidget {
     return Row(
       children: [
         IconButton.outlined(
-          tooltip: 'Previous video',
+          tooltip: strings.previousVideoTooltip,
           onPressed: canGoPrevious ? () => onSelected(currentIndex - 1) : null,
           icon: const Icon(Icons.skip_previous),
         ),
@@ -354,7 +500,7 @@ class _PlaylistControls extends StatelessWidget {
         ),
         const SizedBox(width: 8),
         IconButton.outlined(
-          tooltip: 'Next video',
+          tooltip: strings.nextVideoTooltip,
           onPressed: canGoNext ? () => onSelected(currentIndex + 1) : null,
           icon: const Icon(Icons.skip_next),
         ),
@@ -369,12 +515,14 @@ class _CacheTaskControls extends StatelessWidget {
     required this.isRunning,
     required this.onPrecache,
     required this.onCancel,
+    required this.strings,
   });
 
   final M3u8CacheEvent? event;
   final bool isRunning;
   final VoidCallback onPrecache;
   final VoidCallback onCancel;
+  final ExampleStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -382,20 +530,20 @@ class _CacheTaskControls extends StatelessWidget {
     return Row(
       children: [
         IconButton.outlined(
-          tooltip: 'Precache current source',
+          tooltip: strings.precacheCurrentSourceTooltip,
           onPressed: isRunning ? null : onPrecache,
           icon: const Icon(Icons.download),
         ),
         const SizedBox(width: 8),
         IconButton.outlined(
-          tooltip: 'Cancel precache',
+          tooltip: strings.cancelPrecacheTooltip,
           onPressed: isRunning ? onCancel : null,
           icon: const Icon(Icons.cancel_outlined),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: Text(
-            _cacheStatus(event, isRunning),
+            _cacheStatus(event, isRunning, strings),
             style: textTheme.bodyMedium,
             overflow: TextOverflow.ellipsis,
           ),
@@ -404,9 +552,13 @@ class _CacheTaskControls extends StatelessWidget {
     );
   }
 
-  String _cacheStatus(M3u8CacheEvent? event, bool isRunning) {
+  String _cacheStatus(
+    M3u8CacheEvent? event,
+    bool isRunning,
+    ExampleStrings strings,
+  ) {
     if (event == null) {
-      return 'Precache idle';
+      return strings.precacheIdle;
     }
     final percent = event.percent?.clamp(0.0, 100.0).round();
     final progress = event.position == null
@@ -416,21 +568,29 @@ class _CacheTaskControls extends StatelessWidget {
     final quality = event.quality?.label;
     final qualitySuffix = quality == null ? '' : ' $quality';
     return switch (event.type) {
-      M3u8CacheEventType.completed => 'Precache complete$qualitySuffix',
-      M3u8CacheEventType.cancelled => 'Precache cancelled',
-      M3u8CacheEventType.error =>
-        'Precache failed: ${event.error?.message ?? 'unknown'}',
+      M3u8CacheEventType.completed => strings.precacheComplete(qualitySuffix),
+      M3u8CacheEventType.cancelled => strings.precacheCancelled,
+      M3u8CacheEventType.error => strings.precacheFailed(
+        event.error?.message ?? strings.unknown,
+      ),
       M3u8CacheEventType.progress =>
-        isRunning ? 'Precaching$qualitySuffix$suffix' : 'Precache idle',
+        isRunning
+            ? strings.precaching(qualitySuffix, suffix)
+            : strings.precacheIdle,
     };
   }
 }
 
 class _Controls extends StatelessWidget {
-  const _Controls({required this.controller, required this.value});
+  const _Controls({
+    required this.controller,
+    required this.value,
+    required this.strings,
+  });
 
   final M3u8PlayerController controller;
   final M3u8PlayerValue value;
+  final ExampleStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -440,7 +600,9 @@ class _Controls extends StatelessWidget {
         Row(
           children: [
             IconButton.filled(
-              tooltip: value.isPlaying ? 'Pause' : 'Play',
+              tooltip: value.isPlaying
+                  ? strings.pauseTooltip
+                  : strings.playTooltip,
               onPressed: value.isInitialized
                   ? () {
                       if (value.isPlaying) {
@@ -454,14 +616,14 @@ class _Controls extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             IconButton.outlined(
-              tooltip: 'Seek back 10 seconds',
+              tooltip: strings.seekBack10Tooltip,
               onPressed: value.isInitialized
                   ? () => controller.seekBy(const Duration(seconds: -10))
                   : null,
               icon: const Icon(Icons.replay_10),
             ),
             IconButton.outlined(
-              tooltip: 'Seek forward 10 seconds',
+              tooltip: strings.seekForward10Tooltip,
               onPressed: value.isInitialized
                   ? () => controller.seekBy(const Duration(seconds: 10))
                   : null,
@@ -469,33 +631,46 @@ class _Controls extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: _BufferedSeekBar(controller: controller, value: value),
+              child: _BufferedSeekBar(
+                controller: controller,
+                value: value,
+                strings: strings,
+              ),
             ),
           ],
         ),
         const SizedBox(height: 8),
         _SpeedSelector(controller: controller, value: value),
         const SizedBox(height: 8),
-        _VolumeControl(controller: controller, value: value),
+        _VolumeControl(controller: controller, value: value, strings: strings),
         const SizedBox(height: 8),
-        _QualitySelector(controller: controller, value: value),
+        _QualitySelector(
+          controller: controller,
+          value: value,
+          strings: strings,
+        ),
       ],
     );
   }
 }
 
 class _VolumeControl extends StatelessWidget {
-  const _VolumeControl({required this.controller, required this.value});
+  const _VolumeControl({
+    required this.controller,
+    required this.value,
+    required this.strings,
+  });
 
   final M3u8PlayerController controller;
   final M3u8PlayerValue value;
+  final ExampleStrings strings;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
         IconButton.outlined(
-          tooltip: value.isMuted ? 'Unmute' : 'Mute',
+          tooltip: value.isMuted ? strings.unmuteTooltip : strings.muteTooltip,
           onPressed: value.isInitialized
               ? () => controller.setMuted(!value.isMuted)
               : null,
@@ -555,10 +730,15 @@ class _SpeedSelector extends StatelessWidget {
 }
 
 class _QualitySelector extends StatelessWidget {
-  const _QualitySelector({required this.controller, required this.value});
+  const _QualitySelector({
+    required this.controller,
+    required this.value,
+    required this.strings,
+  });
 
   final M3u8PlayerController controller;
   final M3u8PlayerValue value;
+  final ExampleStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -578,7 +758,10 @@ class _QualitySelector extends StatelessWidget {
         for (final quality in qualities)
           DropdownMenuItem<String>(
             value: quality.id,
-            child: Text(quality.label, overflow: TextOverflow.ellipsis),
+            child: Text(
+              _qualityLabel(quality, strings),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
       ],
       onChanged: value.isInitialized
@@ -595,10 +778,15 @@ class _QualitySelector extends StatelessWidget {
 }
 
 class _BufferedSeekBar extends StatefulWidget {
-  const _BufferedSeekBar({required this.controller, required this.value});
+  const _BufferedSeekBar({
+    required this.controller,
+    required this.value,
+    required this.strings,
+  });
 
   final M3u8PlayerController controller;
   final M3u8PlayerValue value;
+  final ExampleStrings strings;
 
   @override
   State<_BufferedSeekBar> createState() => _BufferedSeekBarState();
@@ -658,9 +846,11 @@ class _BufferedSeekBarState extends State<_BufferedSeekBar> {
             onHorizontalDragEnd: enabled ? (_) => _endScrub() : null,
             onHorizontalDragCancel: enabled ? _cancelScrub : null,
             child: Semantics(
-              label: 'Playback progress',
-              value:
-                  '${_formatDuration(value.position)} of ${_formatDuration(value.duration)}',
+              label: widget.strings.playbackProgressSemantics,
+              value: widget.strings.playbackProgressValue(
+                value.position,
+                value.duration,
+              ),
               child: CustomPaint(
                 painter: _BufferedTrackPainter(
                   playedFraction: playedFraction,
@@ -845,9 +1035,10 @@ class _BufferedTrackPainter extends CustomPainter {
 }
 
 class _PlaybackStats extends StatelessWidget {
-  const _PlaybackStats({required this.value});
+  const _PlaybackStats({required this.value, required this.strings});
 
   final M3u8PlayerValue value;
+  final ExampleStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -876,38 +1067,56 @@ class _PlaybackStats extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Position: ${_formatDuration(value.position)}'),
-          Text('Duration: ${_formatDuration(value.duration)}'),
+          Text('${strings.positionLabel}: ${_formatDuration(value.position)}'),
+          Text('${strings.durationLabel}: ${_formatDuration(value.duration)}'),
           Text(
-            'Player buffer: ${_formatDuration(value.bufferedPosition)} / '
+            '${strings.playerBufferLabel}: '
+            '${_formatDuration(value.bufferedPosition)} / '
             '${_formatDuration(value.duration)} ($bufferedPercent%)',
           ),
           Text(
-            'Disk cache: ${_formatDuration(value.diskCacheStartPosition)} - '
+            '${strings.diskCacheLabel}: '
+            '${_formatDuration(value.diskCacheStartPosition)} - '
             '${_formatDuration(value.diskCachePosition)} / '
             '${_formatDuration(value.duration)} ($diskCachePercent%)'
-            '${value.isDiskCacheComplete ? ' complete' : ''}',
+            '${value.isDiskCacheComplete ? strings.completeSuffix : ''}',
           ),
           Text(
-            'Buffer ahead: ${_formatDuration(_positiveDuration(bufferAhead))}',
+            '${strings.bufferAheadLabel}: '
+            '${_formatDuration(_positiveDuration(bufferAhead))}',
           ),
-          Text('Startup: ${value.startupTime.inMilliseconds} ms'),
-          Text('Rebuffers: ${value.rebufferCount}'),
-          Text('Rebuffer time: ${value.rebufferDuration.inMilliseconds} ms'),
-          Text('Dropped frames: ${value.droppedFrames}'),
-          Text('Playback speed: ${_speedLabel(value.playbackSpeed)}'),
           Text(
-            'Volume: ${(value.volume * 100).round()}%'
-            '${value.isMuted ? ' muted' : ''}',
+            '${strings.startupLabel}: ${value.startupTime.inMilliseconds} ms',
           ),
-          Text('Quality switches: ${value.qualitySwitchCount}'),
-          Text('Recovery: ${value.recoveryCount}'),
+          Text('${strings.rebuffersLabel}: ${value.rebufferCount}'),
+          Text(
+            '${strings.rebufferTimeLabel}: '
+            '${value.rebufferDuration.inMilliseconds} ms',
+          ),
+          Text('${strings.droppedFramesLabel}: ${value.droppedFrames}'),
+          Text(
+            '${strings.playbackSpeedLabel}: '
+            '${_speedLabel(value.playbackSpeed)}',
+          ),
+          Text(
+            '${strings.volumeLabel}: ${(value.volume * 100).round()}%'
+            '${value.isMuted ? strings.mutedSuffix : ''}',
+          ),
+          Text('${strings.qualitySwitchesLabel}: ${value.qualitySwitchCount}'),
+          Text('${strings.recoveryLabel}: ${value.recoveryCount}'),
           if (value.lastRecoveryReason.isNotEmpty)
-            Text('Last recovery: ${value.lastRecoveryReason}'),
-          Text('Video bitrate: ${_formatBitrate(value.videoBitrate)}'),
-          Text('Observed bitrate: ${_formatBitrate(value.observedBitrate)}'),
+            Text('${strings.lastRecoveryLabel}: ${value.lastRecoveryReason}'),
           Text(
-            'Size: ${value.size.width.toInt()} x ${value.size.height.toInt()}',
+            '${strings.videoBitrateLabel}: '
+            '${_formatBitrate(value.videoBitrate, strings)}',
+          ),
+          Text(
+            '${strings.observedBitrateLabel}: '
+            '${_formatBitrate(value.observedBitrate, strings)}',
+          ),
+          Text(
+            '${strings.sizeLabel}: '
+            '${value.size.width.toInt()} x ${value.size.height.toInt()}',
           ),
         ],
       ),
@@ -916,10 +1125,15 @@ class _PlaybackStats extends StatelessWidget {
 }
 
 class _QoePanel extends StatelessWidget {
-  const _QoePanel({required this.snapshots, required this.onCopyLatest});
+  const _QoePanel({
+    required this.snapshots,
+    required this.onCopyLatest,
+    required this.strings,
+  });
 
   final List<M3u8QoeSnapshot> snapshots;
   final VoidCallback onCopyLatest;
+  final ExampleStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -931,31 +1145,39 @@ class _QoePanel extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: Text('QoE snapshots', style: textTheme.titleMedium),
+              child: Text(
+                strings.qoeSnapshotsTitle,
+                style: textTheme.titleMedium,
+              ),
             ),
             IconButton.outlined(
-              tooltip: 'Copy latest QoE snapshot',
+              tooltip: strings.copyLatestQoeSnapshotTooltip,
               onPressed: latest == null ? null : onCopyLatest,
               icon: const Icon(Icons.copy),
             ),
           ],
         ),
         if (latest == null)
-          Text('QoE waiting for first sample', style: textTheme.bodyMedium)
+          Text(strings.qoeWaitingForFirstSample, style: textTheme.bodyMedium)
         else ...[
           Text(
-            'Latest QoE: rebuffer ratio '
-            '${(latest.rebufferRatio * 100).toStringAsFixed(1)}%',
+            strings.latestQoeRebufferRatio(
+              '${(latest.rebufferRatio * 100).toStringAsFixed(1)}%',
+            ),
           ),
           Text(
-            'QoE deltas: rebuffer +${latest.rebufferCountDelta}, '
-            'drop +${latest.droppedFramesDelta}, '
-            'recover +${latest.recoveryCountDelta}, '
-            'quality +${latest.qualitySwitchCountDelta}',
+            strings.qoeDeltas(
+              rebufferCountDelta: latest.rebufferCountDelta,
+              droppedFramesDelta: latest.droppedFramesDelta,
+              recoveryCountDelta: latest.recoveryCountDelta,
+              qualitySwitchCountDelta: latest.qualitySwitchCountDelta,
+            ),
           ),
           Text(
-            'QoE bitrate: ${_formatBitrate(latest.videoBitrate)} / '
-            '${_formatBitrate(latest.observedBitrate)}',
+            strings.qoeBitrate(
+              _formatBitrate(latest.videoBitrate, strings),
+              _formatBitrate(latest.observedBitrate, strings),
+            ),
           ),
           const SizedBox(height: 8),
           for (final snapshot in snapshots.take(3))
@@ -972,10 +1194,15 @@ class _QoePanel extends StatelessWidget {
 }
 
 class _ErrorOverlay extends StatelessWidget {
-  const _ErrorOverlay({required this.error, required this.onRetry});
+  const _ErrorOverlay({
+    required this.error,
+    required this.onRetry,
+    required this.strings,
+  });
 
   final M3u8PlayerError error;
   final VoidCallback onRetry;
+  final ExampleStrings strings;
 
   @override
   Widget build(BuildContext context) {
@@ -998,7 +1225,7 @@ class _ErrorOverlay extends StatelessWidget {
               FilledButton.icon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                label: Text(strings.retryLabel),
               ),
             ],
           ),
@@ -1025,6 +1252,13 @@ String _speedLabel(double speed) {
   return '${speed.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '')}x';
 }
 
+String _qualityLabel(M3u8Quality quality, ExampleStrings strings) {
+  if (quality.id == M3u8Quality.auto.id) {
+    return strings.autoQualityLabel;
+  }
+  return quality.label;
+}
+
 Duration _positiveDuration(Duration duration) {
   if (duration.isNegative) {
     return Duration.zero;
@@ -1032,9 +1266,9 @@ Duration _positiveDuration(Duration duration) {
   return duration;
 }
 
-String _formatBitrate(int bitrate) {
+String _formatBitrate(int bitrate, ExampleStrings strings) {
   if (bitrate <= 0) {
-    return 'unknown';
+    return strings.unknown;
   }
   if (bitrate >= 1000 * 1000) {
     return '${(bitrate / (1000 * 1000)).toStringAsFixed(1)} Mbps';

@@ -1,16 +1,30 @@
 # player_m3u8_example
 
-Demonstrates how to use the player_m3u8 plugin.
+Demonstrates the `player_m3u8` plugin with a Texture-based HLS player on iOS and Android.
 
-## Getting Started
+The example app uses Chinese by default and provides a top-bar language button to switch between Chinese and English. It includes playback controls, playlist switching, standalone disk prefetch controls, playback-health stats, and a QoE snapshot panel.
 
-This project is a starting point for a Flutter application.
+## Test Sources
 
-A few resources to get you started if this is your first Flutter project:
+The built-in playlist uses public HLS test streams:
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+| Name | URL |
+| --- | --- |
+| Apple BipBop | `https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8` |
+| Google Shaka Angel One | `https://storage.googleapis.com/shaka-demo-assets/angel-one-hls/hls.m3u8` |
+| Google Shaka Big Buck Bunny | `https://storage.googleapis.com/shaka-demo-assets/bbb-dark-truths-hls/hls.m3u8` |
+| Mux Tears of Steel | `https://test-streams.mux.dev/tos_ismc/main.m3u8` |
+| Akamai HLS Test | `https://cph-p2p-msl.akamaized.net/hls/live/2000341/test/master.m3u8` |
+| AWS CloudFront Sintel | `https://d2zihajmogu5jn.cloudfront.net/sintel/master.m3u8` |
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Run
+
+```sh
+flutter run
+```
+
+## Test
+
+```sh
+flutter test
+```

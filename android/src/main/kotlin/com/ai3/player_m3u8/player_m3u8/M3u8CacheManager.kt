@@ -6,23 +6,46 @@ import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.CacheDataSource
-import androidx.media3.datasource.cache.NoOpCacheEvictor
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import java.io.File
 
 internal object M3u8CacheManager {
     private const val CACHE_DIRECTORY_NAME = "player_m3u8_media_cache"
+    private const val DEFAULT_MAX_CACHE_BYTES = 512L * 1024L * 1024L
 
     @Volatile
     private var simpleCache: SimpleCache? = null
 
+    @Volatile
+    private var maxCacheBytes = DEFAULT_MAX_CACHE_BYTES
+
     fun cache(context: Context): SimpleCache {
         return simpleCache ?: synchronized(this) {
             simpleCache ?: SimpleCache(
-                File(context.cacheDir, CACHE_DIRECTORY_NAME),
-                NoOpCacheEvictor(),
+                cacheDirectory(context),
+                LeastRecentlyUsedCacheEvictor(maxCacheBytes),
                 StandaloneDatabaseProvider(context.applicationContext),
             ).also { simpleCache = it }
+        }
+    }
+
+    fun configure(maxSizeBytes: Long) {
+        require(maxSizeBytes > 0L) { "maxSizeBytes must be greater than zero." }
+        synchronized(this) {
+            if (simpleCache != null && maxCacheBytes != maxSizeBytes) {
+                simpleCache?.release()
+                simpleCache = null
+            }
+            maxCacheBytes = maxSizeBytes
+        }
+    }
+
+    fun clear(context: Context) {
+        synchronized(this) {
+            simpleCache?.release()
+            simpleCache = null
+            cacheDirectory(context).deleteRecursively()
         }
     }
 
@@ -59,5 +82,9 @@ internal object M3u8CacheManager {
             factory.setDefaultRequestProperties(headers)
         }
         return factory
+    }
+
+    private fun cacheDirectory(context: Context): File {
+        return File(context.cacheDir, CACHE_DIRECTORY_NAME)
     }
 }

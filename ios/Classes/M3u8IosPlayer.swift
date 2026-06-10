@@ -12,9 +12,11 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
 
   private let textureRegistry: FlutterTextureRegistry
   private let eventSinkProvider: () -> FlutterEventSink?
+  private let asset: AVURLAsset
   private let player: AVPlayer
   private let playerItem: AVPlayerItem
   private let videoOutput: AVPlayerItemVideoOutput
+  private let resourceLoader: M3u8ResourceLoader
   private var diskCachePrefetcher: M3u8DiskCachePrefetcher?
   private var displayLink: CADisplayLink?
   private var progressTimer: Timer?
@@ -35,10 +37,13 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
   ) {
     self.textureRegistry = textureRegistry
     self.eventSinkProvider = eventSinkProvider
+    self.resourceLoader = M3u8ResourceLoader(headers: headers)
     let assetOptions: [String: Any]? =
       headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers]
-    let asset = AVURLAsset(url: url, options: assetOptions)
-    self.playerItem = AVPlayerItem(asset: asset)
+    let asset = AVURLAsset(url: M3u8ResourceLoader.cachedUrl(for: url), options: assetOptions)
+    self.asset = asset
+    self.asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
+    self.playerItem = AVPlayerItem(asset: self.asset)
     self.videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
       kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
     ])
@@ -96,6 +101,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture {
     rateObservation = nil
     player.pause()
     player.replaceCurrentItem(with: nil)
+    asset.resourceLoader.setDelegate(nil, queue: nil)
     playerItem.remove(videoOutput)
     latestPixelBuffer = nil
   }

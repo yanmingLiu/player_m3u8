@@ -76,6 +76,26 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
   @override
   Future<void> disposePlayer(int playerId) => _invokeVoid('dispose', playerId);
 
+  @override
+  Future<void> configureCache({required int maxSizeBytes}) async {
+    try {
+      await methodChannel.invokeMethod<void>('configureCache', {
+        'maxSizeBytes': maxSizeBytes,
+      });
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
+  Future<void> clearCache() async {
+    try {
+      await methodChannel.invokeMethod<void>('clearCache');
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
   Future<void> _invokeVoid(String method, int playerId) async {
     try {
       await methodChannel.invokeMethod<void>(method, {'playerId': playerId});

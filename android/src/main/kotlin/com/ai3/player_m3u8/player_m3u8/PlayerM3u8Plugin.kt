@@ -55,6 +55,8 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
                 players.remove(playerId)?.dispose()
                 result.success(null)
             }
+            "configureCache" -> configureCache(call, result)
+            "clearCache" -> clearCache(result)
             else -> result.notImplemented()
         }
     }
@@ -92,6 +94,45 @@ class PlayerM3u8Plugin : FlutterPlugin, MethodCallHandler, EventChannel.StreamHa
         )
         players[surfaceProducer.id()] = player
         result.success(surfaceProducer.id())
+    }
+
+    private fun configureCache(call: MethodCall, result: Result) {
+        val maxSizeBytes = call.argument<Number>("maxSizeBytes")?.toLong()
+        if (maxSizeBytes == null || maxSizeBytes <= 0L) {
+            result.error(
+                "invalid_cache_size",
+                "maxSizeBytes must be greater than zero.",
+                null,
+            )
+            return
+        }
+        if (players.isNotEmpty()) {
+            result.error(
+                "active_players",
+                "Cache cannot be configured while players are active.",
+                null,
+            )
+            return
+        }
+        try {
+            M3u8CacheManager.configure(maxSizeBytes)
+            result.success(null)
+        } catch (error: IllegalStateException) {
+            result.error("cache_in_use", error.message, null)
+        }
+    }
+
+    private fun clearCache(result: Result) {
+        if (players.isNotEmpty()) {
+            result.error(
+                "active_players",
+                "Cache cannot be cleared while players are active.",
+                null,
+            )
+            return
+        }
+        M3u8CacheManager.clear(context)
+        result.success(null)
     }
 
     private fun withPlayer(

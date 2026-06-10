@@ -76,6 +76,10 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       players.removeValue(forKey: id)?.dispose()
       textureRegistry.unregisterTexture(id)
       result(nil)
+    case "configureCache":
+      configureCache(call: call, result: result)
+    case "clearCache":
+      clearCache(result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -113,6 +117,70 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     player.textureId = textureId
     players[textureId] = player
     result(textureId)
+  }
+
+  private func configureCache(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let maxSizeBytes = arguments["maxSizeBytes"] as? NSNumber,
+      maxSizeBytes.int64Value > 0
+    else {
+      result(
+        FlutterError(
+          code: "invalid_cache_size",
+          message: "maxSizeBytes must be greater than zero.",
+          details: nil
+        )
+      )
+      return
+    }
+    guard players.isEmpty else {
+      result(
+        FlutterError(
+          code: "active_players",
+          message: "Cache cannot be configured while players are active.",
+          details: nil
+        )
+      )
+      return
+    }
+    do {
+      try M3u8IosCacheManager.shared.configure(maxSizeBytes: maxSizeBytes.int64Value)
+      result(nil)
+    } catch {
+      result(
+        FlutterError(
+          code: "cache_config_failed",
+          message: error.localizedDescription,
+          details: nil
+        )
+      )
+    }
+  }
+
+  private func clearCache(result: @escaping FlutterResult) {
+    guard players.isEmpty else {
+      result(
+        FlutterError(
+          code: "active_players",
+          message: "Cache cannot be cleared while players are active.",
+          details: nil
+        )
+      )
+      return
+    }
+    do {
+      try M3u8IosCacheManager.shared.clear()
+      result(nil)
+    } catch {
+      result(
+        FlutterError(
+          code: "cache_clear_failed",
+          message: error.localizedDescription,
+          details: nil
+        )
+      )
+    }
   }
 
   private func withPlayer(

@@ -20,6 +20,8 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   int? pausedPlayerId;
   int? disposedPlayerId;
   Duration? seekPosition;
+  int? configuredCacheBytes;
+  bool cacheCleared = false;
 
   @override
   Stream<M3u8PlayerEvent> get events => eventController.stream;
@@ -53,6 +55,16 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   @override
   Future<void> disposePlayer(int playerId) async {
     disposedPlayerId = playerId;
+  }
+
+  @override
+  Future<void> configureCache({required int maxSizeBytes}) async {
+    configuredCacheBytes = maxSizeBytes;
+  }
+
+  @override
+  Future<void> clearCache() async {
+    cacheCleared = true;
   }
 }
 
@@ -244,6 +256,26 @@ void main() {
     expect(controller.value.size, const Size(1280, 720));
     controller.dispose();
     await platform.eventController.close();
+  });
+
+  test('cache wrapper delegates configuration and clear calls', () async {
+    final platform = FakePlayerM3u8Platform();
+
+    await M3u8PlayerCache.configure(maxSizeBytes: 128, platform: platform);
+    await M3u8PlayerCache.clear(platform: platform);
+
+    expect(platform.configuredCacheBytes, 128);
+    expect(platform.cacheCleared, true);
+    await platform.eventController.close();
+  });
+
+  test('cache wrapper rejects invalid cache size', () {
+    final platform = FakePlayerM3u8Platform();
+
+    expect(
+      () => M3u8PlayerCache.configure(maxSizeBytes: 0, platform: platform),
+      throwsArgumentError,
+    );
   });
 }
 

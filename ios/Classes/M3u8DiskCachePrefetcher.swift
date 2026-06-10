@@ -1,14 +1,13 @@
 import Flutter
 import Foundation
-import CryptoKit
 
 final class M3u8DiskCachePrefetcher {
   private let url: URL
   private let headers: [String: String]
   private let playerIdProvider: () -> Int64
   private let eventSinkProvider: () -> FlutterEventSink?
+  private let cacheManager: M3u8IosCacheManager
   private let queue = DispatchQueue(label: "player_m3u8_disk_cache")
-  private let session = URLSession(configuration: .ephemeral)
   private let lock = NSLock()
   private var cancelled = false
   private var generation = 0
@@ -19,12 +18,14 @@ final class M3u8DiskCachePrefetcher {
     url: URL,
     headers: [String: String],
     playerIdProvider: @escaping () -> Int64,
-    eventSinkProvider: @escaping () -> FlutterEventSink?
+    eventSinkProvider: @escaping () -> FlutterEventSink?,
+    cacheManager: M3u8IosCacheManager = .shared
   ) {
     self.url = url
     self.headers = headers
     self.playerIdProvider = playerIdProvider
     self.eventSinkProvider = eventSinkProvider
+    self.cacheManager = cacheManager
   }
 
   func start() {
@@ -54,7 +55,6 @@ final class M3u8DiskCachePrefetcher {
     let task = currentTask
     lock.unlock()
     task?.cancel()
-    session.invalidateAndCancel()
   }
 
   private func cacheVod(startPositionMs: Int64, generation taskGeneration: Int) {
@@ -65,7 +65,6 @@ final class M3u8DiskCachePrefetcher {
         return
       }
 
-      let directory = try cacheDirectory(for: url)
       let startIndex = playlist.segmentIndex(for: startPositionMs)
       let orderedSegments = Array(playlist.segments[startIndex...])
         + Array(playlist.segments[..<startIndex])
@@ -81,22 +80,12 @@ final class M3u8DiskCachePrefetcher {
 
       for resource in playlist.resources {
         if !isCurrent(taskGeneration) { return }
-        let destination = directory.appendingPathComponent(
-          "resource_\(cacheKey(for: resource.absoluteString)).cache"
-        )
-        if !FileManager.default.fileExists(atPath: destination.path) {
-          try? downloadFile(from: resource, to: destination)
-        }
+        try? cacheUrl(resource, generation: taskGeneration)
       }
 
       for segment in orderedSegments {
         if !isCurrent(taskGeneration) { return }
-        let destination = directory.appendingPathComponent(
-          "segment_\(segment.index)_\(cacheKey(for: segment.url.absoluteString)).cache"
-        )
-        if !FileManager.default.fileExists(atPath: destination.path) {
-          try downloadFile(from: segment.url, to: destination)
-        }
+        try cacheUrl(segment.url, generation: taskGeneration)
         if segment.startTimeMs >= diskCacheStartMs {
           diskCachePositionMs = min(segment.endTimeMs, playlist.durationMs)
           sendDiskCacheProgress(
@@ -128,7 +117,12 @@ final class M3u8DiskCachePrefetcher {
       return Playlist(segments: [], resources: [], durationMs: 0)
     }
 
-    let data = try requestData(from: playlistUrl)
+    let data = try cacheManager.data(
+      for: playlistUrl,
+      headers: headers,
+      taskObserver: { [weak self] task in self?.setCurrentTask(task) },
+      isCancelled: { [weak self] in self?.isCancelled ?? true }
+    )
     guard let text = String(data: data, encoding: .utf8) else {
       return Playlist(segments: [], resources: [], durationMs: 0)
     }
@@ -191,77 +185,16 @@ final class M3u8DiskCachePrefetcher {
     return Playlist(segments: [], resources: [], durationMs: 0)
   }
 
-  private func requestData(from requestUrl: URL) throws -> Data {
-    var request = URLRequest(url: requestUrl)
-    headers.forEach { key, value in
-      request.setValue(value, forHTTPHeaderField: key)
-    }
-
-    let semaphore = DispatchSemaphore(value: 0)
-    var result: Result<Data, Error>?
-    let task = session.dataTask(with: request) { data, _, error in
-      if let error {
-        result = .failure(error)
-      } else {
-        result = .success(data ?? Data())
+  private func cacheUrl(_ url: URL, generation taskGeneration: Int) throws {
+    try cacheManager.ensureCached(
+      url: url,
+      headers: headers,
+      taskObserver: { [weak self] task in self?.setCurrentTask(task) },
+      isCancelled: { [weak self] in
+        guard let self else { return true }
+        return !self.isCurrent(taskGeneration)
       }
-      semaphore.signal()
-    }
-    setCurrentTask(task)
-    task.resume()
-    semaphore.wait()
-    setCurrentTask(nil)
-    return try result?.get() ?? Data()
-  }
-
-  private func downloadFile(from requestUrl: URL, to destination: URL) throws {
-    var request = URLRequest(url: requestUrl)
-    headers.forEach { key, value in
-      request.setValue(value, forHTTPHeaderField: key)
-    }
-
-    let semaphore = DispatchSemaphore(value: 0)
-    var result: Result<URL, Error>?
-    let task = session.downloadTask(with: request) { temporaryUrl, _, error in
-      if let error {
-        result = .failure(error)
-      } else if let temporaryUrl {
-        result = .success(temporaryUrl)
-      } else {
-        result = .failure(NSError(domain: "player_m3u8", code: -1))
-      }
-      semaphore.signal()
-    }
-    setCurrentTask(task)
-    task.resume()
-    semaphore.wait()
-    setCurrentTask(nil)
-
-    let temporaryUrl = try result?.get()
-    guard let temporaryUrl else { return }
-
-    try FileManager.default.createDirectory(
-      at: destination.deletingLastPathComponent(),
-      withIntermediateDirectories: true
     )
-    if FileManager.default.fileExists(atPath: destination.path) {
-      try FileManager.default.removeItem(at: destination)
-    }
-    try FileManager.default.moveItem(at: temporaryUrl, to: destination)
-  }
-
-  private func cacheDirectory(for playlistUrl: URL) throws -> URL {
-    let root = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-      .appendingPathComponent("player_m3u8_media_cache", isDirectory: true)
-      .appendingPathComponent(cacheKey(for: playlistUrl.absoluteString), isDirectory: true)
-    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-    return root
-  }
-
-  private func cacheKey(for value: String) -> String {
-    SHA256.hash(data: Data(value.utf8))
-      .map { String(format: "%02x", $0) }
-      .joined()
   }
 
   private func parseExtInfDurationMs(_ line: String) -> Int64 {

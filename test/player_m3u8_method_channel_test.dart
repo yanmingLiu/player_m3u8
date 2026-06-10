@@ -53,4 +53,18 @@ void main() {
     expect(log.single.method, 'dispose');
     expect(log.single.arguments, {'playerId': 3});
   });
+
+  test('configureCache sends maximum cache size', () async {
+    await platform.configureCache(maxSizeBytes: 64 * 1024 * 1024);
+
+    expect(log.single.method, 'configureCache');
+    expect(log.single.arguments, {'maxSizeBytes': 64 * 1024 * 1024});
+  });
+
+  test('clearCache sends cache clear command', () async {
+    await platform.clearCache();
+
+    expect(log.single.method, 'clearCache');
+    expect(log.single.arguments, isNull);
+  });
 }

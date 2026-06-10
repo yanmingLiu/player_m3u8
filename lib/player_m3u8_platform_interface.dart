@@ -44,6 +44,14 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
   Future<void> disposePlayer(int playerId) {
     throw UnimplementedError('disposePlayer() has not been implemented.');
   }
+
+  Future<void> configureCache({required int maxSizeBytes}) {
+    throw UnimplementedError('configureCache() has not been implemented.');
+  }
+
+  Future<void> clearCache() {
+    throw UnimplementedError('clearCache() has not been implemented.');
+  }
 }
 
 class PlayerM3u8PlatformException implements Exception {

@@ -16,6 +16,7 @@
 - 播放列表切换：`setSource(...)`。
 - 播放状态、进度、时长、播放器缓冲、磁盘缓存、视频尺寸、错误事件。
 - 有界播放器内存缓冲，避免用超大 forward buffer 导致 OOM。
+- 可配置磁盘缓存容量，并支持清理磁盘缓存。
 - 当前视频磁盘预取：播放暂停时仍可继续缓存，切换视频时停止旧视频主动缓存。
 - seek 后磁盘预取会从新的播放位置重新开始，优先缓存用户即将观看的内容。
 
@@ -24,7 +25,7 @@
 | 平台 | 播放内核 | 渲染 | 缓存策略 |
 | --- | --- | --- | --- |
 | Android | Media3 ExoPlayer + HLS | Flutter Texture / SurfaceProducer | 播放和预取共用 Media3 `SimpleCache` |
-| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | `URLSessionDownloadTask` 分片落盘并上报进度 |
+| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | `AVAssetResourceLoader` 让播放和预取共用 app caches 磁盘文件 |
 
 ### 安装
 
@@ -86,6 +87,17 @@ await controller.setSource(nextUrl, autoPlay: true);
 - 新 source 会创建新的 native player，并按 `autoPlay` 决定是否自动播放。
 
 因此列表场景中不会出现多个视频同时后台下载的情况；只有当前 source 会继续播放和主动预取。
+
+### 磁盘缓存配置
+
+默认磁盘缓存上限是 512 MB。可以在创建播放器前配置容量，或在没有活跃播放器时清理缓存：
+
+```dart
+await M3u8PlayerCache.configure(maxSizeBytes: 1024 * 1024 * 1024);
+await M3u8PlayerCache.clear();
+```
+
+配置和清理都要求当前没有活跃 native player。Android 会重建 Media3 `SimpleCache` 并保留符合上限的数据；iOS 会调整 app caches 目录的 LRU 清理上限。
 
 ### 状态监听
 
@@ -158,15 +170,15 @@ example/
 - 进度事件默认约 250ms 一次，避免高频 channel 压力。
 - dispose 或 source 切换时释放 player、surface/texture、observer/timer、预取任务。
 - Android 预取使用 Media3 `HlsPlaylistParser` 解析 HLS，并通过 Media3 `CacheWriter` 写入 `SimpleCache`，播放器可复用缓存数据。
+- iOS 播放通过 `AVAssetResourceLoader` 读取自定义 scheme，playlist、key、map、segment 请求会优先命中 app caches；缺失时下载并写入缓存。
 - seek 后会取消当前主动预取，并从目标时间对应的分片开始向后预取；已写入磁盘的数据保留复用。
-- iOS 预取写入 app caches 目录并上报进度；AVPlayer 播放仍由系统网络栈管理。
 
 ### 当前限制
 
 - 仅支持网络 HLS/m3u8 VOD。
 - 暂不支持字幕、倍速、清晰度切换、后台播放、DRM。
-- iOS 侧磁盘预取文件当前用于进度展示和后续复用扩展；如果要强制 AVPlayer 读取本地分片，需要增加 ResourceLoader 或本地代理。
-- 磁盘缓存清理策略还未暴露为 Dart API。
+- iOS HLS 解析仍是轻量实现，适合常见 VOD playlist；复杂 HLS 特性仍需继续补测试。
+- 磁盘缓存配置和清理必须在没有活跃播放器时调用。
 
 ### 示例播放源
 
@@ -235,6 +247,7 @@ It is designed for Flutter apps that need HLS/m3u8 VOD playback, playback/buffer
 - Playlist source switching through `setSource(...)`.
 - Playback state, progress, duration, player buffer, disk cache, video size, and error events.
 - Bounded in-memory player buffering to avoid OOM.
+- Configurable disk cache size and disk cache clearing.
 - Disk prefetch for the current source. Prefetch can continue while playback is paused and is stopped when switching away from the source.
 - After seek, disk prefetch restarts from the new playback position and prioritizes the content the user is about to watch.
 
@@ -243,7 +256,7 @@ It is designed for Flutter apps that need HLS/m3u8 VOD playback, playback/buffer
 | Platform | Playback Engine | Rendering | Cache Strategy |
 | --- | --- | --- | --- |
 | Android | Media3 ExoPlayer + HLS | Flutter Texture / SurfaceProducer | Playback and prefetch share Media3 `SimpleCache` |
-| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | `URLSessionDownloadTask` stores HLS resources and reports progress |
+| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | `AVAssetResourceLoader` makes playback and prefetch share app caches files |
 
 ### Installation
 
@@ -306,6 +319,17 @@ Switching behavior:
 
 Only the current source continues playback and active prefetch. Previous sources do not keep downloading in the background.
 
+### Disk Cache Configuration
+
+The default disk cache limit is 512 MB. Configure it before creating players, or clear the cache when no players are active:
+
+```dart
+await M3u8PlayerCache.configure(maxSizeBytes: 1024 * 1024 * 1024);
+await M3u8PlayerCache.clear();
+```
+
+Both operations require no active native players. Android rebuilds Media3 `SimpleCache` with the configured LRU limit; iOS applies the LRU limit to the app caches directory.
+
 ### State Listening
 
 `M3u8PlayerController` is a `ValueNotifier<M3u8PlayerValue>`:
@@ -349,6 +373,7 @@ lib/
   player_m3u8_platform_interface.dart   Platform interface
   player_m3u8_method_channel.dart       Method/Event channel implementation
   src/
+    m3u8_player_cache.dart              Disk cache configuration and clearing
     m3u8_player_controller.dart         Controller and source switching
     m3u8_player.dart                    Texture widget
     m3u8_player_value.dart              Public playback state model
@@ -363,7 +388,9 @@ android/src/main/kotlin/
 ios/Classes/
   PlayerM3u8Plugin.swift                Flutter plugin entry
   M3u8IosPlayer.swift                   AVPlayer + FlutterTexture
-  M3u8DiskCachePrefetcher.swift         HLS playlist parsing and URLSession prefetch
+  M3u8ResourceLoader.swift              AVAssetResourceLoader cache bridge
+  M3u8IosCacheManager.swift             iOS app caches storage and LRU trim
+  M3u8DiskCachePrefetcher.swift         HLS playlist parsing and seek-aware disk prefetch
 
 example/
   lib/main.dart                         Demo playlist UI and custom progress bar
@@ -377,15 +404,15 @@ example/
 - Progress events are throttled to about 250ms.
 - dispose and source switching release native players, surfaces/textures, observers/timers, and active prefetch tasks.
 - Android prefetch uses Media3 `HlsPlaylistParser` for HLS parsing and Media3 `CacheWriter` to write into `SimpleCache`, which ExoPlayer can reuse.
+- iOS playback uses `AVAssetResourceLoader` with a custom scheme. Playlist, key, map, and segment requests read from app caches first; missing resources are downloaded and stored.
 - After seek, active prefetch is canceled and restarted from the segment that matches the target time. Already cached data remains reusable.
-- iOS prefetch writes to the app caches directory and reports progress; AVPlayer playback still uses the system network stack.
 
 ### Current Limitations
 
 - Network HLS/m3u8 VOD only.
 - No subtitles, playback speed, quality switching, background playback, or DRM yet.
-- iOS disk prefetch currently supports progress reporting and future reuse extension. To force AVPlayer to consume local segments, add ResourceLoader or a local proxy.
-- Disk cache cleanup is not exposed as a Dart API yet.
+- iOS HLS parsing remains lightweight and targets common VOD playlists; complex HLS features need additional validation.
+- Disk cache configuration and clearing must be called only when no players are active.
 
 ### Example Sources
 

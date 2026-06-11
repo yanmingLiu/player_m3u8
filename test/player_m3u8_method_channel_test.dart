@@ -2,6 +2,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:player_m3u8/player_m3u8.dart';
 import 'package:player_m3u8/player_m3u8_method_channel.dart';
+import 'package:player_m3u8/player_m3u8_platform_interface.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -9,12 +10,17 @@ void main() {
   const channel = MethodChannel('player_m3u8/methods');
   final log = <MethodCall>[];
   final platform = MethodChannelPlayerM3u8();
+  Object? Function(MethodCall methodCall)? responseOverride;
 
   setUp(() {
     log.clear();
+    responseOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (MethodCall methodCall) async {
           log.add(methodCall);
+          if (responseOverride != null) {
+            return responseOverride!(methodCall);
+          }
           if (methodCall.method == 'create') {
             return 3;
           }
@@ -49,6 +55,7 @@ void main() {
   });
 
   tearDown(() {
+    responseOverride = null;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
   });
@@ -135,6 +142,41 @@ void main() {
     );
   });
 
+  test('create maps null player id and platform errors', () async {
+    responseOverride = (_) => null;
+
+    expect(
+      platform.create(
+        source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+      ),
+      throwsA(
+        isA<PlayerM3u8PlatformException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_player_id',
+        ),
+      ),
+    );
+
+    responseOverride = (_) => throw PlatformException(
+      code: 'native_error',
+      message: 'failed',
+      details: const {'reason': 'source'},
+    );
+
+    expect(
+      platform.create(
+        source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+      ),
+      throwsA(
+        isA<PlayerM3u8PlatformException>()
+            .having((error) => error.code, 'code', 'native_error')
+            .having((error) => error.message, 'message', 'failed')
+            .having((error) => error.details, 'details', {'reason': 'source'}),
+      ),
+    );
+  });
+
   test('seekTo sends player id and position milliseconds', () async {
     await platform.seekTo(3, const Duration(seconds: 8));
 
@@ -146,6 +188,92 @@ void main() {
     expect(
       platform.seekTo(3, const Duration(milliseconds: -1)),
       throwsArgumentError,
+    );
+  });
+
+  test('method calls map platform exceptions', () async {
+    responseOverride = (_) =>
+        throw PlatformException(code: 'native_error', message: 'failed');
+
+    await expectLater(
+      platform.play(3),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.pause(3),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.seekTo(3, Duration.zero),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.setQuality(3, M3u8Quality.auto),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.setRecoveryPolicy(3, M3u8RecoveryPolicy.defaults),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.setPlaybackSpeed(3, 1),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.setVolume(3, 1),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.setMuted(3, false),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.setSubtitle(3, null),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.setAudioTrack(3, null),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.disposePlayer(3),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.configureCache(maxSizeBytes: 1024),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.clearCache(),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.cancelPrecache('task'),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.pausePrecache('task'),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.resumePrecache('task'),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.cacheTasks(),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.sourceCacheInfo(
+        M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+      ),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+    await expectLater(
+      platform.clearSourceCache(
+        M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+      ),
+      throwsA(isA<PlayerM3u8PlatformException>()),
     );
   });
 
@@ -281,6 +409,41 @@ void main() {
     });
   });
 
+  test('cache info APIs reject null payloads and map errors', () async {
+    responseOverride = (_) => null;
+
+    await expectLater(
+      platform.getCacheInfo(),
+      throwsA(
+        isA<PlayerM3u8PlatformException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_cache_info',
+        ),
+      ),
+    );
+    await expectLater(
+      platform.sourceCacheInfo(
+        M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+      ),
+      throwsA(
+        isA<PlayerM3u8PlatformException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_cache_info',
+        ),
+      ),
+    );
+
+    responseOverride = (_) =>
+        throw PlatformException(code: 'cache_error', message: 'failed');
+
+    await expectLater(
+      platform.getCacheInfo(),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+  });
+
   test('precache sends source and returns task id', () async {
     final taskId = await platform.precache(
       source: const M3u8Source(
@@ -338,11 +501,56 @@ void main() {
     expect(log.single.arguments, containsPair('sourceType', 'hls'));
   });
 
+  test('precache validates inputs and platform task id', () async {
+    expect(
+      platform.precache(
+        source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+        initialPosition: const Duration(milliseconds: -1),
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      platform.precache(
+        source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+        maxRetries: -1,
+      ),
+      throwsArgumentError,
+    );
+
+    responseOverride = (_) => '';
+    await expectLater(
+      platform.precache(
+        source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+      ),
+      throwsA(
+        isA<PlayerM3u8PlatformException>().having(
+          (error) => error.code,
+          'code',
+          'invalid_cache_task',
+        ),
+      ),
+    );
+
+    responseOverride = (_) => null;
+    await expectLater(
+      platform.precache(
+        source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+      ),
+      throwsA(isA<PlayerM3u8PlatformException>()),
+    );
+  });
+
   test('cancelPrecache sends task id', () async {
     await platform.cancelPrecache('cache-task-1');
 
     expect(log.single.method, 'cancelPrecache');
     expect(log.single.arguments, {'taskId': 'cache-task-1'});
+  });
+
+  test('cache task controls reject empty task ids', () {
+    expect(platform.cancelPrecache(' '), throwsArgumentError);
+    expect(platform.pausePrecache(' '), throwsArgumentError);
+    expect(platform.resumePrecache(' '), throwsArgumentError);
   });
 
   test('pause and resume precache send task id', () async {

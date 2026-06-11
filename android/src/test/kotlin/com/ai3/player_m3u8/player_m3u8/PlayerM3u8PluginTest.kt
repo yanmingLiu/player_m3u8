@@ -49,7 +49,7 @@ internal class PlayerM3u8PluginTest {
         val plugin = PlayerM3u8Plugin()
         val result: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
 
-        plugin.onMethodCall(MethodCall("precache", mapOf("url" to "")), result)
+        plugin.onMethodCall(MethodCall("precache", mapOf("videoUrl" to "")), result)
 
         Mockito.verify(result).error(
             Mockito.eq("invalid_url"),
@@ -67,7 +67,7 @@ internal class PlayerM3u8PluginTest {
             MethodCall(
                 "precache",
                 mapOf(
-                    "url" to "https://example.com/index.m3u8",
+                    "videoUrl" to "https://example.com/index.m3u8",
                     "initialPosition" to -1,
                 ),
             ),
@@ -90,7 +90,7 @@ internal class PlayerM3u8PluginTest {
             MethodCall(
                 "precache",
                 mapOf(
-                    "url" to "https://example.com/video.mp4",
+                    "videoUrl" to "https://example.com/video.mp4",
                     "sourceType" to "progressive",
                 ),
             ),

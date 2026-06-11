@@ -11,6 +11,13 @@ const String sampleM3u8Url =
 const List<VideoSource> sampleVideos = <VideoSource>[
   VideoSource(title: 'Apple BipBop', url: sampleM3u8Url),
   VideoSource(
+    title: 'Apple Adv (音视频分离)',
+    url:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
+    audioUrl:
+        'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
+  ),
+  VideoSource(
     title: 'Apple BipBop Advanced (内嵌字幕)',
     url:
         'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
@@ -82,14 +89,25 @@ class VideoSource {
   const VideoSource({
     required this.title,
     required this.url,
+    this.audioUrl,
+    this.audioHeaders,
     this.sourceType = M3u8SourceType.auto,
     this.subtitles = const <M3u8SubtitleTrack>[],
   });
 
   final String title;
   final String url;
+  final String? audioUrl;
+  final Map<String, String>? audioHeaders;
   final M3u8SourceType sourceType;
   final List<M3u8SubtitleTrack> subtitles;
+
+  M3u8Source toSource() => M3u8Source(
+    videoUrl: url,
+    audioUrl: audioUrl,
+    audioHeaders: audioHeaders,
+    sourceType: sourceType,
+  );
 
   bool get supportsPrecache => sourceType != M3u8SourceType.progressive;
 }
@@ -276,13 +294,12 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
 
   Future<void> _initialize() async {
     try {
+      final source = sampleVideos[_currentVideoIndex];
       await _controller.initialize(
-        sampleVideos[_currentVideoIndex].url,
-        sourceType: sampleVideos[_currentVideoIndex].sourceType,
-        subtitles: sampleVideos[_currentVideoIndex].subtitles,
-        selectedSubtitleId: sampleVideos[_currentVideoIndex].subtitles.isEmpty
-            ? null
-            : sampleVideos[_currentVideoIndex].subtitles.first.id,
+        source: source.toSource(),
+        subtitles: source.subtitles,
+        selectedSubtitleId:
+            source.subtitles.isEmpty ? null : source.subtitles.first.id,
       );
       _controller.startQoeSampling(interval: const Duration(seconds: 5));
     } finally {
@@ -305,13 +322,12 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     });
     try {
       await _cancelPrecacheTask();
+      final source = sampleVideos[index];
       await _controller.setSource(
-        sampleVideos[index].url,
-        sourceType: sampleVideos[index].sourceType,
-        subtitles: sampleVideos[index].subtitles,
-        selectedSubtitleId: sampleVideos[index].subtitles.isEmpty
-            ? null
-            : sampleVideos[index].subtitles.first.id,
+        source.toSource(),
+        subtitles: source.subtitles,
+        selectedSubtitleId:
+            source.subtitles.isEmpty ? null : source.subtitles.first.id,
         autoPlay: true,
       );
       _qoeSnapshots.clear();
@@ -354,14 +370,12 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     if (_precacheTaskId != null) {
       return;
     }
-    final url = sampleVideos[_currentVideoIndex].url;
-    final sourceType = sampleVideos[_currentVideoIndex].sourceType;
-    if (!sampleVideos[_currentVideoIndex].supportsPrecache) {
+    final source = sampleVideos[_currentVideoIndex];
+    if (!source.supportsPrecache) {
       return;
     }
     final taskId = await M3u8PlayerCache.precache(
-      url,
-      sourceType: sourceType,
+      source.toSource(),
       initialPosition: _controller.value.position,
       quality: _controller.value.selectedQuality,
     );
@@ -372,7 +386,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
       _precacheTaskId = taskId;
       _latestCacheEvent = M3u8CacheEvent(
         taskId: taskId,
-        url: url,
+        url: source.url,
         type: M3u8CacheEventType.progress,
         position: _controller.value.position,
         startPosition: _controller.value.position,

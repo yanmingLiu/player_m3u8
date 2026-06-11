@@ -3,11 +3,12 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../player_m3u8_platform_interface.dart';
+import 'm3u8_audio_track.dart';
 import 'm3u8_player_event.dart';
 import 'm3u8_player_value.dart';
 import 'm3u8_qoe_snapshot.dart';
 import 'm3u8_recovery_policy.dart';
-import 'm3u8_source_type.dart';
+import 'm3u8_source.dart';
 import 'm3u8_subtitle_track.dart';
 
 class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
@@ -29,18 +30,17 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   Timer? _qoeTimer;
   M3u8PlayerValue _lastQoeValue = const M3u8PlayerValue();
   DateTime? _lastQoeSampleAt;
-  String? _sourceUrl;
-  Map<String, String> _sourceHeaders = const <String, String>{};
-  bool _sourceAutoPlay = false;
-  M3u8SourceType _sourceType = M3u8SourceType.auto;
-  List<M3u8SubtitleTrack> _sourceSubtitles = const <M3u8SubtitleTrack>[];
+  M3u8Source? _source;
   String? _selectedSubtitleId;
+  String? _selectedAudioTrackId;
   bool _disposed = false;
   bool _isChangingSource = false;
 
   int? get playerId => _playerId;
 
   M3u8RecoveryPolicy get recoveryPolicy => _recoveryPolicy;
+
+  M3u8Source? get source => _source;
 
   double get playbackSpeed => _playbackSpeed;
 
@@ -86,10 +86,8 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     }
   }
 
-  Future<void> initialize(
-    String url, {
-    Map<String, String> headers = const <String, String>{},
-    M3u8SourceType sourceType = M3u8SourceType.auto,
+  Future<void> initialize({
+    required M3u8Source source,
     bool autoPlay = false,
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
     Duration initialPosition = Duration.zero,
@@ -98,6 +96,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     bool isMuted = false,
     List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
     String? selectedSubtitleId,
+    String? selectedAudioTrackId,
   }) async {
     _debugAssertNotDisposed();
     if (_playerId != null || _isChangingSource) {
@@ -111,16 +110,11 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     _playbackSpeed = playbackSpeed;
     _volume = volume;
     _isMuted = isMuted;
-    _sourceUrl = url;
-    _sourceHeaders = Map<String, String>.unmodifiable(headers);
-    _sourceAutoPlay = autoPlay;
-    _sourceType = sourceType;
-    _sourceSubtitles = List<M3u8SubtitleTrack>.unmodifiable(subtitles);
+    _source = source;
     _selectedSubtitleId = selectedSubtitleId;
+    _selectedAudioTrackId = selectedAudioTrackId;
     await _createSource(
-      url,
-      headers: headers,
-      sourceType: sourceType,
+      source,
       autoPlay: autoPlay,
       initialPosition: initialPosition,
       subtitles: subtitles,
@@ -129,9 +123,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   }
 
   Future<void> setSource(
-    String url, {
-    Map<String, String> headers = const <String, String>{},
-    M3u8SourceType sourceType = M3u8SourceType.auto,
+    M3u8Source source, {
     bool autoPlay = false,
     M3u8RecoveryPolicy? recoveryPolicy,
     Duration initialPosition = Duration.zero,
@@ -140,6 +132,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     bool? isMuted,
     List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
     String? selectedSubtitleId,
+    String? selectedAudioTrackId,
   }) async {
     _debugAssertNotDisposed();
     _debugAssertValidPosition(initialPosition);
@@ -175,16 +168,11 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       if (previousPlayerId != null) {
         await _platform.disposePlayer(previousPlayerId);
       }
-      _sourceUrl = url;
-      _sourceHeaders = Map<String, String>.unmodifiable(headers);
-      _sourceAutoPlay = autoPlay;
-      _sourceType = sourceType;
-      _sourceSubtitles = List<M3u8SubtitleTrack>.unmodifiable(subtitles);
+      _source = source;
       _selectedSubtitleId = selectedSubtitleId;
+      _selectedAudioTrackId = selectedAudioTrackId;
       await _createSource(
-        url,
-        headers: headers,
-        sourceType: sourceType,
+        source,
         autoPlay: autoPlay,
         initialPosition: initialPosition,
         subtitles: subtitles,
@@ -292,10 +280,29 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
 
   Future<void> clearSubtitle() => setSubtitle(null);
 
+  Future<void> setAudioTrack(String? audioTrackId) async {
+    _debugAssertNotDisposed();
+    final playerId = _requirePlayerId();
+    await _platform.setAudioTrack(playerId, audioTrackId);
+    _selectedAudioTrackId = audioTrackId;
+    M3u8AudioTrack? selectedAudioTrack;
+    if (audioTrackId != null) {
+      for (final track in value.availableAudioTracks) {
+        if (track.id == audioTrackId) {
+          selectedAudioTrack = track;
+          break;
+        }
+      }
+    }
+    value = value.copyWith(selectedAudioTrack: selectedAudioTrack);
+  }
+
+  Future<void> clearAudioTrack() => setAudioTrack(null);
+
   Future<void> retry({bool? autoPlay, Duration? initialPosition}) async {
     _debugAssertNotDisposed();
-    final url = _sourceUrl;
-    if (url == null) {
+    final source = _source;
+    if (source == null) {
       throw StateError('M3u8PlayerController has no source to retry.');
     }
     if (_isChangingSource) {
@@ -320,12 +327,10 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         await _platform.disposePlayer(previousPlayerId);
       }
       await _createSource(
-        url,
-        headers: _sourceHeaders,
-        sourceType: _sourceType,
-        autoPlay: autoPlay ?? _sourceAutoPlay,
+        source,
+        autoPlay: autoPlay ?? value.isPlaying,
         initialPosition: retryPosition,
-        subtitles: _sourceSubtitles,
+        subtitles: const [],
         selectedSubtitleId: _selectedSubtitleId,
       );
     } finally {
@@ -353,9 +358,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   }
 
   Future<void> _createSource(
-    String url, {
-    required Map<String, String> headers,
-    required M3u8SourceType sourceType,
+    M3u8Source source, {
     required bool autoPlay,
     required Duration initialPosition,
     required List<M3u8SubtitleTrack> subtitles,
@@ -364,9 +367,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     _ensureEventSubscription();
     try {
       final playerId = await _platform.create(
-        url: url,
-        headers: headers,
-        sourceType: sourceType,
+        source: source,
         recoveryPolicy: _recoveryPolicy,
         initialPosition: initialPosition,
         playbackSpeed: _playbackSpeed,
@@ -374,6 +375,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         isMuted: _isMuted,
         subtitles: subtitles,
         selectedSubtitleId: selectedSubtitleId,
+        selectedAudioTrackId: _selectedAudioTrackId,
       );
       _playerId = playerId;
       _flushPendingEventsFor(playerId);
@@ -577,6 +579,8 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       availableSubtitles: event.availableSubtitles,
       selectedSubtitle: event.selectedSubtitle,
       subtitleText: event.subtitleText,
+      availableAudioTracks: event.availableAudioTracks,
+      selectedAudioTrack: event.selectedAudioTrack,
       recoveryCount: event.recoveryCount,
       lastRecoveryReason: event.lastRecoveryReason,
     );

@@ -8,4 +8,12 @@ enum M3u8SourceType {
     M3u8SourceType.hls => 'hls',
     M3u8SourceType.progressive => 'progressive',
   };
+
+  static M3u8SourceType from(String? value) {
+    return switch (value) {
+      'hls' => M3u8SourceType.hls,
+      'progressive' => M3u8SourceType.progressive,
+      _ => M3u8SourceType.auto,
+    };
+  }
 }

@@ -117,6 +117,11 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
                 player.setSubtitle(subtitleId)
                 result.success(null)
             }
+            "setAudioTrack" -> withPlayer(call, result) { player ->
+                val audioTrackId = call.argument<String>("audioTrackId")
+                player.setAudioTrack(audioTrackId)
+                result.success(null)
+            }
             "dispose" -> {
                 val playerId = call.argument<Number>("playerId")?.toLong()
                 if (playerId == null) {
@@ -156,12 +161,14 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
     }
 
     private fun create(call: MethodCall, result: Result) {
-        val url = call.argument<String>("url")
-        if (url.isNullOrBlank()) {
-            result.error("invalid_url", "url is required.", null)
+        val videoUrl = call.argument<String>("videoUrl")
+        if (videoUrl.isNullOrBlank()) {
+            result.error("invalid_url", "videoUrl is required.", null)
             return
         }
-        val headers = call.argument<Map<String, String>>("headers") ?: emptyMap()
+        val audioUrl = call.argument<String>("audioUrl")
+        val videoHeaders = call.argument<Map<String, String>>("videoHeaders") ?: emptyMap()
+        val audioHeaders = call.argument<Map<String, String>>("audioHeaders")
         val initialPositionMs = call.argument<Number>("initialPosition")?.toLong() ?: 0L
         if (initialPositionMs < 0L) {
             result.error(
@@ -200,12 +207,15 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
         val isMuted = call.argument<Boolean>("isMuted") ?: false
         val subtitles = call.argument<List<Map<String, Any?>>>("subtitles") ?: emptyList()
         val selectedSubtitleId = call.argument<String>("selectedSubtitleId")
+        val selectedAudioTrackId = call.argument<String>("selectedAudioTrackId")
         val sourceType = M3u8SourceType.from(call.argument<String>("sourceType"))
         val surfaceProducer = textures.createSurfaceProducer()
         val player = M3u8AndroidPlayer(
             context = context,
-            url = url,
-            headers = headers,
+            videoUrl = videoUrl,
+            audioUrl = audioUrl,
+            videoHeaders = videoHeaders,
+            audioHeaders = audioHeaders,
             sourceType = sourceType,
             initialPositionMs = initialPositionMs,
             playbackSpeed = playbackSpeed,
@@ -213,6 +223,7 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
             isMuted = isMuted,
             externalSubtitles = subtitles,
             selectedSubtitleId = selectedSubtitleId,
+            selectedAudioTrackId = selectedAudioTrackId,
             recoveryPolicy = recoveryPolicy,
             surfaceProducer = surfaceProducer,
             eventSinkProvider = { eventSink },
@@ -281,11 +292,12 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
     }
 
     private fun precache(call: MethodCall, result: Result) {
-        val url = call.argument<String>("url")
-        if (url.isNullOrBlank()) {
-            result.error("invalid_url", "url is required.", null)
+        val videoUrl = call.argument<String>("videoUrl")
+        if (videoUrl.isNullOrBlank()) {
+            result.error("invalid_url", "videoUrl is required.", null)
             return
         }
+        val audioUrl = call.argument<String>("audioUrl")
         val initialPositionMs = call.argument<Number>("initialPosition")?.toLong() ?: 0L
         if (initialPositionMs < 0L) {
             result.error(
@@ -295,8 +307,9 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
             )
             return
         }
-        val headers = call.argument<Map<String, String>>("headers") ?: emptyMap()
-        val sourceType = M3u8SourceType.from(call.argument<String>("sourceType")).resolve(url)
+        val videoHeaders = call.argument<Map<String, String>>("videoHeaders") ?: emptyMap()
+        val audioHeaders = call.argument<Map<String, String>>("audioHeaders")
+        val sourceType = M3u8SourceType.from(call.argument<String>("sourceType")).resolve(videoUrl)
         if (sourceType != M3u8SourceType.HLS) {
             result.error(
                 "unsupported_source_type",
@@ -309,13 +322,15 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
         val taskId = UUID.randomUUID().toString()
         val prefetcher = M3u8DiskCachePrefetcher(
             context = context,
-            url = url,
-            headers = headers,
+            url = videoUrl,
+            headers = videoHeaders,
             playerIdProvider = { -1L },
             eventSinkProvider = { cacheEventSink },
             taskId = taskId,
             onFinished = { cacheTasks.remove(taskId) },
             qualityProvider = { quality },
+            audioUrl = audioUrl,
+            audioHeaders = audioHeaders,
         )
         cacheTasks[taskId] = prefetcher
         prefetcher.restartFrom(initialPositionMs)

@@ -7,7 +7,7 @@ import 'src/m3u8_cache_info.dart';
 import 'src/m3u8_player_event.dart';
 import 'src/m3u8_player_value.dart';
 import 'src/m3u8_recovery_policy.dart';
-import 'src/m3u8_source_type.dart';
+import 'src/m3u8_source.dart';
 import 'src/m3u8_subtitle_track.dart';
 
 abstract class PlayerM3u8Platform extends PlatformInterface {
@@ -33,9 +33,7 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
   }
 
   Future<int> create({
-    required String url,
-    Map<String, String> headers = const <String, String>{},
-    M3u8SourceType sourceType = M3u8SourceType.auto,
+    required M3u8Source source,
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
     Duration initialPosition = Duration.zero,
     double playbackSpeed = 1.0,
@@ -43,6 +41,7 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
     bool isMuted = false,
     List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
     String? selectedSubtitleId,
+    String? selectedAudioTrackId,
   }) {
     throw UnimplementedError('create() has not been implemented.');
   }
@@ -86,6 +85,10 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
     throw UnimplementedError('setSubtitle() has not been implemented.');
   }
 
+  Future<void> setAudioTrack(int playerId, String? audioTrackId) {
+    throw UnimplementedError('setAudioTrack() has not been implemented.');
+  }
+
   Future<void> disposePlayer(int playerId) {
     throw UnimplementedError('disposePlayer() has not been implemented.');
   }
@@ -103,9 +106,7 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
   }
 
   Future<String> precache({
-    required String url,
-    Map<String, String> headers = const <String, String>{},
-    M3u8SourceType sourceType = M3u8SourceType.auto,
+    required M3u8Source source,
     Duration initialPosition = Duration.zero,
     M3u8Quality quality = M3u8Quality.auto,
   }) {

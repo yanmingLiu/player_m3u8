@@ -24,6 +24,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.hls.playlist.HlsMultivariantPlaylist
 import androidx.media3.exoplayer.hls.playlist.HlsPlaylistParser
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.ParsingLoadable
 import io.flutter.plugin.common.EventChannel
@@ -31,8 +32,10 @@ import io.flutter.view.TextureRegistry
 
 class M3u8AndroidPlayer(
     private val context: Context,
-    private val url: String,
-    private val headers: Map<String, String>,
+    private val videoUrl: String,
+    private val audioUrl: String?,
+    private val videoHeaders: Map<String, String>,
+    private val audioHeaders: Map<String, String>?,
     sourceType: M3u8SourceType,
     private val initialPositionMs: Long,
     private var playbackSpeed: Float,
@@ -40,6 +43,7 @@ class M3u8AndroidPlayer(
     private var isMuted: Boolean,
     private val externalSubtitles: List<Map<String, Any?>>,
     private var selectedSubtitleId: String?,
+    private var selectedAudioTrackId: String?,
     recoveryPolicy: M3u8RecoveryPolicy,
     private val surfaceProducer: TextureRegistry.SurfaceProducer,
     private val eventSinkProvider: () -> EventChannel.EventSink?,
@@ -65,23 +69,28 @@ class M3u8AndroidPlayer(
     private var selectedQuality = autoQuality()
     private var availableSubtitles = normalizeExternalSubtitles(externalSubtitles)
     private var selectedSubtitle = availableSubtitles.firstOrNull { it["id"] == selectedSubtitleId }
+    private var availableAudioTracks = listOf<Map<String, Any?>>()
+    private var selectedAudioTrack = availableAudioTracks.firstOrNull { it["id"] == selectedAudioTrackId }
     private var recoveryPolicy = recoveryPolicy.normalized()
-    private val resolvedSourceType = sourceType.resolve(url)
+    private val resolvedSourceType = sourceType.resolve(videoUrl)
     private val isHlsSource = resolvedSourceType == M3u8SourceType.HLS
+    private val effectiveAudioHeaders = audioHeaders ?: videoHeaders
     private var recoveryCount = 0
     private var lastRecoveryReason = ""
     private var lastRecoveredRebufferCount = 0
     private var lastRecoveryAtMs = 0L
-    private val sourceDebugId = M3u8Log.sourceDebugId(url)
+    private val sourceDebugId = M3u8Log.sourceDebugId(videoUrl)
     private val videoTrackCompatLimit = videoTrackCompatLimit()
     private val diskCachePrefetcher = if (isHlsSource) {
         M3u8DiskCachePrefetcher(
             context = context,
-            url = url,
-            headers = headers,
+            url = videoUrl,
+            headers = videoHeaders,
             playerIdProvider = { surfaceProducer.id() },
             eventSinkProvider = eventSinkProvider,
             qualityProvider = { selectedQuality },
+            audioUrl = audioUrl,
+            audioHeaders = effectiveAudioHeaders,
         )
     } else {
         null
@@ -101,7 +110,8 @@ class M3u8AndroidPlayer(
         runOnMain {
             logInfo(
                 "init playerId=${surfaceProducer.id()} source=$sourceDebugId " +
-                    "sourceType=$resolvedSourceType headerCount=${headers.size} decoderFallback=true " +
+                    "sourceType=$resolvedSourceType videoHeaderCount=${videoHeaders.size} " +
+                    "audioUrl=${audioUrl != null} decoderFallback=true " +
                     "trackCompat=${videoTrackCompatLimit?.name ?: "none"} " +
                     "device=${Build.MANUFACTURER}/${Build.MODEL} sdk=${Build.VERSION.SDK_INT}",
             )
@@ -210,6 +220,15 @@ class M3u8AndroidPlayer(
             } else {
                 sendProgress(force = true)
             }
+        }
+    }
+
+    fun setAudioTrack(audioTrackId: String?) {
+        runOnMain {
+            selectedAudioTrackId = audioTrackId
+            selectedAudioTrack = availableAudioTracks.firstOrNull { it["id"] == audioTrackId }
+            applySelectedAudioTrack()
+            sendProgress(force = true)
         }
     }
 
@@ -344,8 +363,11 @@ class M3u8AndroidPlayer(
             ?.takeIf { it > 0 }
             ?: videoBitrate
         mergeTextTracks(tracks)
+        mergeAudioTracks(tracks)
         selectedSubtitle = availableSubtitles.firstOrNull { it["id"] == selectedSubtitleId }
+        selectedAudioTrack = availableAudioTracks.firstOrNull { it["id"] == selectedAudioTrackId }
         applySelectedSubtitle()
+        applySelectedAudioTrack()
         sendProgress(force = true)
     }
 
@@ -417,7 +439,7 @@ class M3u8AndroidPlayer(
     }
 
     private fun createPlayer(state: SavedState? = null) {
-        val mediaItemBuilder = MediaItem.Builder().setUri(url)
+        val mediaItemBuilder = MediaItem.Builder().setUri(videoUrl)
         if (isHlsSource) {
             mediaItemBuilder.setMimeType(MimeTypes.APPLICATION_M3U8)
         }
@@ -429,7 +451,7 @@ class M3u8AndroidPlayer(
         }
         val mediaItem = mediaItemBuilder.build()
         val mediaSourceFactory = DefaultMediaSourceFactory(
-            M3u8CacheManager.mediaDataSourceFactory(context, headers),
+            M3u8CacheManager.mediaDataSourceFactory(context, videoHeaders),
         )
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
@@ -462,10 +484,26 @@ class M3u8AndroidPlayer(
         newPlayer.addAnalyticsListener(this)
         newPlayer.playbackParameters = PlaybackParameters(playbackSpeed)
         newPlayer.volume = effectiveVolume()
-        if (state == null && initialPositionMs > 0L) {
-            newPlayer.setMediaItem(mediaItem, initialPositionMs)
+        if (audioUrl != null) {
+            val audioMediaSource = mediaSourceFactory.createMediaSource(
+                MediaItem.Builder()
+                    .setUri(audioUrl)
+                    .setMimeType(MimeTypes.APPLICATION_M3U8)
+                    .build(),
+            )
+            val videoMediaSource = mediaSourceFactory.createMediaSource(mediaItem)
+            val mergedSource = MergingMediaSource(videoMediaSource, audioMediaSource)
+            if (state == null && initialPositionMs > 0L) {
+                newPlayer.setMediaSource(mergedSource, initialPositionMs)
+            } else {
+                newPlayer.setMediaSource(mergedSource)
+            }
         } else {
-            newPlayer.setMediaItem(mediaItem)
+            if (state == null && initialPositionMs > 0L) {
+                newPlayer.setMediaItem(mediaItem, initialPositionMs)
+            } else {
+                newPlayer.setMediaItem(mediaItem)
+            }
         }
         newPlayer.setVideoSurface(surfaceProducer.getSurface())
         if (state != null) {
@@ -483,12 +521,12 @@ class M3u8AndroidPlayer(
             return
         }
         try {
-            val dataSource = M3u8CacheManager.mediaDataSourceFactory(context, headers)
+            val dataSource = M3u8CacheManager.mediaDataSourceFactory(context, videoHeaders)
                 .createDataSource()
             val playlist = ParsingLoadable.load(
                 dataSource,
                 HlsPlaylistParser(),
-                Uri.parse(url),
+                Uri.parse(videoUrl),
                 C.DATA_TYPE_MANIFEST,
             )
             availableQualities = when (playlist) {
@@ -663,6 +701,77 @@ class M3u8AndroidPlayer(
         }.distinctBy { it["id"] }
     }
 
+    private fun applySelectedAudioTrack(selector: DefaultTrackSelector? = trackSelector) {
+        val currentSelector = selector ?: return
+        val builder = currentSelector.buildUponParameters()
+            .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+        val audioTrackId = selectedAudioTrackId
+        if (audioTrackId == null) {
+            currentSelector.setParameters(builder)
+            return
+        }
+        val override = audioTrackOverride(audioTrackId)
+        if (override != null) {
+            builder.setOverrideForType(override)
+        } else {
+            val language = selectedAudioTrack?.get("language") as? String
+            if (!language.isNullOrBlank()) {
+                builder.setPreferredAudioLanguage(language)
+            }
+        }
+        currentSelector.setParameters(builder)
+    }
+
+    private fun audioTrackOverride(audioTrackId: String): TrackSelectionOverride? {
+        val currentPlayer = player ?: return null
+        for (group in currentPlayer.currentTracks.groups) {
+            if (group.type() != C.TRACK_TYPE_AUDIO) {
+                continue
+            }
+            for (index in 0 until group.length) {
+                val track = audioTrackPayload(group, index)
+                if (track["id"] == audioTrackId && group.isTrackSupported(index, true)) {
+                    return TrackSelectionOverride(group.mediaTrackGroup, index)
+                }
+            }
+        }
+        return null
+    }
+
+    private fun mergeAudioTracks(tracks: Tracks) {
+        val merged = linkedMapOf<String, Map<String, Any?>>()
+        for (group in tracks.groups) {
+            if (group.type() != C.TRACK_TYPE_AUDIO) {
+                continue
+            }
+            for (index in 0 until group.length) {
+                if (!group.isTrackSupported(index, true)) {
+                    continue
+                }
+                val track = audioTrackPayload(group, index)
+                merged[track["id"] as String] = track
+            }
+        }
+        availableAudioTracks = merged.values.toList()
+    }
+
+    private fun audioTrackPayload(group: Tracks.Group, index: Int): Map<String, Any?> {
+        val format = group.getTrackFormat(index)
+        val id = format.id?.takeIf { it.isNotBlank() }
+            ?: "audio:${format.language ?: "und"}:$index"
+        val label = format.label?.takeIf { it.isNotBlank() }
+            ?: format.language?.takeIf { it.isNotBlank() }
+            ?: "Audio ${index + 1}"
+        return mapOf(
+            "id" to id,
+            "label" to label,
+            "language" to format.language,
+            "url" to null,
+            "mimeType" to format.sampleMimeType,
+            "headers" to emptyMap<String, String>(),
+        )
+    }
+
     private fun constrainedDimension(selected: Int, compatLimit: Int?): Int {
         return when {
             selected > 0 && compatLimit != null -> minOf(selected, compatLimit)
@@ -830,6 +939,8 @@ class M3u8AndroidPlayer(
             "availableSubtitles" to availableSubtitles,
             "selectedSubtitle" to selectedSubtitle,
             "subtitleText" to "",
+            "availableAudioTracks" to availableAudioTracks,
+            "selectedAudioTrack" to selectedAudioTrack,
             "recoveryCount" to recoveryCount,
             "lastRecoveryReason" to lastRecoveryReason,
         )

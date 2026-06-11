@@ -9,7 +9,7 @@ import 'src/m3u8_cache_info.dart';
 import 'src/m3u8_player_event.dart';
 import 'src/m3u8_player_value.dart';
 import 'src/m3u8_recovery_policy.dart';
-import 'src/m3u8_source_type.dart';
+import 'src/m3u8_source.dart';
 import 'src/m3u8_subtitle_track.dart';
 
 class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
@@ -59,9 +59,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
 
   @override
   Future<int> create({
-    required String url,
-    Map<String, String> headers = const <String, String>{},
-    M3u8SourceType sourceType = M3u8SourceType.auto,
+    required M3u8Source source,
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
     Duration initialPosition = Duration.zero,
     double playbackSpeed = 1.0,
@@ -69,6 +67,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
     bool isMuted = false,
     List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
     String? selectedSubtitleId,
+    String? selectedAudioTrackId,
   }) async {
     recoveryPolicy.debugAssertValid();
     _debugAssertValidPosition(initialPosition);
@@ -76,9 +75,11 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
     _debugAssertValidVolume(volume);
     try {
       final playerId = await methodChannel.invokeMethod<int>('create', {
-        'url': url,
-        'headers': headers,
-        'sourceType': sourceType.platformValue,
+        'videoUrl': source.videoUrl,
+        'audioUrl': source.audioUrl,
+        'videoHeaders': source.videoHeaders,
+        'audioHeaders': source.effectiveAudioHeaders,
+        'sourceType': source.sourceType.platformValue,
         'recoveryPolicy': recoveryPolicy.toMap(),
         'initialPosition': initialPosition.inMilliseconds,
         'playbackSpeed': playbackSpeed,
@@ -86,6 +87,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'isMuted': isMuted,
         'subtitles': subtitles.map((track) => track.toMap()).toList(),
         'selectedSubtitleId': selectedSubtitleId,
+        'selectedAudioTrackId': selectedAudioTrackId,
       });
       if (playerId == null) {
         throw PlayerM3u8PlatformException(
@@ -200,6 +202,18 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
   }
 
   @override
+  Future<void> setAudioTrack(int playerId, String? audioTrackId) async {
+    try {
+      await methodChannel.invokeMethod<void>('setAudioTrack', {
+        'playerId': playerId,
+        'audioTrackId': audioTrackId,
+      });
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
   Future<void> configureCache({required int maxSizeBytes}) async {
     try {
       await methodChannel.invokeMethod<void>('configureCache', {
@@ -239,19 +253,18 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
 
   @override
   Future<String> precache({
-    required String url,
-    Map<String, String> headers = const <String, String>{},
-    M3u8SourceType sourceType = M3u8SourceType.auto,
+    required M3u8Source source,
     Duration initialPosition = Duration.zero,
     M3u8Quality quality = M3u8Quality.auto,
   }) async {
-    _debugAssertValidUrl(url);
     _debugAssertValidPosition(initialPosition);
     try {
       final taskId = await methodChannel.invokeMethod<String>('precache', {
-        'url': url,
-        'headers': headers,
-        'sourceType': sourceType.platformValue,
+        'videoUrl': source.videoUrl,
+        'audioUrl': source.audioUrl,
+        'videoHeaders': source.videoHeaders,
+        'audioHeaders': source.effectiveAudioHeaders,
+        'sourceType': source.sourceType.platformValue,
         'initialPosition': initialPosition.inMilliseconds,
         'quality': quality.toMap(),
       });
@@ -297,12 +310,6 @@ void _debugAssertValidPosition(Duration position) {
       'position',
       'Must be greater than or equal to zero.',
     );
-  }
-}
-
-void _debugAssertValidUrl(String url) {
-  if (url.trim().isEmpty) {
-    throw ArgumentError.value(url, 'url', 'URL must not be empty.');
   }
 }
 

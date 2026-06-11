@@ -27,6 +27,8 @@ internal class M3u8DiskCachePrefetcher(
     private val taskId: String? = null,
     private val onFinished: (() -> Unit)? = null,
     private val qualityProvider: () -> Map<String, Any?> = { autoQuality() },
+    private val audioUrl: String? = null,
+    private val audioHeaders: Map<String, String>? = null,
 ) {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -137,6 +139,10 @@ internal class M3u8DiskCachePrefetcher(
                 }
             }
 
+            if (!audioUrl.isNullOrBlank()) {
+                cacheAudioSegments(taskGeneration)
+            }
+
             if (isCurrent(taskGeneration)) {
                 sendDiskCacheProgress(
                     diskCacheStartMs = 0L,
@@ -158,9 +164,41 @@ internal class M3u8DiskCachePrefetcher(
         }
     }
 
-    private fun loadPlaylist(selectedQuality: Map<String, Any?>): Playlist {
+    private fun cacheAudioSegments(taskGeneration: Int) {
+        val audioUrl = audioUrl ?: return
+        val audioHeaders = audioHeaders ?: headers
+        try {
+            val playlist = loadPlaylist(
+                selectedQuality = autoQuality(),
+                url = audioUrl,
+                headers = audioHeaders,
+            )
+            for (resource in playlist.resources) {
+                if (!isCurrent(taskGeneration)) {
+                    return
+                }
+                cacheUri(resource, taskGeneration)
+            }
+            for (segment in playlist.segments) {
+                if (!isCurrent(taskGeneration)) {
+                    return
+                }
+                cacheUri(segment.uri, taskGeneration)
+            }
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        } catch (_: Throwable) {
+            // Audio prefetch is optional; playback should continue.
+        }
+    }
+
+    private fun loadPlaylist(
+        selectedQuality: Map<String, Any?>,
+        url: String = this.url,
+        headers: Map<String, String> = this.headers,
+    ): Playlist {
         val rootUri = Uri.parse(url)
-        return when (val rootPlaylist = loadHlsPlaylist(rootUri)) {
+        return when (val rootPlaylist = loadHlsPlaylist(rootUri, headers)) {
             is HlsMediaPlaylist -> {
                 logMediaPlaylist(rootUri, rootPlaylist, root = true)
                 toPlaylist(rootUri, rootPlaylist, selectedQuality)
@@ -171,7 +209,7 @@ internal class M3u8DiskCachePrefetcher(
                 val selectedPlaylistUri = selectedVariant?.url
                     ?: rootPlaylist.mediaPlaylistUrls.firstOrNull()
                     ?: Uri.parse(url)
-                val mediaPlaylist = loadHlsPlaylist(selectedPlaylistUri) as? HlsMediaPlaylist
+                val mediaPlaylist = loadHlsPlaylist(selectedPlaylistUri, headers) as? HlsMediaPlaylist
                     ?: return Playlist(emptyList(), emptyList(), durationMs = 0L, quality = selectedQuality)
                 logMediaPlaylist(selectedPlaylistUri, mediaPlaylist, root = false)
                 toPlaylist(
@@ -190,7 +228,7 @@ internal class M3u8DiskCachePrefetcher(
         }
     }
 
-    private fun loadHlsPlaylist(uri: Uri): HlsPlaylist {
+    private fun loadHlsPlaylist(uri: Uri, headers: Map<String, String> = this.headers): HlsPlaylist {
         val dataSource = M3u8CacheManager.mediaDataSourceFactory(appContext, headers)
             .createDataSource()
         return ParsingLoadable.load(

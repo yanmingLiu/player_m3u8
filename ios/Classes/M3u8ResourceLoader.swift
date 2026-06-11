@@ -6,18 +6,26 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
 
   private let headers: [String: String]
   private let cacheManager: M3u8IosCacheManager
+  private let audioUrl: URL?
+  private let audioHeaders: [String: String]
   var qualityProvider: () -> [String: Any] = { ["isAuto": true] }
   private let queue = DispatchQueue(label: "player_m3u8_resource_loader")
   private let cancellationLock = NSLock()
   private let cancelledRequests =
     NSHashTable<AVAssetResourceLoadingRequest>.weakObjects()
+  private var audioPlaylistData: Data?
+  private var audioPlaylistInjected = false
 
   init(
     headers: [String: String],
-    cacheManager: M3u8IosCacheManager = .shared
+    cacheManager: M3u8IosCacheManager = .shared,
+    audioUrl: URL? = nil,
+    audioHeaders: [String: String] = [:]
   ) {
     self.headers = headers
     self.cacheManager = cacheManager
+    self.audioUrl = audioUrl
+    self.audioHeaders = audioHeaders
     super.init()
   }
 
@@ -42,14 +50,37 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
     _ resourceLoader: AVAssetResourceLoader,
     shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest
   ) -> Bool {
-    guard
-      let requestUrl = loadingRequest.request.url,
-      let originalUrl = Self.originalUrl(for: requestUrl)
-    else {
+    guard let requestUrl = loadingRequest.request.url else {
       return false
     }
 
     trackRequest(loadingRequest)
+
+    if requestUrl.host == "audio",
+       let queryValue = URLComponents(url: requestUrl, resolvingAgainstBaseURL: false)?
+         .queryItems?.first(where: { $0.name == "url" })?.value,
+       let originalAudioUrl = URL(string: queryValue)
+    {
+      queue.async { [weak self, weak loadingRequest] in
+        guard let self, let loadingRequest else { return }
+        if let data = self.audioPlaylistData, !self.isCancelled(loadingRequest) {
+          self.respond(to: loadingRequest, data: data, isPlaylist: true)
+          loadingRequest.finishLoading()
+        } else {
+          if !self.isCancelled(loadingRequest) {
+            loadingRequest.finishLoading(
+              with: NSError(domain: "M3u8ResourceLoader", code: -1, userInfo: nil)
+            )
+          }
+        }
+        self.clearRequest(loadingRequest)
+      }
+      return true
+    }
+
+    guard let originalUrl = Self.originalUrl(for: requestUrl) else {
+      return false
+    }
     queue.async { [weak self, weak loadingRequest] in
       guard let self, let loadingRequest else { return }
       do {
@@ -65,6 +96,13 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
             playlistUrl: originalUrl,
             selectedQuality: self.qualityProvider()
           )
+          if self.isMasterPlaylist(data: data),
+             let audioUrl = self.audioUrl,
+             self.audioPlaylistData != nil || self.audioPlaylistInjected.not
+          {
+            data = self.injectAudioMedia(data: data, audioUrl: audioUrl)
+            self.audioPlaylistInjected = true
+          }
         }
         self.respond(to: loadingRequest, data: data, isPlaylist: isPlaylist)
         loadingRequest.finishLoading()
@@ -237,5 +275,65 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
     cancellationLock.lock()
     cancelledRequests.remove(loadingRequest)
     cancellationLock.unlock()
+  }
+
+  private func isMasterPlaylist(data: Data) -> Bool {
+    guard let text = String(data: data, encoding: .utf8) else { return false }
+    return text.contains("#EXT-X-STREAM-INF:")
+  }
+
+  private func injectAudioMedia(data: Data, audioUrl: URL) -> Data {
+    guard var text = String(data: data, encoding: .utf8) else { return data }
+    if audioPlaylistData == nil {
+      do {
+        let audioData = try cacheManager.data(for: audioUrl, headers: audioHeaders)
+        audioPlaylistData = Self.rewriteAudioPlaylist(
+          data: audioData,
+          playlistUrl: audioUrl
+        )
+      } catch {
+        return data
+      }
+    }
+    let cachedAudioUrl = Self.audioPlaylistUrl(for: audioUrl)
+    let audioTag = (
+      "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"extaudio\",NAME=\"External\","
+      + "DEFAULT=YES,AUTOSELECT=YES,URI=\"\(cachedAudioUrl.absoluteString)\"\n"
+    )
+    if text.contains("#EXT-X-ENDLIST") {
+      text = text.replacingOccurrences(of: "#EXT-X-ENDLIST", with: "\(audioTag)#EXT-X-ENDLIST")
+    } else {
+      text.append("\n\(audioTag)")
+    }
+    return Data(text.utf8)
+  }
+
+  static func audioPlaylistUrl(for originalUrl: URL) -> URL {
+    var components = URLComponents()
+    components.scheme = cacheScheme
+    components.host = "audio"
+    components.queryItems = [
+      URLQueryItem(name: "url", value: originalUrl.absoluteString)
+    ]
+    return components.url!
+  }
+
+  private static func rewriteAudioPlaylist(data: Data, playlistUrl: URL) -> Data {
+    guard let text = String(data: data, encoding: .utf8) else { return data }
+    let lines = text.components(separatedBy: .newlines).compactMap { rawLine -> String? in
+      let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !line.isEmpty else { return rawLine }
+      if line.hasPrefix("#EXT-X-STREAM-INF:") {
+        return nil
+      }
+      if line.hasPrefix("#") {
+        return rawLine
+      }
+      guard let originalUrl = URL(string: line, relativeTo: playlistUrl)?.absoluteURL else {
+        return rawLine
+      }
+      return M3u8ResourceLoader.cachedUrl(for: originalUrl).absoluteString
+    }
+    return Data(lines.joined(separator: "\n").utf8)
   }
 }

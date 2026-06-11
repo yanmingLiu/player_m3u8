@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'm3u8_audio_track.dart';
 import 'm3u8_subtitle_track.dart';
 import 'm3u8_player_value.dart';
 
@@ -40,6 +41,8 @@ class M3u8PlayerEvent {
     this.availableSubtitles,
     this.selectedSubtitle,
     this.subtitleText,
+    this.availableAudioTracks,
+    this.selectedAudioTrack,
     this.recoveryCount,
     this.lastRecoveryReason,
     this.size,
@@ -74,6 +77,8 @@ class M3u8PlayerEvent {
       availableSubtitles: _subtitlesFromMap(map['availableSubtitles']),
       selectedSubtitle: _subtitleFromMap(map['selectedSubtitle']),
       subtitleText: map['subtitleText'] as String?,
+      availableAudioTracks: _audioTracksFromMap(map['availableAudioTracks']),
+      selectedAudioTrack: _audioTrackFromMap(map['selectedAudioTrack']),
       recoveryCount: _asNullableInt(map['recoveryCount']),
       lastRecoveryReason: map['lastRecoveryReason'] as String?,
       size: _sizeFromMap(map),
@@ -111,6 +116,8 @@ class M3u8PlayerEvent {
   final List<M3u8SubtitleTrack>? availableSubtitles;
   final M3u8SubtitleTrack? selectedSubtitle;
   final String? subtitleText;
+  final List<M3u8AudioTrack>? availableAudioTracks;
+  final M3u8AudioTrack? selectedAudioTrack;
   final int? recoveryCount;
   final String? lastRecoveryReason;
   final Size? size;
@@ -214,5 +221,26 @@ M3u8SubtitleTrack? _subtitleFromMap(Object? value) {
     return null;
   }
   final track = M3u8SubtitleTrack.fromMap(Map<Object?, Object?>.from(value));
+  return track.id.isEmpty ? null : track;
+}
+
+List<M3u8AudioTrack>? _audioTracksFromMap(Object? value) {
+  if (value is! List) {
+    return null;
+  }
+  return value
+      .whereType<Map>()
+      .map(
+        (map) => M3u8AudioTrack.fromMap(Map<Object?, Object?>.from(map)),
+      )
+      .where((track) => track.id.isNotEmpty)
+      .toList(growable: false);
+}
+
+M3u8AudioTrack? _audioTrackFromMap(Object? value) {
+  if (value is! Map) {
+    return null;
+  }
+  final track = M3u8AudioTrack.fromMap(Map<Object?, Object?>.from(value));
   return track.id.isEmpty ? null : track;
 }

@@ -79,8 +79,10 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
 
   private let textureRegistry: FlutterTextureRegistry
   private let eventSinkProvider: () -> FlutterEventSink?
-  private let url: URL
-  private let headers: [String: String]
+  private let videoUrl: URL
+  private let audioUrl: URL?
+  private let videoHeaders: [String: String]
+  private let audioHeaders: [String: String]?
   private let sourceType: M3u8SourceType
   private var asset: AVURLAsset
   private let player: AVPlayer
@@ -115,6 +117,9 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   private var selectedSubtitleId: String?
   private var selectedSubtitle: [String: Any]?
   private var subtitleText = ""
+  private var availableAudioTracks = [[String: Any]]()
+  private var selectedAudioTrackId: String?
+  private var selectedAudioTrack: [String: Any]?
   private var playbackSpeed: Double
   private var volume: Double
   private var isMuted: Bool
@@ -127,8 +132,10 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   var supportsQualitySelection: Bool { sourceType == .hls }
 
   init(
-    url: URL,
-    headers: [String: String],
+    videoUrl: URL,
+    audioUrl: URL?,
+    videoHeaders: [String: String],
+    audioHeaders: [String: String]?,
     sourceType: M3u8SourceType,
     initialPositionMs: Int64,
     playbackSpeed: Double,
@@ -136,26 +143,35 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     isMuted: Bool,
     externalSubtitles: [[String: Any]],
     selectedSubtitleId: String?,
+    selectedAudioTrackId: String?,
     recoveryPolicy: M3u8RecoveryPolicy,
     textureRegistry: FlutterTextureRegistry,
     eventSinkProvider: @escaping () -> FlutterEventSink?
   ) {
     self.textureRegistry = textureRegistry
     self.eventSinkProvider = eventSinkProvider
-    self.url = url
-    self.headers = headers
-    self.sourceType = sourceType.resolve(url: url)
+    self.videoUrl = videoUrl
+    self.audioUrl = audioUrl
+    self.videoHeaders = videoHeaders
+    self.audioHeaders = audioHeaders
+    self.sourceType = sourceType.resolve(url: videoUrl)
     self.playbackSpeed = min(max(playbackSpeed, 0.25), 2.0)
     self.volume = min(max(volume, 0), 1)
     self.isMuted = isMuted
     self.availableSubtitles = Self.normalizeExternalSubtitles(externalSubtitles)
     self.selectedSubtitleId = selectedSubtitleId
     self.selectedSubtitle = availableSubtitles.first { $0["id"] as? String == selectedSubtitleId }
+    self.selectedAudioTrackId = selectedAudioTrackId
+    let effectiveAudioHeaders = audioHeaders ?? videoHeaders
     self.recoveryPolicy = recoveryPolicy
-    self.resourceLoader = M3u8ResourceLoader(headers: headers)
+    self.resourceLoader = M3u8ResourceLoader(
+      headers: videoHeaders,
+      audioUrl: audioUrl,
+      audioHeaders: effectiveAudioHeaders,
+    )
     let assetOptions: [String: Any]? =
-      headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers]
-    let asset = AVURLAsset(url: Self.assetUrl(for: url, sourceType: self.sourceType), options: assetOptions)
+      videoHeaders.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": videoHeaders]
+    let asset = AVURLAsset(url: Self.assetUrl(for: videoUrl, sourceType: self.sourceType), options: assetOptions)
     self.asset = asset
     if self.sourceType == .hls {
       self.asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
@@ -183,11 +199,13 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     }
     if self.sourceType == .hls {
       diskCachePrefetcher = M3u8DiskCachePrefetcher(
-        url: url,
-        headers: headers,
+        url: videoUrl,
+        headers: videoHeaders,
         playerIdProvider: { [weak self] in self?.textureId ?? -1 },
         eventSinkProvider: eventSinkProvider,
-        qualityProvider: { [weak self] in self?.selectedQuality ?? Self.autoQuality() }
+        qualityProvider: { [weak self] in self?.selectedQuality ?? Self.autoQuality() },
+        audioUrl: audioUrl,
+        audioHeaders: effectiveAudioHeaders,
       )
     } else {
       diskCachePrefetcher = nil
@@ -283,6 +301,14 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     var payload = playbackPayload(event: "progress")
     payload["subtitleText"] = ""
     sendEvent(payload)
+  }
+
+  func setAudioTrack(_ audioTrackId: String?) {
+    guard !disposed else { return }
+    selectedAudioTrackId = audioTrackId
+    selectedAudioTrack = availableAudioTracks.first { $0["id"] as? String == audioTrackId }
+    applySelectedAudioTrack()
+    sendEvent(playbackPayload(event: "progress"))
   }
 
   func dispose() {
@@ -479,8 +505,8 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     playerItem.remove(legibleOutput)
     asset.resourceLoader.setDelegate(nil, queue: nil)
     let assetOptions: [String: Any]? =
-      headers.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": headers]
-    asset = AVURLAsset(url: Self.assetUrl(for: url, sourceType: sourceType), options: assetOptions)
+      videoHeaders.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": videoHeaders]
+    asset = AVURLAsset(url: Self.assetUrl(for: videoUrl, sourceType: sourceType), options: assetOptions)
     if sourceType == .hls {
       asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
     }
@@ -516,7 +542,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       availableQualities = []
       return
     }
-    guard let data = try? M3u8IosCacheManager.shared.data(for: url, headers: headers),
+    guard let data = try? M3u8IosCacheManager.shared.data(for: videoUrl, headers: videoHeaders),
       let text = String(data: data, encoding: .utf8)
     else {
       availableQualities = []
@@ -607,6 +633,8 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       "availableSubtitles": availableSubtitles,
       "selectedSubtitle": selectedSubtitle as Any,
       "subtitleText": subtitleText,
+      "availableAudioTracks": availableAudioTracks,
+      "selectedAudioTrack": selectedAudioTrack as Any,
       "recoveryCount": recoveryCount,
       "lastRecoveryReason": lastRecoveryReason,
     ]
@@ -743,6 +771,59 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       }
     }
     selectedSubtitle = nil
+  }
+
+  private func updateAvailableAudioTracks() {
+    guard let group = playerItem.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) else {
+      return
+    }
+    var tracks = [[String: Any]]()
+    for (index, option) in group.options.enumerated() {
+      let id = option.propertyList() as? String ?? "audible:\(index)"
+      let language = option.locale?.identifier
+      let label = option.displayName
+      tracks.append([
+        "id": id,
+        "label": label.isEmpty ? (language ?? "Audio \(index + 1)") : label,
+        "language": language as Any,
+        "url": NSNull(),
+        "mimeType": NSNull(),
+        "headers": [:],
+      ])
+    }
+    availableAudioTracks = tracks
+    selectedAudioTrack = selectedAudioTrackId.flatMap { id in
+      tracks.first { $0["id"] as? String == id }
+    }
+  }
+
+  private func applySelectedAudioTrack() {
+    updateAvailableAudioTracks()
+    guard let group = playerItem.asset.mediaSelectionGroup(forMediaCharacteristic: .audible) else {
+      selectedAudioTrack = nil
+      return
+    }
+    guard let audioTrackId = selectedAudioTrackId else {
+      playerItem.select(nil, in: group)
+      selectedAudioTrack = nil
+      return
+    }
+    for (index, option) in group.options.enumerated() {
+      let id = option.propertyList() as? String ?? "audible:\(index)"
+      if id == audioTrackId {
+        playerItem.select(option, in: group)
+        selectedAudioTrack = [
+          "id": id,
+          "label": option.displayName,
+          "language": option.locale?.identifier as Any,
+          "url": NSNull(),
+          "mimeType": NSNull(),
+          "headers": [:],
+        ]
+        return
+      }
+    }
+    selectedAudioTrack = nil
   }
 
   private func finishRebufferTiming() {

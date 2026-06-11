@@ -162,6 +162,12 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         player.setSubtitle(arguments?["subtitleId"] as? String)
         result(nil)
       }
+    case "setAudioTrack":
+      withPlayer(call: call, result: result) { player in
+        let arguments = call.arguments as? [String: Any]
+        player.setAudioTrack(arguments?["audioTrackId"] as? String)
+        result(nil)
+      }
     case "dispose":
       guard
         let arguments = call.arguments as? [String: Any],
@@ -210,13 +216,18 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private func create(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard
       let arguments = call.arguments as? [String: Any],
-      let urlString = arguments["url"] as? String,
-      let url = URL(string: urlString)
+      let videoUrlString = arguments["videoUrl"] as? String,
+      let videoUrl = URL(string: videoUrlString)
     else {
-      result(FlutterError(code: "invalid_url", message: "url is required.", details: nil))
+      result(FlutterError(code: "invalid_url", message: "videoUrl is required.", details: nil))
       return
     }
-    let headers = arguments["headers"] as? [String: String] ?? [:]
+    var audioUrl: URL? = nil
+    if let audioUrlString = arguments["audioUrl"] as? String {
+      audioUrl = URL(string: audioUrlString)
+    }
+    let videoHeaders = arguments["videoHeaders"] as? [String: String] ?? [:]
+    let audioHeaders = arguments["audioHeaders"] as? [String: String]
     let initialPositionMs = (arguments["initialPosition"] as? NSNumber)?.int64Value ?? 0
     guard initialPositionMs >= 0 else {
       result(
@@ -229,8 +240,10 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       return
     }
     let player = M3u8IosPlayer(
-      url: url,
-      headers: headers,
+      videoUrl: videoUrl,
+      audioUrl: audioUrl,
+      videoHeaders: videoHeaders,
+      audioHeaders: audioHeaders,
       sourceType: M3u8SourceType.from(arguments["sourceType"]),
       initialPositionMs: initialPositionMs,
       playbackSpeed: validPlaybackSpeed(from: arguments["playbackSpeed"]),
@@ -238,6 +251,7 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       isMuted: arguments["isMuted"] as? Bool ?? false,
       externalSubtitles: arguments["subtitles"] as? [[String: Any]] ?? [],
       selectedSubtitleId: arguments["selectedSubtitleId"] as? String,
+      selectedAudioTrackId: arguments["selectedAudioTrackId"] as? String,
       recoveryPolicy: M3u8RecoveryPolicy.from(arguments["recoveryPolicy"] as? [String: Any]),
       textureRegistry: textureRegistry,
       eventSinkProvider: { [weak self] in self?.eventSink }
@@ -371,12 +385,16 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private func precache(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard
       let arguments = call.arguments as? [String: Any],
-      let urlString = arguments["url"] as? String,
-      !urlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-      let url = URL(string: urlString)
+      let videoUrlString = arguments["videoUrl"] as? String,
+      !videoUrlString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+      let videoUrl = URL(string: videoUrlString)
     else {
-      result(FlutterError(code: "invalid_url", message: "url is required.", details: nil))
+      result(FlutterError(code: "invalid_url", message: "videoUrl is required.", details: nil))
       return
+    }
+    var audioUrl: URL? = nil
+    if let audioUrlString = arguments["audioUrl"] as? String {
+      audioUrl = URL(string: audioUrlString)
     }
     let initialPositionMs = (arguments["initialPosition"] as? NSNumber)?.int64Value ?? 0
     guard initialPositionMs >= 0 else {
@@ -389,8 +407,9 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       )
       return
     }
-    let headers = arguments["headers"] as? [String: String] ?? [:]
-    let sourceType = M3u8SourceType.from(arguments["sourceType"]).resolve(url: url)
+    let videoHeaders = arguments["videoHeaders"] as? [String: String] ?? [:]
+    let audioHeaders = arguments["audioHeaders"] as? [String: String]
+    let sourceType = M3u8SourceType.from(arguments["sourceType"]).resolve(url: videoUrl)
     guard sourceType == .hls else {
       result(
         FlutterError(
@@ -404,13 +423,15 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     let quality = arguments["quality"] as? [String: Any] ?? autoQuality()
     let taskId = UUID().uuidString
     let prefetcher = M3u8DiskCachePrefetcher(
-      url: url,
-      headers: headers,
+      url: videoUrl,
+      headers: videoHeaders,
       playerIdProvider: { -1 },
       eventSinkProvider: { [weak self] in self?.cacheEventSink },
       taskId: taskId,
       onFinished: { [weak self] in self?.cacheTasks.removeValue(forKey: taskId) },
-      qualityProvider: { quality }
+      qualityProvider: { quality },
+      audioUrl: audioUrl,
+      audioHeaders: audioHeaders
     )
     cacheTasks[taskId] = prefetcher
     prefetcher.restart(from: initialPositionMs)

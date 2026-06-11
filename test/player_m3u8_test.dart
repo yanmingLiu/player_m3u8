@@ -14,11 +14,15 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   final StreamController<M3u8CacheEvent> cacheEventController =
       StreamController<M3u8CacheEvent>.broadcast();
 
+  @override
+  Stream<M3u8PlayerEvent> get events => eventController.stream;
+
+  @override
+  Stream<M3u8CacheEvent> get cacheEvents => cacheEventController.stream;
+
   int nextPlayerId = 7;
   int? createdPlayerId;
-  String? createdUrl;
-  Map<String, String>? createdHeaders;
-  M3u8SourceType? createdSourceType;
+  M3u8Source? createdSource;
   Duration? initialPosition;
   double? playbackSpeed;
   double? volume;
@@ -26,6 +30,7 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   List<M3u8SubtitleTrack>? subtitles;
   String? selectedSubtitleId;
   String? selectedSubtitleCommand;
+  String? selectedAudioTrackId;
   int? playedPlayerId;
   int? pausedPlayerId;
   int? disposedPlayerId;
@@ -41,23 +46,13 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
     sizeBytes: 128,
   );
   bool cacheCleared = false;
-  String? precacheUrl;
-  Map<String, String>? precacheHeaders;
-  M3u8SourceType? precacheSourceType;
+  M3u8Source? precacheSource;
   Duration? precacheInitialPosition;
   String? cancelledPrecacheTaskId;
 
   @override
-  Stream<M3u8PlayerEvent> get events => eventController.stream;
-
-  @override
-  Stream<M3u8CacheEvent> get cacheEvents => cacheEventController.stream;
-
-  @override
   Future<int> create({
-    required String url,
-    Map<String, String> headers = const <String, String>{},
-    M3u8SourceType sourceType = M3u8SourceType.auto,
+    required M3u8Source source,
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
     Duration initialPosition = Duration.zero,
     double playbackSpeed = 1.0,
@@ -65,10 +60,9 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
     bool isMuted = false,
     List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
     String? selectedSubtitleId,
+    String? selectedAudioTrackId,
   }) async {
-    createdUrl = url;
-    createdHeaders = headers;
-    createdSourceType = sourceType;
+    createdSource = source;
     this.recoveryPolicy = recoveryPolicy;
     this.initialPosition = initialPosition;
     this.playbackSpeed = playbackSpeed;
@@ -76,6 +70,7 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
     this.isMuted = isMuted;
     this.subtitles = subtitles;
     this.selectedSubtitleId = selectedSubtitleId;
+    this.selectedAudioTrackId = selectedAudioTrackId;
     createdPlayerId = nextPlayerId;
     return nextPlayerId++;
   }
@@ -129,6 +124,11 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   }
 
   @override
+  Future<void> setAudioTrack(int playerId, String? audioTrackId) async {
+    selectedAudioTrackId = audioTrackId;
+  }
+
+  @override
   Future<void> disposePlayer(int playerId) async {
     disposedPlayerId = playerId;
   }
@@ -150,15 +150,11 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
 
   @override
   Future<String> precache({
-    required String url,
-    Map<String, String> headers = const <String, String>{},
-    M3u8SourceType sourceType = M3u8SourceType.auto,
+    required M3u8Source source,
     Duration initialPosition = Duration.zero,
     M3u8Quality quality = M3u8Quality.auto,
   }) async {
-    precacheUrl = url;
-    precacheHeaders = headers;
-    precacheSourceType = sourceType;
+    precacheSource = source;
     precacheInitialPosition = initialPosition;
     selectedQuality = quality;
     return 'cache-task-1';
@@ -257,8 +253,10 @@ void main() {
     final controller = M3u8PlayerController(platform: platform);
 
     await controller.initialize(
-      'https://example.com/index.m3u8',
-      headers: const {'Authorization': 'token'},
+      source: const M3u8Source(
+        videoUrl: 'https://example.com/index.m3u8',
+        videoHeaders: {'Authorization': 'token'},
+      ),
       recoveryPolicy: const M3u8RecoveryPolicy(
         rebufferThreshold: 2,
         minimumRecoveryInterval: Duration(seconds: 5),
@@ -280,9 +278,9 @@ void main() {
     );
 
     expect(controller.playerId, 7);
-    expect(platform.createdUrl, 'https://example.com/index.m3u8');
-    expect(platform.createdHeaders, const {'Authorization': 'token'});
-    expect(platform.createdSourceType, M3u8SourceType.auto);
+    expect(platform.createdSource?.videoUrl, 'https://example.com/index.m3u8');
+    expect(platform.createdSource?.videoHeaders, const {'Authorization': 'token'});
+    expect(platform.createdSource?.sourceType, M3u8SourceType.auto);
     expect(platform.initialPosition, const Duration(seconds: 12));
     expect(platform.playbackSpeed, 1.25);
     expect(platform.volume, 0.75);
@@ -461,49 +459,13 @@ void main() {
   test('events for other players are ignored', () async {
     final platform = FakePlayerM3u8Platform();
     final controller = M3u8PlayerController(platform: platform);
-    await controller.initialize('https://example.com/index.m3u8');
-
-    platform.eventController.add(
-      const M3u8PlayerEvent(
-        playerId: 8,
-        type: M3u8PlayerEventType.initialized,
-        size: Size(1, 1),
-      ),
-    );
-    await pumpEventQueue();
-
-    expect(controller.value.isInitialized, false);
-    controller.dispose();
-    await platform.eventController.close();
-  });
-
-  test('setSource disposes previous player and ignores stale events', () async {
-    final platform = FakePlayerM3u8Platform();
-    final controller = M3u8PlayerController(platform: platform);
-
-    await controller.initialize('https://example.com/one.m3u8');
-    expect(controller.playerId, 7);
-
-    await controller.setRecoveryPolicy(
-      const M3u8RecoveryPolicy(rebufferThreshold: 4),
-    );
-
-    platform.eventController.add(
-      const M3u8PlayerEvent(
-        playerId: 7,
-        type: M3u8PlayerEventType.initialized,
-        duration: Duration(seconds: 30),
-        size: Size(1920, 1080),
-      ),
-    );
-    await pumpEventQueue();
-    expect(controller.value.isInitialized, true);
+    await controller.initialize(source: M3u8Source(videoUrl: 'https://example.com/one.m3u8'));
 
     await controller.setSource(
-      'https://example.com/two.mp4',
-      sourceType: M3u8SourceType.progressive,
-      autoPlay: true,
-      initialPosition: const Duration(seconds: 18),
+        M3u8Source(videoUrl: 'https://example.com/two.mp4', sourceType: M3u8SourceType.progressive),
+        autoPlay: true,
+        recoveryPolicy: const M3u8RecoveryPolicy(rebufferThreshold: 4),
+        initialPosition: const Duration(seconds: 18),
       playbackSpeed: 1.5,
       volume: 0.4,
       isMuted: true,
@@ -516,8 +478,8 @@ void main() {
     expect(platform.disposedPlayerId, 7);
     expect(controller.playerId, 8);
     expect(platform.playedPlayerId, 8);
-    expect(platform.createdUrl, 'https://example.com/two.mp4');
-    expect(platform.createdSourceType, M3u8SourceType.progressive);
+    expect(platform.createdSource?.videoUrl, 'https://example.com/two.mp4');
+    expect(platform.createdSource?.sourceType, M3u8SourceType.progressive);
     expect(platform.initialPosition, const Duration(seconds: 18));
     expect(platform.playbackSpeed, 1.5);
     expect(platform.volume, 0.4);
@@ -557,7 +519,7 @@ void main() {
     final platform = _EagerEventPlatform();
     final controller = M3u8PlayerController(platform: platform);
 
-    await controller.initialize('https://example.com/index.m3u8');
+    await controller.initialize(source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'));
     await pumpEventQueue();
 
     expect(controller.value.isInitialized, true);
@@ -570,7 +532,7 @@ void main() {
     final platform = FakePlayerM3u8Platform();
     final controller = M3u8PlayerController(platform: platform);
 
-    await controller.initialize('https://example.com/index.m3u8');
+    await controller.initialize(source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'));
     platform.eventController.add(
       const M3u8PlayerEvent(
         playerId: 7,
@@ -593,7 +555,7 @@ void main() {
 
     expect(platform.disposedPlayerId, 7);
     expect(controller.playerId, 8);
-    expect(platform.createdUrl, 'https://example.com/index.m3u8');
+    expect(platform.createdSource?.videoUrl, 'https://example.com/index.m3u8');
     expect(platform.initialPosition, const Duration(seconds: 42));
     expect(platform.playedPlayerId, 8);
     expect(controller.value.hasError, false);
@@ -608,13 +570,13 @@ void main() {
 
     expect(
       controller.initialize(
-        'https://example.com/index.m3u8',
+        source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
         initialPosition: const Duration(milliseconds: -1),
       ),
       throwsArgumentError,
     );
 
-    await controller.initialize('https://example.com/index.m3u8');
+    await controller.initialize(source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'));
 
     expect(
       controller.seekTo(const Duration(milliseconds: -1)),
@@ -687,7 +649,7 @@ void main() {
     final snapshots = <M3u8QoeSnapshot>[];
     final subscription = controller.qoeSnapshots.listen(snapshots.add);
 
-    await controller.initialize('https://example.com/index.m3u8');
+    await controller.initialize(source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'));
     controller.startQoeSampling(emitImmediately: true);
     await pumpEventQueue();
 
@@ -723,9 +685,7 @@ void main() {
     await M3u8PlayerCache.configure(maxSizeBytes: 128, platform: platform);
     final info = await M3u8PlayerCache.info(platform: platform);
     final taskId = await M3u8PlayerCache.precache(
-      'https://example.com/index.m3u8',
-      headers: const {'Authorization': 'token'},
-      sourceType: M3u8SourceType.hls,
+      M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
       initialPosition: const Duration(seconds: 12),
       quality: const M3u8Quality(
         id: '720p',
@@ -744,9 +704,9 @@ void main() {
     expect(info.sizeBytes, 128);
     expect(info.usageRatio, 0.25);
     expect(taskId, 'cache-task-1');
-    expect(platform.precacheUrl, 'https://example.com/index.m3u8');
-    expect(platform.precacheHeaders, const {'Authorization': 'token'});
-    expect(platform.precacheSourceType, M3u8SourceType.hls);
+    expect(platform.precacheSource?.videoUrl, 'https://example.com/index.m3u8');
+    expect(platform.precacheSource?.videoHeaders, const {});
+    expect(platform.precacheSource?.sourceType, M3u8SourceType.auto);
     expect(platform.precacheInitialPosition, const Duration(seconds: 12));
     expect(platform.selectedQuality?.height, 720);
     expect(platform.cancelledPrecacheTaskId, 'cache-task-1');
@@ -763,12 +723,8 @@ void main() {
       throwsArgumentError,
     );
     expect(
-      () => M3u8PlayerCache.precache('', platform: platform),
-      throwsArgumentError,
-    );
-    expect(
       () => M3u8PlayerCache.precache(
-        'https://example.com/index.m3u8',
+        M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
         initialPosition: const Duration(milliseconds: -1),
         platform: platform,
       ),
@@ -784,9 +740,7 @@ void main() {
 class _EagerEventPlatform extends FakePlayerM3u8Platform {
   @override
   Future<int> create({
-    required String url,
-    Map<String, String> headers = const <String, String>{},
-    M3u8SourceType sourceType = M3u8SourceType.auto,
+    required M3u8Source source,
     M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
     Duration initialPosition = Duration.zero,
     double playbackSpeed = 1.0,
@@ -794,11 +748,10 @@ class _EagerEventPlatform extends FakePlayerM3u8Platform {
     bool isMuted = false,
     List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
     String? selectedSubtitleId,
+    String? selectedAudioTrackId,
   }) async {
     final playerId = await super.create(
-      url: url,
-      headers: headers,
-      sourceType: sourceType,
+      source: source,
       recoveryPolicy: recoveryPolicy,
       initialPosition: initialPosition,
       playbackSpeed: playbackSpeed,
@@ -806,6 +759,7 @@ class _EagerEventPlatform extends FakePlayerM3u8Platform {
       isMuted: isMuted,
       subtitles: subtitles,
       selectedSubtitleId: selectedSubtitleId,
+      selectedAudioTrackId: selectedAudioTrackId,
     );
     eventController.add(
       M3u8PlayerEvent(

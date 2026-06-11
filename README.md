@@ -58,8 +58,10 @@ import 'package:player_m3u8/player_m3u8.dart';
 final controller = M3u8PlayerController();
 
 await controller.initialize(
-  'https://example.com/index.m3u8',
-  headers: const {'User-Agent': 'MyApp'},
+  source: const M3u8Source(
+    videoUrl: 'https://example.com/index.m3u8',
+    videoHeaders: const {'User-Agent': 'MyApp'},
+  ),
   autoPlay: true,
   initialPosition: const Duration(seconds: 30),
 );
@@ -71,9 +73,59 @@ MP4/MOV 会在默认 `sourceType: M3u8SourceType.auto` 下按后缀自动识别�
 
 ```dart
 await controller.initialize(
-  'https://example.com/video.mp4',
-  sourceType: M3u8SourceType.progressive,
+  source: const M3u8Source(
+    videoUrl: 'https://example.com/video.mp4',
+    sourceType: M3u8SourceType.progressive,
+  ),
   autoPlay: true,
+);
+```
+
+#### 音视频分离源
+
+如果视频和音频是分开的 HLS 流，可以通过 `audioUrl` 参数指定外部音频源：
+
+```dart
+await controller.initialize(
+  source: const M3u8Source(
+    videoUrl: 'https://example.com/video-only.m3u8',
+    audioUrl: 'https://example.com/audio-only.m3u8',
+    audioHeaders: {'User-Agent': 'MyAudioApp'},
+  ),
+  autoPlay: true,
+);
+```
+
+`audioHeaders` 未设置时自动沿用 `videoHeaders`。
+
+#### 音频轨道选择
+
+```dart
+// 查看可用音频轨道
+controller.value.availableAudioTracks; // List<M3u8AudioTrack>
+
+// 选择音频轨道
+await controller.setAudioTrack('audio:en');
+
+// 取消选择（使用默认音频）
+await controller.clearAudioTrack();
+```
+
+#### 播放列表切换
+
+```dart
+await controller.setSource(
+  M3u8Source(videoUrl: 'https://example.com/next.m3u8'),
+  autoPlay: true,
+);
+```
+
+#### 预缓存（仅 HLS）
+
+```dart
+await M3u8PlayerCache.precache(
+  M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+  initialPosition: Duration.zero,
 );
 ```
 

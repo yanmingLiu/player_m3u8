@@ -2,6 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/foundation.dart';
 
+import 'm3u8_audio_track.dart';
 import 'm3u8_subtitle_track.dart';
 
 @immutable
@@ -33,6 +34,8 @@ class M3u8PlayerValue {
     this.availableSubtitles = const <M3u8SubtitleTrack>[],
     this.selectedSubtitle,
     this.subtitleText = '',
+    this.availableAudioTracks = const <M3u8AudioTrack>[],
+    this.selectedAudioTrack,
     this.recoveryCount = 0,
     this.lastRecoveryReason = '',
     this.size = Size.zero,
@@ -65,6 +68,8 @@ class M3u8PlayerValue {
   final List<M3u8SubtitleTrack> availableSubtitles;
   final M3u8SubtitleTrack? selectedSubtitle;
   final String subtitleText;
+  final List<M3u8AudioTrack> availableAudioTracks;
+  final M3u8AudioTrack? selectedAudioTrack;
   final int recoveryCount;
   final String lastRecoveryReason;
   final Size size;
@@ -118,6 +123,8 @@ class M3u8PlayerValue {
     List<M3u8SubtitleTrack>? availableSubtitles,
     Object? selectedSubtitle = _sentinel,
     String? subtitleText,
+    List<M3u8AudioTrack>? availableAudioTracks,
+    Object? selectedAudioTrack = _sentinel,
     int? recoveryCount,
     String? lastRecoveryReason,
     Size? size,
@@ -153,6 +160,10 @@ class M3u8PlayerValue {
           ? this.selectedSubtitle
           : selectedSubtitle as M3u8SubtitleTrack?,
       subtitleText: subtitleText ?? this.subtitleText,
+      availableAudioTracks: availableAudioTracks ?? this.availableAudioTracks,
+      selectedAudioTrack: identical(selectedAudioTrack, _sentinel)
+          ? this.selectedAudioTrack
+          : selectedAudioTrack as M3u8AudioTrack?,
       recoveryCount: recoveryCount ?? this.recoveryCount,
       lastRecoveryReason: lastRecoveryReason ?? this.lastRecoveryReason,
       size: size ?? this.size,
@@ -191,6 +202,8 @@ class M3u8PlayerValue {
         'availableSubtitles: $availableSubtitles, '
         'selectedSubtitle: $selectedSubtitle, '
         'subtitleText: $subtitleText, '
+        'availableAudioTracks: $availableAudioTracks, '
+        'selectedAudioTrack: $selectedAudioTrack, '
         'recoveryCount: $recoveryCount, '
         'lastRecoveryReason: $lastRecoveryReason, '
         'size: $size, '

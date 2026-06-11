@@ -4,6 +4,8 @@ import Foundation
 final class M3u8DiskCachePrefetcher {
   private let url: URL
   private let headers: [String: String]
+  private let audioUrl: URL?
+  private let audioHeaders: [String: String]?
   private let playerIdProvider: () -> Int64
   private let eventSinkProvider: () -> FlutterEventSink?
   private let cacheManager: M3u8IosCacheManager
@@ -26,10 +28,14 @@ final class M3u8DiskCachePrefetcher {
     taskId: String? = nil,
     onFinished: (() -> Void)? = nil,
     qualityProvider: (() -> [String: Any])? = nil,
-    cacheManager: M3u8IosCacheManager = .shared
+    cacheManager: M3u8IosCacheManager = .shared,
+    audioUrl: URL? = nil,
+    audioHeaders: [String: String]? = nil
   ) {
     self.url = url
     self.headers = headers
+    self.audioUrl = audioUrl
+    self.audioHeaders = audioHeaders
     self.playerIdProvider = playerIdProvider
     self.eventSinkProvider = eventSinkProvider
     self.taskId = taskId
@@ -130,6 +136,10 @@ final class M3u8DiskCachePrefetcher {
         }
       }
 
+      if let audioUrl = audioUrl, isCurrent(taskGeneration) {
+        cacheAudioSegments(audioUrl: audioUrl, generation: taskGeneration)
+      }
+
       if isCurrent(taskGeneration) {
         sendDiskCacheProgress(
           diskCacheStartMs: 0,
@@ -148,18 +158,41 @@ final class M3u8DiskCachePrefetcher {
     }
   }
 
+  private func cacheAudioSegments(audioUrl: URL, generation taskGeneration: Int) {
+    let useHeaders = audioHeaders ?? headers
+    do {
+      let playlist = try loadPlaylist(
+        url: audioUrl,
+        selectedQuality: autoQuality(),
+        headers: useHeaders
+      )
+      for resource in playlist.resources {
+        if !isCurrent(taskGeneration) { return }
+        try? cacheUrl(resource, generation: taskGeneration)
+      }
+      for segment in playlist.segments {
+        if !isCurrent(taskGeneration) { return }
+        try cacheUrl(segment.url, generation: taskGeneration)
+      }
+    } catch {
+      // Audio prefetch is optional; playback should continue.
+    }
+  }
+
   private func loadPlaylist(
     url playlistUrl: URL,
     selectedQuality: [String: Any],
-    depth: Int = 0
+    depth: Int = 0,
+    headers: [String: String]? = nil
   ) throws -> Playlist {
     guard !isCancelled, depth <= 3 else {
       return Playlist(segments: [], resources: [], durationMs: 0, quality: selectedQuality)
     }
 
+    let useHeaders = headers ?? self.headers
     let data = try cacheManager.data(
       for: playlistUrl,
-      headers: headers,
+      headers: useHeaders,
       taskObserver: { [weak self] task in self?.setCurrentTask(task) },
       isCancelled: { [weak self] in self?.isCancelled ?? true }
     )

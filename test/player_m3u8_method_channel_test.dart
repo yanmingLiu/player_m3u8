@@ -40,8 +40,10 @@ void main() {
     'create sends url headers initial position and playback speed',
     () async {
       final playerId = await platform.create(
-        url: 'https://example.com/index.m3u8',
-        headers: const {'User-Agent': 'test'},
+        source: const M3u8Source(
+          videoUrl: 'https://example.com/index.m3u8',
+          videoHeaders: {'User-Agent': 'test'},
+        ),
         initialPosition: const Duration(seconds: 15),
         playbackSpeed: 1.25,
         volume: 0.75,
@@ -61,8 +63,10 @@ void main() {
       expect(playerId, 3);
       expect(log.single.method, 'create');
       expect(log.single.arguments, {
-        'url': 'https://example.com/index.m3u8',
-        'headers': {'User-Agent': 'test'},
+        'videoUrl': 'https://example.com/index.m3u8',
+        'audioUrl': null,
+        'videoHeaders': {'User-Agent': 'test'},
+        'audioHeaders': {'User-Agent': 'test'},
         'sourceType': 'auto',
         'recoveryPolicy': {
           'isEnabled': true,
@@ -84,6 +88,7 @@ void main() {
             'headers': <String, String>{},
           },
         ],
+        'selectedAudioTrackId': null,
         'selectedSubtitleId': 'en',
       });
     },
@@ -91,8 +96,10 @@ void main() {
 
   test('create sends explicit progressive source type', () async {
     final playerId = await platform.create(
-      url: 'https://example.com/video.mp4',
-      sourceType: M3u8SourceType.progressive,
+      source: M3u8Source(
+        videoUrl: 'https://example.com/video.mp4',
+        sourceType: M3u8SourceType.progressive,
+      ),
     );
 
     expect(playerId, 3);
@@ -103,7 +110,7 @@ void main() {
   test('create rejects negative initial position', () {
     expect(
       platform.create(
-        url: 'https://example.com/index.m3u8',
+        source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
         initialPosition: const Duration(milliseconds: -1),
       ),
       throwsArgumentError,
@@ -252,8 +259,10 @@ void main() {
 
   test('precache sends source and returns task id', () async {
     final taskId = await platform.precache(
-      url: 'https://example.com/index.m3u8',
-      headers: const {'Authorization': 'token'},
+      source: const M3u8Source(
+        videoUrl: 'https://example.com/index.m3u8',
+        videoHeaders: {'Authorization': 'token'},
+      ),
       initialPosition: const Duration(seconds: 15),
       quality: const M3u8Quality(
         id: '720p',
@@ -267,8 +276,10 @@ void main() {
     expect(taskId, 'cache-task-1');
     expect(log.single.method, 'precache');
     expect(log.single.arguments, {
-      'url': 'https://example.com/index.m3u8',
-      'headers': {'Authorization': 'token'},
+      'videoUrl': 'https://example.com/index.m3u8',
+      'audioUrl': null,
+      'videoHeaders': {'Authorization': 'token'},
+      'audioHeaders': {'Authorization': 'token'},
       'sourceType': 'auto',
       'initialPosition': 15000,
       'quality': {
@@ -284,8 +295,7 @@ void main() {
 
   test('precache sends explicit HLS source type', () async {
     final taskId = await platform.precache(
-      url: 'https://example.com/index.m3u8',
-      sourceType: M3u8SourceType.hls,
+      source: M3u8Source(videoUrl: 'https://example.com/index.m3u8', sourceType: M3u8SourceType.hls),
     );
 
     expect(taskId, 'cache-task-1');

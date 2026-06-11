@@ -154,11 +154,14 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     self.audioUrl = audioUrl
     self.videoHeaders = videoHeaders
     self.audioHeaders = audioHeaders
-    self.sourceType = sourceType.resolve(url: videoUrl)
+    let resolvedSourceType = sourceType.resolve(url: videoUrl)
+    self.sourceType = resolvedSourceType
     self.playbackSpeed = min(max(playbackSpeed, 0.25), 2.0)
     self.volume = min(max(volume, 0), 1)
     self.isMuted = isMuted
-    self.availableSubtitles = Self.normalizeExternalSubtitles(externalSubtitles)
+    self.availableSubtitles = resolvedSourceType == .hls
+      ? Self.normalizeExternalSubtitles(externalSubtitles)
+      : []
     self.selectedSubtitleId = selectedSubtitleId
     self.selectedSubtitle = availableSubtitles.first { $0["id"] as? String == selectedSubtitleId }
     self.selectedAudioTrackId = selectedAudioTrackId
@@ -168,6 +171,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       headers: videoHeaders,
       audioUrl: audioUrl,
       audioHeaders: effectiveAudioHeaders,
+      externalSubtitles: self.availableSubtitles,
     )
     let assetOptions: [String: Any]? =
       videoHeaders.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": videoHeaders]

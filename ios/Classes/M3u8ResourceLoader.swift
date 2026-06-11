@@ -8,6 +8,9 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
   private let cacheManager: M3u8IosCacheManager
   private let audioUrl: URL?
   private let audioHeaders: [String: String]
+  private let externalSubtitles: [[String: Any]]
+  private let audioGroupId = "extaudio"
+  private let subtitleGroupId = "extsubs"
   var qualityProvider: () -> [String: Any] = { ["isAuto": true] }
   private let queue = DispatchQueue(label: "player_m3u8_resource_loader")
   private let cancellationLock = NSLock()
@@ -15,17 +18,20 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
     NSHashTable<AVAssetResourceLoadingRequest>.weakObjects()
   private var audioPlaylistData: Data?
   private var audioPlaylistInjected = false
+  private var subtitlePlaylistDataById: [String: Data] = [:]
 
   init(
     headers: [String: String],
     cacheManager: M3u8IosCacheManager = .shared,
     audioUrl: URL? = nil,
-    audioHeaders: [String: String] = [:]
+    audioHeaders: [String: String] = [:],
+    externalSubtitles: [[String: Any]] = []
   ) {
     self.headers = headers
     self.cacheManager = cacheManager
     self.audioUrl = audioUrl
     self.audioHeaders = audioHeaders
+    self.externalSubtitles = externalSubtitles
     super.init()
   }
 
@@ -57,9 +63,8 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
     trackRequest(loadingRequest)
 
     if requestUrl.host == "audio",
-       let queryValue = URLComponents(url: requestUrl, resolvingAgainstBaseURL: false)?
-         .queryItems?.first(where: { $0.name == "url" })?.value,
-       let originalAudioUrl = URL(string: queryValue)
+       URLComponents(url: requestUrl, resolvingAgainstBaseURL: false)?
+         .queryItems?.first(where: { $0.name == "url" })?.value != nil
     {
       queue.async { [weak self, weak loadingRequest] in
         guard let self, let loadingRequest else { return }
@@ -72,6 +77,25 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
               with: NSError(domain: "M3u8ResourceLoader", code: -1, userInfo: nil)
             )
           }
+        }
+        self.clearRequest(loadingRequest)
+      }
+      return true
+    }
+
+    if requestUrl.host == "subtitle",
+       let subtitleId = URLComponents(url: requestUrl, resolvingAgainstBaseURL: false)?
+         .queryItems?.first(where: { $0.name == "id" })?.value
+    {
+      queue.async { [weak self, weak loadingRequest] in
+        guard let self, let loadingRequest else { return }
+        if let data = self.subtitlePlaylistDataById[subtitleId], !self.isCancelled(loadingRequest) {
+          self.respond(to: loadingRequest, data: data, isPlaylist: true)
+          loadingRequest.finishLoading()
+        } else if !self.isCancelled(loadingRequest) {
+          loadingRequest.finishLoading(
+            with: NSError(domain: "M3u8ResourceLoader", code: -2, userInfo: nil)
+          )
         }
         self.clearRequest(loadingRequest)
       }
@@ -98,10 +122,13 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
           )
           if self.isMasterPlaylist(data: data),
              let audioUrl = self.audioUrl,
-             self.audioPlaylistData != nil || self.audioPlaylistInjected.not
+             self.audioPlaylistData != nil || !self.audioPlaylistInjected
           {
             data = self.injectAudioMedia(data: data, audioUrl: audioUrl)
             self.audioPlaylistInjected = true
+          }
+          if self.isMasterPlaylist(data: data), !self.externalSubtitles.isEmpty {
+            data = self.injectSubtitleMedia(data: data)
           }
         }
         self.respond(to: loadingRequest, data: data, isPlaylist: isPlaylist)
@@ -177,11 +204,18 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
       let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
       guard !line.isEmpty else { return rawLine }
       if line.hasPrefix("#EXT-X-STREAM-INF:") {
-        pendingStreamInf = rawLine
+        var streamInf = rawLine
+        if audioUrl != nil {
+          streamInf = withAttribute(streamInf, name: "AUDIO", value: audioGroupId)
+        }
+        if !externalSubtitles.isEmpty {
+          streamInf = withAttribute(streamInf, name: "SUBTITLES", value: subtitleGroupId)
+        }
+        pendingStreamInf = streamInf
         return ""
       }
       if line.hasPrefix("#EXT-X-KEY:") || line.hasPrefix("#EXT-X-MAP:") {
-        return rewriteUriAttribute(in: rawLine, playlistUrl: playlistUrl)
+        return Self.rewriteUriAttribute(in: rawLine, playlistUrl: playlistUrl)
       }
       if line.hasPrefix("#") {
         return rawLine
@@ -233,7 +267,7 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
     return String(line[valueRange]).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
   }
 
-  private func rewriteUriAttribute(in line: String, playlistUrl: URL) -> String {
+  private static func rewriteUriAttribute(in line: String, playlistUrl: URL) -> String {
     let pattern = #"URI="([^"]+)""#
     guard let regex = try? NSRegularExpression(pattern: pattern) else { return line }
     let range = NSRange(line.startIndex..<line.endIndex, in: line)
@@ -247,10 +281,25 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
     guard let originalUrl = URL(string: value, relativeTo: playlistUrl)?.absoluteURL else {
       return line
     }
-    let cachedUrl = Self.cachedUrl(for: originalUrl).absoluteString
+    let cachedUrl = cachedUrl(for: originalUrl).absoluteString
     var rewritten = line
     rewritten.replaceSubrange(uriRange, with: cachedUrl)
     return rewritten
+  }
+
+  private func withAttribute(_ line: String, name: String, value: String) -> String {
+    let attribute = "\(name)=\"\(value)\""
+    guard line.contains("\(name)=") else {
+      return line.contains(",") ? "\(line),\(attribute)" : "\(line) \(attribute)"
+    }
+    let pattern = "\(name)=\"[^\"]*\""
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return line }
+    let range = NSRange(line.startIndex..<line.endIndex, in: line)
+    return regex.stringByReplacingMatches(
+      in: line,
+      range: range,
+      withTemplate: attribute
+    )
   }
 
   private func trackRequest(_ loadingRequest: AVAssetResourceLoadingRequest) {
@@ -295,9 +344,10 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
         return data
       }
     }
+    text = Self.removingMediaTags(from: text, type: "AUDIO", groupId: audioGroupId)
     let cachedAudioUrl = Self.audioPlaylistUrl(for: audioUrl)
     let audioTag = (
-      "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"extaudio\",NAME=\"External\","
+      "#EXT-X-MEDIA:TYPE=AUDIO,GROUP-ID=\"\(audioGroupId)\",NAME=\"External\","
       + "DEFAULT=YES,AUTOSELECT=YES,URI=\"\(cachedAudioUrl.absoluteString)\"\n"
     )
     if text.contains("#EXT-X-ENDLIST") {
@@ -308,12 +358,64 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
     return Data(text.utf8)
   }
 
+  private func injectSubtitleMedia(data: Data) -> Data {
+    guard var text = String(data: data, encoding: .utf8) else { return data }
+    let tags = externalSubtitles.compactMap { subtitle -> String? in
+      guard
+        let id = subtitle["id"] as? String,
+        !id.isEmpty,
+        let urlString = subtitle["url"] as? String,
+        let subtitleUrl = URL(string: urlString)
+      else {
+        return nil
+      }
+      if subtitlePlaylistDataById[id] == nil {
+        let subtitleHeaders = subtitle["headers"] as? [String: String] ?? [:]
+        subtitlePlaylistDataById[id] = Self.rewriteSubtitlePlaylist(
+          subtitleUrl: subtitleUrl,
+          headers: subtitleHeaders,
+          cacheManager: cacheManager
+        )
+      }
+      guard subtitlePlaylistDataById[id] != nil else { return nil }
+      let label = subtitle["label"] as? String ?? id
+      let language = subtitle["language"] as? String
+      let defaultValue = subtitle["isDefault"] as? Bool == true ? "YES" : "NO"
+      var tag = "#EXT-X-MEDIA:TYPE=SUBTITLES,GROUP-ID=\"\(subtitleGroupId)\",NAME=\"\(Self.escapeAttribute(label))\","
+      tag += "DEFAULT=\(defaultValue),AUTOSELECT=YES"
+      if let language, !language.isEmpty {
+        tag += ",LANGUAGE=\"\(Self.escapeAttribute(language))\""
+      }
+      tag += ",URI=\"\(Self.subtitlePlaylistUrl(for: id).absoluteString)\""
+      return tag
+    }
+    guard !tags.isEmpty else { return data }
+    text = Self.removingMediaTags(from: text, type: "SUBTITLES", groupId: subtitleGroupId)
+    let subtitleTags = tags.joined(separator: "\n") + "\n"
+    if text.contains("#EXT-X-ENDLIST") {
+      text = text.replacingOccurrences(of: "#EXT-X-ENDLIST", with: "\(subtitleTags)#EXT-X-ENDLIST")
+    } else {
+      text.append("\n\(subtitleTags)")
+    }
+    return Data(text.utf8)
+  }
+
   static func audioPlaylistUrl(for originalUrl: URL) -> URL {
     var components = URLComponents()
     components.scheme = cacheScheme
     components.host = "audio"
     components.queryItems = [
       URLQueryItem(name: "url", value: originalUrl.absoluteString)
+    ]
+    return components.url!
+  }
+
+  static func subtitlePlaylistUrl(for id: String) -> URL {
+    var components = URLComponents()
+    components.scheme = cacheScheme
+    components.host = "subtitle"
+    components.queryItems = [
+      URLQueryItem(name: "id", value: id)
     ]
     return components.url!
   }
@@ -335,5 +437,62 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
       return M3u8ResourceLoader.cachedUrl(for: originalUrl).absoluteString
     }
     return Data(lines.joined(separator: "\n").utf8)
+  }
+
+  private static func rewriteSubtitlePlaylist(
+    subtitleUrl: URL,
+    headers: [String: String],
+    cacheManager: M3u8IosCacheManager
+  ) -> Data? {
+    guard
+      let data = try? cacheManager.data(for: subtitleUrl, headers: headers),
+      let text = String(data: data, encoding: .utf8)
+    else {
+      return nil
+    }
+    if text.contains("#EXTM3U") {
+      let lines = text.components(separatedBy: .newlines).map { rawLine -> String in
+        let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !line.isEmpty else { return rawLine }
+        if line.hasPrefix("#EXT-X-KEY:") || line.hasPrefix("#EXT-X-MAP:") {
+          return rewriteUriAttribute(in: rawLine, playlistUrl: subtitleUrl)
+        }
+        if line.hasPrefix("#") {
+          return rawLine
+        }
+        guard let originalUrl = URL(string: line, relativeTo: subtitleUrl)?.absoluteURL else {
+          return rawLine
+        }
+        return cachedUrl(for: originalUrl).absoluteString
+      }
+      return Data(lines.joined(separator: "\n").utf8)
+    }
+    let cachedSubtitleUrl = cachedUrl(for: subtitleUrl).absoluteString
+    let playlistDuration = 86_400
+    let playlist = [
+      "#EXTM3U",
+      "#EXT-X-VERSION:3",
+      "#EXT-X-TARGETDURATION:\(playlistDuration)",
+      "#EXT-X-MEDIA-SEQUENCE:0",
+      "#EXTINF:\(playlistDuration).0,",
+      cachedSubtitleUrl,
+      "#EXT-X-ENDLIST",
+    ].joined(separator: "\n")
+    return Data(playlist.utf8)
+  }
+
+  private static func removingMediaTags(from text: String, type: String, groupId: String) -> String {
+    text.components(separatedBy: .newlines)
+      .filter { line in
+        !(line.hasPrefix("#EXT-X-MEDIA:") &&
+          line.contains("TYPE=\(type)") &&
+          line.contains("GROUP-ID=\"\(groupId)\""))
+      }
+      .joined(separator: "\n")
+  }
+
+  private static func escapeAttribute(_ value: String) -> String {
+    value.replacingOccurrences(of: "\\", with: "\\\\")
+      .replacingOccurrences(of: "\"", with: "\\\"")
   }
 }

@@ -71,7 +71,7 @@ final class M3u8IosCacheManager {
     if isCancelled() {
       throw CancellationError()
     }
-    let fileUrl = try cacheFile(for: url)
+    let fileUrl = try cacheFile(for: url, headers: headers)
     lock.lock()
     let exists = FileManager.default.fileExists(atPath: fileUrl.path)
     lock.unlock()
@@ -154,9 +154,9 @@ final class M3u8IosCacheManager {
     }()
   }
 
-  private func cacheFile(for url: URL) throws -> URL {
+  private func cacheFile(for url: URL, headers: [String: String]) throws -> URL {
     try cacheDirectory(create: true)
-      .appendingPathComponent(cacheKey(for: url.absoluteString))
+      .appendingPathComponent(cacheKey(for: cacheIdentity(url: url, headers: headers)))
       .appendingPathExtension("cache")
   }
 
@@ -173,6 +173,14 @@ final class M3u8IosCacheManager {
     SHA256.hash(data: Data(value.utf8))
       .map { String(format: "%02x", $0) }
       .joined()
+  }
+
+  private func cacheIdentity(url: URL, headers: [String: String]) -> String {
+    let headerIdentity = headers
+      .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
+      .map { "\($0.key.lowercased())=\($0.value)" }
+      .joined(separator: "\n")
+    return "\(url.absoluteString)\n\(headerIdentity)"
   }
 
   private func touch(_ url: URL) {

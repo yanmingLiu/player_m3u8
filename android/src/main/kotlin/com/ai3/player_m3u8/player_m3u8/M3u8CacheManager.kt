@@ -5,7 +5,9 @@ import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.CacheKeyFactory
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import java.io.File
@@ -80,7 +82,24 @@ internal object M3u8CacheManager {
             .setUpstreamDataSourceFactory(
                 DefaultDataSource.Factory(context, httpDataSourceFactory(headers)),
             )
+            .setCacheKeyFactory(headerAwareCacheKeyFactory(headers))
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+    }
+
+    fun cacheKey(uri: String, headers: Map<String, String>): String {
+        val headerIdentity = headers
+            .toSortedMap(String.CASE_INSENSITIVE_ORDER)
+            .entries
+            .joinToString(separator = "\n") { (key, value) ->
+                "${key.lowercase()}=$value"
+            }
+        return "$uri\n$headerIdentity"
+    }
+
+    private fun headerAwareCacheKeyFactory(headers: Map<String, String>): CacheKeyFactory {
+        return CacheKeyFactory { dataSpec: DataSpec ->
+            cacheKey(dataSpec.uri.toString(), headers)
+        }
     }
 
     private fun httpDataSourceFactory(headers: Map<String, String>): DefaultHttpDataSource.Factory {

@@ -31,8 +31,10 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
   M3u8PlayerValue _lastQoeValue = const M3u8PlayerValue();
   DateTime? _lastQoeSampleAt;
   M3u8Source? _source;
+  List<M3u8SubtitleTrack> _subtitles = const <M3u8SubtitleTrack>[];
   String? _selectedSubtitleId;
   String? _selectedAudioTrackId;
+  bool _wasPlayingBeforeLastError = false;
   bool _disposed = false;
   bool _isChangingSource = false;
 
@@ -111,6 +113,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
     _volume = volume;
     _isMuted = isMuted;
     _source = source;
+    _subtitles = List<M3u8SubtitleTrack>.unmodifiable(subtitles);
     _selectedSubtitleId = selectedSubtitleId;
     _selectedAudioTrackId = selectedAudioTrackId;
     await _createSource(
@@ -169,6 +172,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         await _platform.disposePlayer(previousPlayerId);
       }
       _source = source;
+      _subtitles = List<M3u8SubtitleTrack>.unmodifiable(subtitles);
       _selectedSubtitleId = selectedSubtitleId;
       _selectedAudioTrackId = selectedAudioTrackId;
       await _createSource(
@@ -309,6 +313,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       throw StateError('M3u8PlayerController is already changing source.');
     }
     final retryPosition = initialPosition ?? value.position;
+    final shouldResumePlayback = value.isPlaying || _wasPlayingBeforeLastError;
     _debugAssertValidPosition(retryPosition);
     _isChangingSource = true;
     try {
@@ -328,9 +333,9 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       }
       await _createSource(
         source,
-        autoPlay: autoPlay ?? value.isPlaying,
+        autoPlay: autoPlay ?? shouldResumePlayback,
         initialPosition: retryPosition,
-        subtitles: const [],
+        subtitles: _subtitles,
         selectedSubtitleId: _selectedSubtitleId,
       );
     } finally {
@@ -532,6 +537,13 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
         ),
       ),
     };
+    if (event.type == M3u8PlayerEventType.error) {
+      _wasPlayingBeforeLastError = value.isPlaying;
+    } else if (event.type == M3u8PlayerEventType.playing ||
+        event.type == M3u8PlayerEventType.paused ||
+        event.type == M3u8PlayerEventType.initialized) {
+      _wasPlayingBeforeLastError = false;
+    }
     value = nextValue;
   }
 

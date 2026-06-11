@@ -163,7 +163,7 @@ final class M3u8DiskCachePrefetcher {
     do {
       let playlist = try loadPlaylist(
         url: audioUrl,
-        selectedQuality: autoQuality(),
+        selectedQuality: Self.autoQuality(),
         headers: useHeaders
       )
       for resource in playlist.resources {

@@ -17,6 +17,7 @@
 - 播放状态、进度、时长、播放器缓冲、磁盘缓存、视频尺寸、错误事件。
 - 播放健康指标：首帧耗时、rebuffer 次数和总时长、丢帧数、当前码率、观测带宽、清晰度切换次数。
 - HLS 清晰度列表和 Auto/手动清晰度选择；MP4/MOV 不提供清晰度选择。
+- HLS 内嵌字幕和外部 WebVTT 字幕；Android progressive 也可挂外部字幕，iOS progressive 暂不暴露外部字幕。
 - 播放倍速控制，支持 0.25x 到 2.0x。
 - 音量和静音控制，切换 source 后保留当前音频状态。
 - 连续 rebuffer 或播放错误时自动降到下一档清晰度并尝试恢复当前位置。
@@ -98,6 +99,31 @@ await controller.initialize(
 
 `audioHeaders` 未设置时自动沿用 `videoHeaders`。
 
+#### 字幕
+
+HLS 内嵌字幕会通过 native track 信息上报；外部 WebVTT 字幕可在初始化或切换 source 时传入：
+
+```dart
+await controller.initialize(
+  source: const M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+  subtitles: const [
+    M3u8SubtitleTrack(
+      id: 'zh',
+      label: '中文',
+      language: 'zh',
+      url: 'https://example.com/subtitles/zh.vtt',
+      mimeType: 'text/vtt',
+    ),
+  ],
+  selectedSubtitleId: 'zh',
+);
+
+await controller.setSubtitle('zh');
+await controller.clearSubtitle();
+```
+
+iOS 外部字幕当前通过 HLS `SUBTITLES` rendition 注入实现，因此只对 HLS source 暴露；progressive MP4/MOV 在 iOS 上不会上报外部字幕列表。
+
 #### 音频轨道选择
 
 ```dart
@@ -144,14 +170,17 @@ void dispose() {
 同一个 controller 可以切换播放源：
 
 ```dart
-await controller.setSource(nextUrl, autoPlay: true);
+await controller.setSource(
+  M3u8Source(videoUrl: 'https://example.com/next.m3u8'),
+  autoPlay: true,
+);
 ```
 
 如果要恢复历史播放进度或从推荐流跳转到指定时间，可以在创建 source 时传入初始位置：
 
 ```dart
 await controller.setSource(
-  nextUrl,
+  M3u8Source(videoUrl: 'https://example.com/next.m3u8'),
   autoPlay: true,
   initialPosition: resumePosition,
 );
@@ -175,7 +204,7 @@ await controller.setSource(
 await M3u8PlayerCache.configure(maxSizeBytes: 1024 * 1024 * 1024);
 final cacheInfo = await M3u8PlayerCache.info();
 final taskId = await M3u8PlayerCache.precache(
-  url,
+  M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
   initialPosition: resumePosition,
   quality: controller.value.selectedQuality,
 );
@@ -188,7 +217,7 @@ await M3u8PlayerCache.cancelPrecache(taskId);
 await M3u8PlayerCache.clear();
 ```
 
-配置和清理都要求当前没有活跃 native player 或独立预缓存任务；查询缓存状态和独立预缓存任务可在播放中调用。独立预缓存返回 `taskId`，进度通过 `M3u8PlayerCache.events()` 上报，可按 `taskId` 过滤并取消。`precache` 只支持 HLS，可传入 `quality`，用于预热当前播放档位或下一个 source 的目标档位；事件会回传实际预缓存档位。Android 预缓存复用 Media3 `HlsPlaylistParser` + `CacheWriter` + `SimpleCache`；iOS 复用 AVFoundation resource loader 同一套 app caches。MP4/MOV 调用 `precache` 会返回 `unsupported_source_type`。播放器 source 切换会取消播放器内部预取；业务自己发起的独立预缓存任务应按业务生命周期主动取消。
+配置和清理都要求当前没有活跃 native player 或独立预缓存任务；查询缓存状态和独立预缓存任务可在播放中调用。独立预缓存返回 `taskId`，进度通过 `M3u8PlayerCache.events()` 上报，可按 `taskId` 过滤并取消。`precache` 只支持 HLS，可传入 `quality`，用于预热当前播放档位或下一个 source 的目标档位；事件会回传实际预缓存档位。Android 预缓存复用 Media3 `HlsPlaylistParser` + `CacheWriter` + `SimpleCache`；iOS 复用 AVFoundation resource loader 同一套 app caches。缓存 key 包含 URL 和请求 headers，避免不同 Authorization/Cookie/地区 header 的资源互相复用。MP4/MOV 调用 `precache` 会返回 `unsupported_source_type`。播放器 source 切换会取消播放器内部预取；业务自己发起的独立预缓存任务应按业务生命周期主动取消。
 
 ### 清晰度选择
 
@@ -207,8 +236,14 @@ await controller.setQuality(qualities.first);
 初始化、切换 source 或播放中都可以设置倍速：
 
 ```dart
-await controller.initialize(url, playbackSpeed: 1.25);
-await controller.setSource(nextUrl, playbackSpeed: 1.5);
+await controller.initialize(
+  source: const M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+  playbackSpeed: 1.25,
+);
+await controller.setSource(
+  M3u8Source(videoUrl: 'https://example.com/next.m3u8'),
+  playbackSpeed: 1.5,
+);
 await controller.setPlaybackSpeed(2.0);
 ```
 
@@ -219,7 +254,11 @@ await controller.setPlaybackSpeed(2.0);
 初始化、切换 source 或播放中都可以设置音频状态：
 
 ```dart
-await controller.initialize(url, volume: 0.8, isMuted: false);
+await controller.initialize(
+  source: const M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+  volume: 0.8,
+  isMuted: false,
+);
 await controller.setVolume(0.5);
 await controller.setMuted(true);
 ```
@@ -254,7 +293,7 @@ await controller.retry(autoPlay: true);
 
 ```dart
 await controller.initialize(
-  url,
+  source: const M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
   recoveryPolicy: const M3u8RecoveryPolicy(
     rebufferThreshold: 2,
     minimumRecoveryInterval: Duration(seconds: 6),
@@ -363,7 +402,8 @@ example/
 - 进度事件默认约 250ms 一次，避免高频 channel 压力。
 - dispose 或 source 切换时释放 player、surface/texture、observer/timer、预取任务。
 - Android 预取使用 Media3 `HlsPlaylistParser` 解析 HLS，并通过 Media3 `CacheWriter` 写入 `SimpleCache`，播放器可复用缓存数据；MP4/MOV 不启动主动预取。
-- iOS HLS 播放通过 `AVAssetResourceLoader` 读取自定义 scheme，playlist、key、map、segment 请求会优先命中 app caches；MP4/MOV 直接用原始 URL 创建 `AVURLAsset`。
+- iOS HLS 播放通过 `AVAssetResourceLoader` 读取自定义 scheme，playlist、key、map、segment 和外部字幕请求会优先命中 app caches；MP4/MOV 直接用原始 URL 创建 `AVURLAsset`。
+- 磁盘缓存 key 会包含 URL 和请求 headers，避免同 URL 在不同 Authorization/Cookie/地区 header 下复用错误缓存。
 - `M3u8PlayerCache.precache` 可在创建播放器前预热当前/下一个 HLS source 的磁盘缓存，并通过独立 cache event channel 上报进度、完成、取消或错误；传入 `quality` 后会优先预缓存最接近该档位的 HLS variant。
 - HLS 播放器内部主动预取会跟随手动清晰度、自动降级恢复和 seek 位置重启，不再固定优先最高码率 variant。
 - Android 通过 ExoPlayer track/analytics 上报首帧、rebuffer、丢帧、当前码率和带宽估计；iOS 通过 AVPlayer access log 和视频轨道信息上报对应指标。rebuffer 总时长和清晰度切换次数可用于真实设备 QoE 统计。
@@ -375,7 +415,8 @@ example/
 
 - 支持网络 HLS/m3u8 VOD 和 progressive MP4/MOV；不支持 DASH、SmoothStreaming、RTSP、FLV 或本地文件。
 - MP4/MOV 第一版仅支持播放、暂停、seek、进度和 source 切换，不支持磁盘预取或清晰度选择。
-- 暂不支持字幕、后台播放、DRM。
+- 字幕支持以 WebVTT/HLS text track 为主；Android progressive 可挂外部字幕，iOS progressive 暂不支持外部字幕。
+- 暂不支持后台播放、DRM。
 - 当前已支持手动清晰度约束，但尚未暴露自定义自动码率策略。
 - iOS HLS 解析仍是轻量实现，适合常见 VOD playlist；复杂 HLS 特性仍需继续补测试。
 - 磁盘缓存配置和清理必须在没有活跃播放器时调用。
@@ -456,6 +497,7 @@ It is designed for Flutter apps that need HLS/m3u8 VOD or MP4/MOV playback, play
 - Playback state, progress, duration, player buffer, disk cache, video size, and error events.
 - Playback health metrics: startup time, rebuffer count and duration, dropped frames, current video bitrate, observed bitrate, and quality switch count.
 - HLS quality list plus Auto/manual quality selection. MP4/MOV sources do not expose quality selection.
+- Built-in HLS subtitles and external WebVTT subtitles. Android progressive sources can attach external subtitles; iOS progressive sources do not expose external subtitles yet.
 - Playback speed control from 0.25x to 2.0x.
 - Volume and mute controls that survive source switching.
 - Automatic lower-quality recovery after repeated rebuffering or playback errors.
@@ -497,8 +539,10 @@ import 'package:player_m3u8/player_m3u8.dart';
 final controller = M3u8PlayerController();
 
 await controller.initialize(
-  'https://example.com/index.m3u8',
-  headers: const {'User-Agent': 'MyApp'},
+  source: const M3u8Source(
+    videoUrl: 'https://example.com/index.m3u8',
+    videoHeaders: {'User-Agent': 'MyApp'},
+  ),
   autoPlay: true,
   initialPosition: const Duration(seconds: 30),
 );
@@ -510,8 +554,10 @@ MP4/MOV sources are detected by extension with the default `sourceType: M3u8Sour
 
 ```dart
 await controller.initialize(
-  'https://example.com/video.mp4',
-  sourceType: M3u8SourceType.progressive,
+  source: const M3u8Source(
+    videoUrl: 'https://example.com/video.mp4',
+    sourceType: M3u8SourceType.progressive,
+  ),
   autoPlay: true,
 );
 ```
@@ -526,19 +572,64 @@ void dispose() {
 }
 ```
 
+### Separate Audio Sources
+
+If video and audio are separate HLS streams, pass `audioUrl` on the source:
+
+```dart
+await controller.initialize(
+  source: const M3u8Source(
+    videoUrl: 'https://example.com/video-only.m3u8',
+    audioUrl: 'https://example.com/audio-only.m3u8',
+    audioHeaders: {'User-Agent': 'MyAudioApp'},
+  ),
+  autoPlay: true,
+);
+```
+
+When `audioHeaders` is omitted, the player reuses `videoHeaders`.
+
+### Subtitles
+
+Built-in HLS text tracks are reported by the native player. External WebVTT subtitles can be attached during initialization or source switching:
+
+```dart
+await controller.initialize(
+  source: const M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+  subtitles: const [
+    M3u8SubtitleTrack(
+      id: 'en',
+      label: 'English',
+      language: 'en',
+      url: 'https://example.com/subtitles/en.vtt',
+      mimeType: 'text/vtt',
+    ),
+  ],
+  selectedSubtitleId: 'en',
+);
+
+await controller.setSubtitle('en');
+await controller.clearSubtitle();
+```
+
+iOS external subtitles are injected as HLS `SUBTITLES` renditions, so they are exposed only for HLS sources. Android progressive sources can attach external subtitles.
+
 ### Playlist Switching
 
 Reuse one controller and switch the source:
 
 ```dart
-await controller.setSource(nextUrl, autoPlay: true);
+await controller.setSource(
+  M3u8Source(videoUrl: 'https://example.com/next.m3u8'),
+  autoPlay: true,
+);
 ```
 
 To resume watch history or jump into a feed item at a specific timestamp, pass an initial position when creating the source:
 
 ```dart
 await controller.setSource(
-  nextUrl,
+  M3u8Source(videoUrl: 'https://example.com/next.m3u8'),
   autoPlay: true,
   initialPosition: resumePosition,
 );
@@ -562,7 +653,7 @@ The default disk cache limit is 512 MB. Configure it before creating players, or
 await M3u8PlayerCache.configure(maxSizeBytes: 1024 * 1024 * 1024);
 final cacheInfo = await M3u8PlayerCache.info();
 final taskId = await M3u8PlayerCache.precache(
-  url,
+  M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
   initialPosition: resumePosition,
   quality: controller.value.selectedQuality,
 );
@@ -575,7 +666,7 @@ await M3u8PlayerCache.cancelPrecache(taskId);
 await M3u8PlayerCache.clear();
 ```
 
-Configure and clear require no active native players or standalone precache tasks; cache info and standalone precache tasks can run while playback is active. Standalone HLS precache returns a `taskId`, emits progress through `M3u8PlayerCache.events()`, and can be cancelled by `taskId`. Pass `quality` to warm the current playback rendition or the next source's target rendition; cache events include the actual warmed quality. Android precache reuses Media3 `HlsPlaylistParser`, `CacheWriter`, and `SimpleCache`; iOS reuses the same app caches path as the AVFoundation resource loader. MP4/MOV precache returns `unsupported_source_type`. Player source switching cancels player-owned prefetch; app-owned standalone precache tasks should be cancelled according to app lifecycle.
+Configure and clear require no active native players or standalone precache tasks; cache info and standalone precache tasks can run while playback is active. Standalone HLS precache returns a `taskId`, emits progress through `M3u8PlayerCache.events()`, and can be cancelled by `taskId`. Pass `quality` to warm the current playback rendition or the next source's target rendition; cache events include the actual warmed quality. Android precache reuses Media3 `HlsPlaylistParser`, `CacheWriter`, and `SimpleCache`; iOS reuses the same app caches path as the AVFoundation resource loader. Cache keys include URL and request headers to avoid reusing data across different Authorization/Cookie/region headers. MP4/MOV precache returns `unsupported_source_type`. Player source switching cancels player-owned prefetch; app-owned standalone precache tasks should be cancelled according to app lifecycle.
 
 ### Quality Selection
 
@@ -594,8 +685,14 @@ await controller.setQuality(qualities.first);
 Set playback speed during initialization, source switching, or playback:
 
 ```dart
-await controller.initialize(url, playbackSpeed: 1.25);
-await controller.setSource(nextUrl, playbackSpeed: 1.5);
+await controller.initialize(
+  source: const M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+  playbackSpeed: 1.25,
+);
+await controller.setSource(
+  M3u8Source(videoUrl: 'https://example.com/next.m3u8'),
+  playbackSpeed: 1.5,
+);
 await controller.setPlaybackSpeed(2.0);
 ```
 
@@ -606,7 +703,11 @@ The supported range is 0.25x to 2.0x. Android uses ExoPlayer `PlaybackParameters
 Set audio state during initialization, source switching, or playback:
 
 ```dart
-await controller.initialize(url, volume: 0.8, isMuted: false);
+await controller.initialize(
+  source: const M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+  volume: 0.8,
+  isMuted: false,
+);
 await controller.setVolume(0.5);
 await controller.setMuted(true);
 ```
@@ -641,7 +742,7 @@ The default policy enables automatic recovery, steps down after 3 rebuffers, and
 
 ```dart
 await controller.initialize(
-  url,
+  source: const M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
   recoveryPolicy: const M3u8RecoveryPolicy(
     rebufferThreshold: 2,
     minimumRecoveryInterval: Duration(seconds: 6),
@@ -753,7 +854,8 @@ example/
 - Progress events are throttled to about 250ms.
 - dispose and source switching release native players, surfaces/textures, observers/timers, and active prefetch tasks.
 - Android prefetch uses Media3 `HlsPlaylistParser` for HLS parsing and Media3 `CacheWriter` to write into `SimpleCache`, which ExoPlayer can reuse. MP4/MOV do not start active prefetch.
-- iOS HLS playback uses `AVAssetResourceLoader` with a custom scheme. Playlist, key, map, and segment requests read from app caches first; MP4/MOV create `AVURLAsset` from the original URL.
+- iOS HLS playback uses `AVAssetResourceLoader` with a custom scheme. Playlist, key, map, segment, and external subtitle requests read from app caches first; MP4/MOV create `AVURLAsset` from the original URL.
+- Disk cache keys include URL and request headers, so resources with different Authorization, Cookie, or region headers do not share stale cached data.
 - `M3u8PlayerCache.precache` can warm HLS disk cache before creating a player or for the next source, with standalone cache events for progress, completion, cancellation, and errors. Passing `quality` prioritizes the closest HLS variant for that rendition.
 - HLS player-owned active prefetch follows manual quality, automatic recovery downshifts, and seek restarts instead of always prioritizing the highest bitrate variant.
 - Android reports startup, rebuffer, dropped-frame, bitrate, and bandwidth metrics through ExoPlayer tracks/analytics. iOS reports the same metric class through AVPlayer access logs and video track data. Total rebuffer duration and quality switch count are available for real-device QoE analytics.
@@ -765,7 +867,8 @@ example/
 
 - Network HLS/m3u8 VOD and progressive MP4/MOV are supported. DASH, SmoothStreaming, RTSP, FLV, and local files are not supported.
 - MP4/MOV v1 covers playback, pause, seek, progress, and source switching, but not disk prefetch or quality selection.
-- No subtitles, background playback, or DRM yet.
+- Subtitle support targets WebVTT and HLS text tracks. Android progressive sources can attach external subtitles; iOS progressive external subtitles are not exposed yet.
+- No background playback or DRM yet.
 - Manual quality constraints are supported, but custom automatic bitrate policy controls are not exposed yet.
 - iOS HLS parsing remains lightweight and targets common VOD playlists; complex HLS features need additional validation.
 - Disk cache configuration and clearing must be called only when no players are active.

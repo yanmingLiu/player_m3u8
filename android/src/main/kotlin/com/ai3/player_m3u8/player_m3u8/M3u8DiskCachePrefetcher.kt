@@ -117,14 +117,14 @@ internal class M3u8DiskCachePrefetcher(
                 if (!isCurrent(taskGeneration)) {
                     return
                 }
-                cacheUri(resource, taskGeneration)
+                cacheUri(resource, taskGeneration, headers)
             }
 
             for (segment in orderedSegments) {
                 if (!isCurrent(taskGeneration)) {
                     return
                 }
-                cacheUri(segment.uri, taskGeneration)
+                cacheUri(segment.uri, taskGeneration, headers)
                 if (segment.startTimeMs >= diskCacheStartMs) {
                     diskCachePositionMs = segment.endTimeMs.coerceAtMost(currentPlaylist.durationMs)
                     sendDiskCacheProgress(
@@ -177,13 +177,13 @@ internal class M3u8DiskCachePrefetcher(
                 if (!isCurrent(taskGeneration)) {
                     return
                 }
-                cacheUri(resource, taskGeneration)
+                cacheUri(resource, taskGeneration, audioHeaders)
             }
             for (segment in playlist.segments) {
                 if (!isCurrent(taskGeneration)) {
                     return
                 }
-                cacheUri(segment.uri, taskGeneration)
+                cacheUri(segment.uri, taskGeneration, audioHeaders)
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -380,7 +380,7 @@ internal class M3u8DiskCachePrefetcher(
         return UriUtil.resolveToUri(baseUri, reference)
     }
 
-    private fun cacheUri(uri: Uri, taskGeneration: Int) {
+    private fun cacheUri(uri: Uri, taskGeneration: Int, headers: Map<String, String>) {
         if (!isCurrent(taskGeneration)) {
             return
         }
@@ -390,6 +390,7 @@ internal class M3u8DiskCachePrefetcher(
             DataSpec.Builder()
                 .setUri(uri)
                 .setHttpRequestHeaders(headers)
+                .setKey(M3u8CacheManager.cacheKey(uri.toString(), headers))
                 .build(),
             ByteArray(CacheWriter.DEFAULT_BUFFER_SIZE_BYTES),
             null,

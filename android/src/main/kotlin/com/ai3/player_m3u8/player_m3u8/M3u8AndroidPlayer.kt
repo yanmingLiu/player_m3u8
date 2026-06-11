@@ -69,6 +69,7 @@ class M3u8AndroidPlayer(
     private var selectedQuality = autoQuality()
     private var availableSubtitles = normalizeExternalSubtitles(externalSubtitles)
     private var selectedSubtitle = availableSubtitles.firstOrNull { it["id"] == selectedSubtitleId }
+    private var currentSubtitleText = ""
     private var availableAudioTracks = listOf<Map<String, Any?>>()
     private var selectedAudioTrack = availableAudioTracks.firstOrNull { it["id"] == selectedAudioTrackId }
     private var recoveryPolicy = recoveryPolicy.normalized()
@@ -215,6 +216,7 @@ class M3u8AndroidPlayer(
             selectedSubtitleId = subtitleId
             selectedSubtitle = availableSubtitles.firstOrNull { it["id"] == subtitleId }
             applySelectedSubtitle()
+            currentSubtitleText = ""
             if (subtitleId == null) {
                 sendEvent(playbackPayload("progress") + mapOf("subtitleText" to ""))
             } else {
@@ -376,6 +378,7 @@ class M3u8AndroidPlayer(
             .mapNotNull { cue -> cue.text?.toString()?.trim() }
             .filter { it.isNotEmpty() }
             .joinToString(separator = "\n")
+        currentSubtitleText = text
         sendEvent(playbackPayload("progress") + mapOf("subtitleText" to text))
     }
 
@@ -450,7 +453,7 @@ class M3u8AndroidPlayer(
             mediaItemBuilder.setSubtitleConfigurations(subtitleConfigurations)
         }
         val mediaItem = mediaItemBuilder.build()
-        val mediaSourceFactory = DefaultMediaSourceFactory(
+        val videoMediaSourceFactory = DefaultMediaSourceFactory(
             M3u8CacheManager.mediaDataSourceFactory(context, videoHeaders),
         )
         val loadControl = DefaultLoadControl.Builder()
@@ -476,7 +479,7 @@ class M3u8AndroidPlayer(
                 "bufferMs=$MIN_BUFFER_MS-$MAX_BUFFER_MS",
         )
         val newPlayer = ExoPlayer.Builder(context, renderersFactory)
-            .setMediaSourceFactory(mediaSourceFactory)
+            .setMediaSourceFactory(videoMediaSourceFactory)
             .setLoadControl(loadControl)
             .setTrackSelector(trackSelector)
             .build()
@@ -485,13 +488,16 @@ class M3u8AndroidPlayer(
         newPlayer.playbackParameters = PlaybackParameters(playbackSpeed)
         newPlayer.volume = effectiveVolume()
         if (audioUrl != null) {
-            val audioMediaSource = mediaSourceFactory.createMediaSource(
+            val audioMediaSourceFactory = DefaultMediaSourceFactory(
+                M3u8CacheManager.mediaDataSourceFactory(context, effectiveAudioHeaders),
+            )
+            val audioMediaSource = audioMediaSourceFactory.createMediaSource(
                 MediaItem.Builder()
                     .setUri(audioUrl)
                     .setMimeType(MimeTypes.APPLICATION_M3U8)
                     .build(),
             )
-            val videoMediaSource = mediaSourceFactory.createMediaSource(mediaItem)
+            val videoMediaSource = videoMediaSourceFactory.createMediaSource(mediaItem)
             val mergedSource = MergingMediaSource(videoMediaSource, audioMediaSource)
             if (state == null && initialPositionMs > 0L) {
                 newPlayer.setMediaSource(mergedSource, initialPositionMs)
@@ -938,7 +944,7 @@ class M3u8AndroidPlayer(
             "isMuted" to isMuted,
             "availableSubtitles" to availableSubtitles,
             "selectedSubtitle" to selectedSubtitle,
-            "subtitleText" to "",
+            "subtitleText" to currentSubtitleText,
             "availableAudioTracks" to availableAudioTracks,
             "selectedAudioTrack" to selectedAudioTrack,
             "recoveryCount" to recoveryCount,

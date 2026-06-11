@@ -279,7 +279,9 @@ void main() {
 
     expect(controller.playerId, 7);
     expect(platform.createdSource?.videoUrl, 'https://example.com/index.m3u8');
-    expect(platform.createdSource?.videoHeaders, const {'Authorization': 'token'});
+    expect(platform.createdSource?.videoHeaders, const {
+      'Authorization': 'token',
+    });
     expect(platform.createdSource?.sourceType, M3u8SourceType.auto);
     expect(platform.initialPosition, const Duration(seconds: 12));
     expect(platform.playbackSpeed, 1.25);
@@ -459,13 +461,18 @@ void main() {
   test('events for other players are ignored', () async {
     final platform = FakePlayerM3u8Platform();
     final controller = M3u8PlayerController(platform: platform);
-    await controller.initialize(source: M3u8Source(videoUrl: 'https://example.com/one.m3u8'));
+    await controller.initialize(
+      source: M3u8Source(videoUrl: 'https://example.com/one.m3u8'),
+    );
 
     await controller.setSource(
-        M3u8Source(videoUrl: 'https://example.com/two.mp4', sourceType: M3u8SourceType.progressive),
-        autoPlay: true,
-        recoveryPolicy: const M3u8RecoveryPolicy(rebufferThreshold: 4),
-        initialPosition: const Duration(seconds: 18),
+      M3u8Source(
+        videoUrl: 'https://example.com/two.mp4',
+        sourceType: M3u8SourceType.progressive,
+      ),
+      autoPlay: true,
+      recoveryPolicy: const M3u8RecoveryPolicy(rebufferThreshold: 4),
+      initialPosition: const Duration(seconds: 18),
       playbackSpeed: 1.5,
       volume: 0.4,
       isMuted: true,
@@ -519,7 +526,9 @@ void main() {
     final platform = _EagerEventPlatform();
     final controller = M3u8PlayerController(platform: platform);
 
-    await controller.initialize(source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'));
+    await controller.initialize(
+      source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+    );
     await pumpEventQueue();
 
     expect(controller.value.isInitialized, true);
@@ -532,7 +541,12 @@ void main() {
     final platform = FakePlayerM3u8Platform();
     final controller = M3u8PlayerController(platform: platform);
 
-    await controller.initialize(source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'));
+    await controller.initialize(
+      source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+    );
+    platform.eventController.add(
+      const M3u8PlayerEvent(playerId: 7, type: M3u8PlayerEventType.playing),
+    );
     platform.eventController.add(
       const M3u8PlayerEvent(
         playerId: 7,
@@ -551,7 +565,7 @@ void main() {
 
     expect(controller.value.hasError, true);
 
-    await controller.retry(autoPlay: true);
+    await controller.retry();
 
     expect(platform.disposedPlayerId, 7);
     expect(controller.playerId, 8);
@@ -576,7 +590,9 @@ void main() {
       throwsArgumentError,
     );
 
-    await controller.initialize(source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'));
+    await controller.initialize(
+      source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+    );
 
     expect(
       controller.seekTo(const Duration(milliseconds: -1)),
@@ -649,7 +665,9 @@ void main() {
     final snapshots = <M3u8QoeSnapshot>[];
     final subscription = controller.qoeSnapshots.listen(snapshots.add);
 
-    await controller.initialize(source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'));
+    await controller.initialize(
+      source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+    );
     controller.startQoeSampling(emitImmediately: true);
     await pumpEventQueue();
 

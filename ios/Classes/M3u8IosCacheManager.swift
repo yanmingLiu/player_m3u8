@@ -299,22 +299,28 @@ final class M3u8IosCacheManager {
   private func trimIfNeededLocked() throws {
     let directory = try cacheDirectory(create: false)
     guard FileManager.default.fileExists(atPath: directory.path) else { return }
-    let files = try FileManager.default.contentsOfDirectory(
-      at: directory,
-      includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey],
-      options: [.skipsHiddenFiles]
-    )
+    guard
+      let files = FileManager.default.enumerator(
+        at: directory,
+        includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey, .fileSizeKey],
+        options: [.skipsHiddenFiles]
+      )
+    else {
+      return
+    }
     var entries: [(url: URL, size: Int64, date: Date)] = []
     var totalSize: Int64 = 0
 
-    for file in files {
-      let values = try file.resourceValues(forKeys: [
+    for case let fileUrl as URL in files {
+      let values = try fileUrl.resourceValues(forKeys: [
+        .isRegularFileKey,
         .contentModificationDateKey,
         .fileSizeKey,
       ])
+      guard values.isRegularFile == true else { continue }
       let size = Int64(values.fileSize ?? 0)
       totalSize += size
-      entries.append((file, size, values.contentModificationDate ?? .distantPast))
+      entries.append((fileUrl, size, values.contentModificationDate ?? .distantPast))
     }
 
     guard totalSize > maxCacheBytes else { return }

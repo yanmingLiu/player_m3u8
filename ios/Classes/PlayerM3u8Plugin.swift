@@ -251,6 +251,30 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       )
       return
     }
+    guard
+      let playbackSpeed = playbackSpeed(from: arguments["playbackSpeed"])
+    else {
+      result(
+        FlutterError(
+          code: "invalid_playback_speed",
+          message: "playbackSpeed must be finite and between 0.25 and 2.0.",
+          details: nil
+        )
+      )
+      return
+    }
+    guard
+      let volume = volume(from: arguments["volume"])
+    else {
+      result(
+        FlutterError(
+          code: "invalid_volume",
+          message: "volume must be finite and between 0.0 and 1.0.",
+          details: nil
+        )
+      )
+      return
+    }
     let player = M3u8IosPlayer(
       videoUrl: videoUrl,
       audioUrl: audioUrl,
@@ -259,8 +283,8 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       cacheKey: cacheKey,
       sourceType: M3u8SourceType.from(arguments["sourceType"]),
       initialPositionMs: initialPositionMs,
-      playbackSpeed: validPlaybackSpeed(from: arguments["playbackSpeed"]),
-      volume: validVolume(from: arguments["volume"]),
+      playbackSpeed: playbackSpeed,
+      volume: volume,
       isMuted: arguments["isMuted"] as? Bool ?? false,
       externalSubtitles: arguments["subtitles"] as? [[String: Any]] ?? [],
       selectedSubtitleId: arguments["selectedSubtitleId"] as? String,
@@ -275,24 +299,30 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     result(textureId)
   }
 
-  private func validPlaybackSpeed(from value: Any?) -> Double {
+  private func playbackSpeed(from value: Any?) -> Double? {
+    guard let value else {
+      return 1.0
+    }
     guard let speed = (value as? NSNumber)?.doubleValue,
       speed.isFinite,
       speed >= 0.25,
       speed <= 2.0
     else {
-      return 1.0
+      return nil
     }
     return speed
   }
 
-  private func validVolume(from value: Any?) -> Double {
+  private func volume(from value: Any?) -> Double? {
+    guard let value else {
+      return 1.0
+    }
     guard let volume = (value as? NSNumber)?.doubleValue,
       volume.isFinite,
       volume >= 0,
       volume <= 1
     else {
-      return 1.0
+      return nil
     }
     return volume
   }

@@ -222,11 +222,11 @@ final class M3u8DiskCachePrefetcher {
       )
       for resource in playlist.resources {
         if !isCurrent(taskGeneration) { return }
-        try? cacheUrlWithRetry(resource, generation: taskGeneration)
+        try? cacheUrlWithRetry(resource, headers: useHeaders, generation: taskGeneration)
       }
       for segment in playlist.segments {
         if !isCurrent(taskGeneration) { return }
-        try cacheUrlWithRetry(segment.url, generation: taskGeneration)
+        try cacheUrlWithRetry(segment.url, headers: useHeaders, generation: taskGeneration)
       }
     } catch {
       // Audio prefetch is optional; playback should continue.
@@ -327,11 +327,15 @@ final class M3u8DiskCachePrefetcher {
     return Playlist(segments: [], resources: [], durationMs: 0, quality: selectedQuality)
   }
 
-  private func cacheUrlWithRetry(_ url: URL, generation taskGeneration: Int) throws {
+  private func cacheUrlWithRetry(
+    _ url: URL,
+    headers: [String: String]? = nil,
+    generation taskGeneration: Int
+  ) throws {
     var attempt = 0
     while isCurrent(taskGeneration) {
       do {
-        try cacheUrl(url, generation: taskGeneration)
+        try cacheUrl(url, headers: headers, generation: taskGeneration)
         return
       } catch {
         if !isCurrent(taskGeneration) { return }
@@ -346,15 +350,20 @@ final class M3u8DiskCachePrefetcher {
     }
   }
 
-  private func cacheUrl(_ url: URL, generation taskGeneration: Int) throws {
-    if cacheManager.cachedFileIfExists(for: url, headers: headers, cacheKey: cacheKey) != nil {
+  private func cacheUrl(
+    _ url: URL,
+    headers overrideHeaders: [String: String]? = nil,
+    generation taskGeneration: Int
+  ) throws {
+    let useHeaders = overrideHeaders ?? headers
+    if cacheManager.cachedFileIfExists(for: url, headers: useHeaders, cacheKey: cacheKey) != nil {
       cacheHitCount += 1
     } else {
       networkFetchCount += 1
     }
     try cacheManager.ensureCached(
       url: url,
-      headers: headers,
+      headers: useHeaders,
       cacheKey: cacheKey,
       taskObserver: { [weak self] task in self?.setCurrentTask(task) },
       isCancelled: { [weak self] in

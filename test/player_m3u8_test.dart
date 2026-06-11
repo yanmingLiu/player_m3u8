@@ -346,6 +346,52 @@ void main() {
     expect(event.quality?.height, 720);
   });
 
+  test('player event parser handles fallback values and track filtering', () {
+    final event = M3u8PlayerEvent.fromMap(const <Object?, Object?>{
+      'playerId': 4.2,
+      'event': 'error',
+      'position': -1,
+      'width': 1920,
+      'height': 1080,
+      'availableQualities': [
+        {'height': 480},
+        'ignored',
+      ],
+      'selectedQuality': 'ignored',
+      'availableSubtitles': [
+        {'id': '', 'label': 'invalid'},
+        {'id': 'en', 'label': 'English'},
+      ],
+      'selectedSubtitle': {'id': '', 'label': 'invalid'},
+      'availableAudioTracks': [
+        {'id': '', 'label': 'invalid'},
+        {'id': 'main', 'label': 'Main'},
+      ],
+      'selectedAudioTrack': {'id': '', 'label': 'invalid'},
+      'error': {'details': 'detail'},
+    });
+
+    expect(event.playerId, 4);
+    expect(event.type, M3u8PlayerEventType.error);
+    expect(event.position, isNull);
+    expect(event.size, const Size(1920, 1080));
+    expect(event.availableQualities?.single.height, 480);
+    expect(event.selectedQuality, isNull);
+    expect(event.availableSubtitles?.single.id, 'en');
+    expect(event.selectedSubtitle, isNull);
+    expect(event.availableAudioTracks?.single.id, 'main');
+    expect(event.selectedAudioTrack, isNull);
+    expect(event.error?.code, 'player_error');
+    expect(event.error?.message, 'Playback failed.');
+    expect(event.error?.details, 'detail');
+
+    expect(
+      () =>
+          M3u8PlayerEvent.fromMap(const <Object?, Object?>{'playerId': 'bad'}),
+      throwsArgumentError,
+    );
+  });
+
   test('controller initializes and applies player events', () async {
     final platform = FakePlayerM3u8Platform();
     final controller = M3u8PlayerController(platform: platform);
@@ -553,6 +599,107 @@ void main() {
     controller.dispose();
     await pumpEventQueue();
     expect(platform.disposedPlayerId, 7);
+    await platform.eventController.close();
+  });
+
+  test(
+    'controller applies paused completed buffering audio and default error events',
+    () async {
+      final platform = FakePlayerM3u8Platform();
+      final controller = M3u8PlayerController(platform: platform);
+      await controller.initialize(
+        source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+      );
+      platform.eventController.add(
+        const M3u8PlayerEvent(
+          playerId: 7,
+          type: M3u8PlayerEventType.initialized,
+          duration: Duration(seconds: 30),
+          availableAudioTracks: [M3u8AudioTrack(id: 'main', label: 'Main')],
+        ),
+      );
+      await pumpEventQueue();
+
+      await controller.setAudioTrack('main');
+      expect(platform.selectedAudioTrackId, 'main');
+      expect(controller.value.selectedAudioTrack?.id, 'main');
+      await controller.clearAudioTrack();
+      expect(controller.value.selectedAudioTrack, isNull);
+
+      platform.eventController.add(
+        const M3u8PlayerEvent(
+          playerId: 7,
+          type: M3u8PlayerEventType.buffering,
+          position: Duration(seconds: 5),
+        ),
+      );
+      await pumpEventQueue();
+      expect(controller.value.isBuffering, true);
+      expect(controller.value.position, const Duration(seconds: 5));
+
+      platform.eventController.add(
+        const M3u8PlayerEvent(
+          playerId: 7,
+          type: M3u8PlayerEventType.paused,
+          position: Duration(seconds: 6),
+        ),
+      );
+      await pumpEventQueue();
+      expect(controller.value.isPlaying, false);
+      expect(controller.value.isBuffering, false);
+      expect(controller.value.position, const Duration(seconds: 6));
+
+      platform.eventController.add(
+        const M3u8PlayerEvent(playerId: 7, type: M3u8PlayerEventType.completed),
+      );
+      await pumpEventQueue();
+      expect(controller.value.isCompleted, true);
+      expect(controller.value.position, const Duration(seconds: 30));
+
+      platform.eventController.add(
+        const M3u8PlayerEvent(playerId: 7, type: M3u8PlayerEventType.error),
+      );
+      await pumpEventQueue();
+      expect(controller.value.hasError, true);
+      expect(controller.value.error?.code, 'player_error');
+
+      controller.dispose();
+      await platform.eventController.close();
+    },
+  );
+
+  test('controller guards invalid lifecycle operations', () async {
+    final platform = FakePlayerM3u8Platform();
+    final controller = M3u8PlayerController(platform: platform);
+
+    expect(controller.source, isNull);
+    expect(controller.playbackSpeed, 1.0);
+    expect(controller.volume, 1.0);
+    expect(controller.isMuted, false);
+    expect(controller.isInitialized, false);
+    expect(controller.play(), throwsStateError);
+    expect(controller.pause(), throwsStateError);
+    expect(controller.setQuality(M3u8Quality.auto), throwsStateError);
+    expect(controller.retry(), throwsStateError);
+    expect(
+      () => controller.startQoeSampling(interval: Duration.zero),
+      throwsArgumentError,
+    );
+
+    await controller.initialize(
+      source: M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+    );
+    expect(
+      controller.initialize(
+        source: M3u8Source(videoUrl: 'https://example.com/again.m3u8'),
+      ),
+      throwsStateError,
+    );
+    await controller.setRecoveryPolicy(M3u8RecoveryPolicy.disabled);
+    expect(controller.recoveryPolicy, M3u8RecoveryPolicy.disabled);
+
+    controller.dispose();
+    expect(controller.play(), throwsStateError);
     await platform.eventController.close();
   });
 
@@ -880,6 +1027,51 @@ void main() {
       () => M3u8PlayerCache.cancelPrecache('', platform: platform),
       throwsArgumentError,
     );
+    expect(
+      () => M3u8PlayerCache.configure(
+        maxConcurrentPrecacheTasks: 0,
+        platform: platform,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => M3u8PlayerCache.precache(
+        M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+        maxRetries: -1,
+        platform: platform,
+      ),
+      throwsArgumentError,
+    );
+    expect(
+      () => M3u8PlayerCache.pausePrecache('', platform: platform),
+      throwsArgumentError,
+    );
+    expect(
+      () => M3u8PlayerCache.resumePrecache('', platform: platform),
+      throwsArgumentError,
+    );
+  });
+
+  test('cache wrapper exposes cache events stream', () async {
+    final platform = FakePlayerM3u8Platform();
+    final events = <M3u8CacheEvent>[];
+    final subscription = M3u8PlayerCache.events(
+      platform: platform,
+    ).listen(events.add);
+
+    platform.cacheEventController.add(
+      const M3u8CacheEvent(
+        taskId: 'task-1',
+        url: 'https://example.com/index.m3u8',
+        type: M3u8CacheEventType.progress,
+      ),
+    );
+    await pumpEventQueue();
+
+    expect(events.single.taskId, 'task-1');
+    await subscription.cancel();
+    await platform.eventController.close();
+    await platform.cacheEventController.close();
   });
 }
 

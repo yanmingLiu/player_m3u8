@@ -5,6 +5,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:player_m3u8/player_m3u8.dart';
 
+import 'src/buffered_seek_bar.dart';
+import 'src/example_strings.dart';
+import 'src/player_formatters.dart';
+import 'src/video_scaffold.dart';
+
 const String sampleM3u8Url =
     'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8';
 
@@ -12,6 +17,7 @@ const List<VideoSource> sampleVideos = <VideoSource>[
   VideoSource(title: 'Apple BipBop', url: sampleM3u8Url),
   VideoSource(
     title: 'Apple Adv (音视频分离)',
+    titleEn: 'Apple Advanced (separate audio/video)',
     url:
         'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
     audioUrl:
@@ -19,11 +25,13 @@ const List<VideoSource> sampleVideos = <VideoSource>[
   ),
   VideoSource(
     title: 'Apple BipBop Advanced (内嵌字幕)',
+    titleEn: 'Apple BipBop Advanced (embedded subtitles)',
     url:
         'https://devstreaming-cdn.apple.com/videos/streaming/examples/img_bipbop_adv_example_ts/master.m3u8',
   ),
   VideoSource(
     title: 'Elephant\'s Dream (VTT多语言字幕)',
+    titleEn: 'Elephant\'s Dream (multi-language VTT)',
     url:
         'https://playertest.longtailvideo.com/adaptive/elephants_dream_v4/index.m3u8',
   ),
@@ -89,6 +97,7 @@ class VideoSource {
   const VideoSource({
     required this.title,
     required this.url,
+    this.titleEn,
     this.audioUrl,
     this.audioHeaders,
     this.sourceType = M3u8SourceType.auto,
@@ -96,6 +105,7 @@ class VideoSource {
   });
 
   final String title;
+  final String? titleEn;
   final String url;
   final String? audioUrl;
   final Map<String, String>? audioHeaders;
@@ -110,117 +120,12 @@ class VideoSource {
   );
 
   bool get supportsPrecache => sourceType != M3u8SourceType.progressive;
-}
 
-enum ExampleLanguage { zh, en }
-
-class ExampleStrings {
-  const ExampleStrings(this.language);
-
-  final ExampleLanguage language;
-
-  bool get _isZh => language == ExampleLanguage.zh;
-
-  String get appTitle => _isZh ? 'M3U8 播放器' : 'M3U8 Player';
-  String get languageButtonLabel => _isZh ? 'EN' : '中文';
-  String get languageButtonTooltip => _isZh ? '切换到英文' : 'Switch to Chinese';
-  String get qoeSnapshotCopied => _isZh ? 'QoE 快照已复制' : 'QoE snapshot copied';
-  String get previousVideoTooltip => _isZh ? '上一个视频' : 'Previous video';
-  String get nextVideoTooltip => _isZh ? '下一个视频' : 'Next video';
-  String get precacheCurrentSourceTooltip =>
-      _isZh ? '预取当前播放源' : 'Precache current source';
-  String get precacheUnsupported =>
-      _isZh ? '当前格式不支持预取' : 'Precache unsupported for this source';
-  String get cancelPrecacheTooltip => _isZh ? '取消预取' : 'Cancel precache';
-  String get precacheIdle => _isZh ? '预取空闲' : 'Precache idle';
-  String get precacheCancelled => _isZh ? '预取已取消' : 'Precache cancelled';
-  String get playTooltip => _isZh ? '播放' : 'Play';
-  String get pauseTooltip => _isZh ? '暂停' : 'Pause';
-  String get seekBack10Tooltip => _isZh ? '后退 10 秒' : 'Seek back 10 seconds';
-  String get seekForward10Tooltip =>
-      _isZh ? '前进 10 秒' : 'Seek forward 10 seconds';
-  String get muteTooltip => _isZh ? '静音' : 'Mute';
-  String get unmuteTooltip => _isZh ? '取消静音' : 'Unmute';
-  String get playbackProgressSemantics => _isZh ? '播放进度' : 'Playback progress';
-  String get positionLabel => _isZh ? '位置' : 'Position';
-  String get durationLabel => _isZh ? '时长' : 'Duration';
-  String get playerBufferLabel => _isZh ? '播放器缓冲' : 'Player buffer';
-  String get diskCacheLabel => _isZh ? '磁盘缓存' : 'Disk cache';
-  String get bufferAheadLabel => _isZh ? '前向缓冲' : 'Buffer ahead';
-  String get startupLabel => _isZh ? '启动耗时' : 'Startup';
-  String get rebuffersLabel => _isZh ? '卡顿次数' : 'Rebuffers';
-  String get rebufferTimeLabel => _isZh ? '卡顿时长' : 'Rebuffer time';
-  String get droppedFramesLabel => _isZh ? '丢帧' : 'Dropped frames';
-  String get playbackSpeedLabel => _isZh ? '播放速度' : 'Playback speed';
-  String get volumeLabel => _isZh ? '音量' : 'Volume';
-  String get qualitySwitchesLabel => _isZh ? '清晰度切换' : 'Quality switches';
-  String get subtitlesLabel => _isZh ? '字幕' : 'Subtitles';
-  String get subtitlesOffLabel => _isZh ? '关闭字幕' : 'Off';
-  String get recoveryLabel => _isZh ? '恢复次数' : 'Recovery';
-  String get lastRecoveryLabel => _isZh ? '最近恢复' : 'Last recovery';
-  String get videoBitrateLabel => _isZh ? '视频码率' : 'Video bitrate';
-  String get observedBitrateLabel => _isZh ? '观测码率' : 'Observed bitrate';
-  String get sizeLabel => _isZh ? '尺寸' : 'Size';
-  String get completeSuffix => _isZh ? ' 完成' : ' complete';
-  String get mutedSuffix => _isZh ? ' 静音' : ' muted';
-  String get qoeSnapshotsTitle => _isZh ? 'QoE 快照' : 'QoE snapshots';
-  String get copyLatestQoeSnapshotTooltip =>
-      _isZh ? '复制最新 QoE 快照' : 'Copy latest QoE snapshot';
-  String get qoeWaitingForFirstSample =>
-      _isZh ? '等待首个 QoE 采样' : 'QoE waiting for first sample';
-  String get retryLabel => _isZh ? '重试' : 'Retry';
-  String get autoQualityLabel => _isZh ? '自动' : 'Auto';
-  String get unknown => _isZh ? '未知' : 'unknown';
-
-  String playbackProgressValue(Duration position, Duration duration) {
-    if (_isZh) {
-      return '${_formatDuration(position)} / ${_formatDuration(duration)}';
+  String localizedTitle(ExampleLanguage language) {
+    if (language == ExampleLanguage.en) {
+      return titleEn ?? title;
     }
-    return '${_formatDuration(position)} of ${_formatDuration(duration)}';
-  }
-
-  String precacheComplete(String qualitySuffix) {
-    return _isZh ? '预取完成$qualitySuffix' : 'Precache complete$qualitySuffix';
-  }
-
-  String precacheFailed(String error) {
-    return _isZh ? '预取失败：$error' : 'Precache failed: $error';
-  }
-
-  String precaching(String qualitySuffix, String suffix) {
-    return _isZh
-        ? '正在预取$qualitySuffix$suffix'
-        : 'Precaching$qualitySuffix$suffix';
-  }
-
-  String latestQoeRebufferRatio(String percent) {
-    return _isZh
-        ? '最新 QoE：卡顿占比 $percent'
-        : 'Latest QoE: rebuffer ratio $percent';
-  }
-
-  String qoeDeltas({
-    required int rebufferCountDelta,
-    required int droppedFramesDelta,
-    required int recoveryCountDelta,
-    required int qualitySwitchCountDelta,
-  }) {
-    if (_isZh) {
-      return 'QoE 增量：卡顿 +$rebufferCountDelta，'
-          '丢帧 +$droppedFramesDelta，'
-          '恢复 +$recoveryCountDelta，'
-          '清晰度 +$qualitySwitchCountDelta';
-    }
-    return 'QoE deltas: rebuffer +$rebufferCountDelta, '
-        'drop +$droppedFramesDelta, '
-        'recover +$recoveryCountDelta, '
-        'quality +$qualitySwitchCountDelta';
-  }
-
-  String qoeBitrate(String videoBitrate, String observedBitrate) {
-    return _isZh
-        ? 'QoE 码率：$videoBitrate / $observedBitrate'
-        : 'QoE bitrate: $videoBitrate / $observedBitrate';
+    return title;
   }
 }
 
@@ -264,6 +169,10 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   ExampleLanguage _language = ExampleLanguage.zh;
   bool _initializing = true;
   bool _switching = false;
+  bool _isFullscreen = false;
+  bool _autoPlayNext = true;
+  ExampleLoopMode _loopMode = ExampleLoopMode.none;
+  bool _handledCompletion = false;
   int _currentVideoIndex = 0;
   String? _precacheTaskId;
   M3u8CacheEvent? _latestCacheEvent;
@@ -288,6 +197,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     _qoeSubscription?.cancel();
     _cacheSubscription?.cancel();
     _cancelPrecacheTaskSilently();
+    unawaited(_restorePortraitChrome());
     _controller.dispose();
     super.dispose();
   }
@@ -298,8 +208,9 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
       await _controller.initialize(
         source: source.toSource(),
         subtitles: source.subtitles,
-        selectedSubtitleId:
-            source.subtitles.isEmpty ? null : source.subtitles.first.id,
+        selectedSubtitleId: source.subtitles.isEmpty
+            ? null
+            : source.subtitles.first.id,
       );
       _controller.startQoeSampling(interval: const Duration(seconds: 5));
     } finally {
@@ -319,6 +230,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
       _currentVideoIndex = index;
       _switching = true;
       _latestCacheEvent = null;
+      _handledCompletion = false;
     });
     try {
       await _cancelPrecacheTask();
@@ -326,8 +238,9 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
       await _controller.setSource(
         source.toSource(),
         subtitles: source.subtitles,
-        selectedSubtitleId:
-            source.subtitles.isEmpty ? null : source.subtitles.first.id,
+        selectedSubtitleId: source.subtitles.isEmpty
+            ? null
+            : source.subtitles.first.id,
         autoPlay: true,
       );
       _qoeSnapshots.clear();
@@ -337,6 +250,38 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
           _switching = false;
         });
       }
+    }
+  }
+
+  void _handlePlaybackValue(M3u8PlayerValue value) {
+    if (!value.isCompleted) {
+      _handledCompletion = false;
+      return;
+    }
+    if (_handledCompletion || _switching || !value.isInitialized) {
+      return;
+    }
+    _handledCompletion = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_advanceAfterCompletion());
+      }
+    });
+  }
+
+  Future<void> _advanceAfterCompletion() async {
+    if (_loopMode == ExampleLoopMode.single) {
+      await _controller.seekTo(Duration.zero);
+      await _controller.play();
+      return;
+    }
+    final hasNext = _currentVideoIndex < sampleVideos.length - 1;
+    if (_loopMode == ExampleLoopMode.playlist) {
+      await _selectVideo(hasNext ? _currentVideoIndex + 1 : 0);
+      return;
+    }
+    if (_autoPlayNext && hasNext) {
+      await _selectVideo(_currentVideoIndex + 1);
     }
   }
 
@@ -395,6 +340,25 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     });
   }
 
+  void _setPlaybackSpeed(double speed) {
+    if (!_controller.value.isInitialized) {
+      return;
+    }
+    unawaited(_controller.setPlaybackSpeed(speed));
+  }
+
+  void _setAutoPlayNext(bool value) {
+    setState(() {
+      _autoPlayNext = value;
+    });
+  }
+
+  void _setLoopMode(ExampleLoopMode mode) {
+    setState(() {
+      _loopMode = mode;
+    });
+  }
+
   Future<void> _cancelPrecacheTask() async {
     final taskId = _precacheTaskId;
     if (taskId == null) {
@@ -443,86 +407,170 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     });
   }
 
+  Future<void> _enterFullscreen() async {
+    if (_isFullscreen) {
+      return;
+    }
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.black,
+        systemNavigationBarColor: Colors.black,
+        statusBarIconBrightness: Brightness.light,
+        statusBarBrightness: Brightness.dark,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+    setState(() {
+      _isFullscreen = true;
+    });
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    await SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+  }
+
+  Future<void> _exitFullscreen() async {
+    if (!_isFullscreen) {
+      return;
+    }
+    setState(() {
+      _isFullscreen = false;
+    });
+    await _restorePortraitChrome();
+  }
+
+  Future<void> _restorePortraitChrome() async {
+    SystemChrome.setSystemUIOverlayStyle(
+      const SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        systemNavigationBarColor: Colors.black,
+        statusBarIconBrightness: Brightness.dark,
+        statusBarBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: Brightness.light,
+      ),
+    );
+    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    await SystemChrome.setPreferredOrientations(const [
+      DeviceOrientation.portraitUp,
+    ]);
+  }
+
   @override
   Widget build(BuildContext context) {
     final strings = _strings;
     return Scaffold(
-      appBar: AppBar(
-        title: Text(strings.appTitle),
-        actions: [
-          Padding(
-            padding: const EdgeInsetsDirectional.only(end: 8),
-            child: Tooltip(
-              message: strings.languageButtonTooltip,
-              child: TextButton.icon(
-                onPressed: _toggleLanguage,
-                icon: const Icon(Icons.translate),
-                label: Text(strings.languageButtonLabel),
-                style: TextButton.styleFrom(
-                  foregroundColor: Theme.of(context).colorScheme.onSurface,
+      backgroundColor: _isFullscreen ? Colors.black : null,
+      appBar: _isFullscreen
+          ? null
+          : AppBar(
+              title: Text(strings.appTitle),
+              actions: [
+                Padding(
+                  padding: const EdgeInsetsDirectional.only(end: 8),
+                  child: Tooltip(
+                    message: strings.languageButtonTooltip,
+                    child: TextButton.icon(
+                      onPressed: _toggleLanguage,
+                      icon: const Icon(Icons.translate),
+                      label: Text(strings.languageButtonLabel),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
-          ),
-        ],
-      ),
       body: SafeArea(
+        top: !_isFullscreen,
+        bottom: !_isFullscreen,
+        left: !_isFullscreen,
+        right: !_isFullscreen,
         child: ValueListenableBuilder<M3u8PlayerValue>(
           valueListenable: _controller,
           builder:
               (BuildContext context, M3u8PlayerValue value, Widget? child) {
+                _handlePlaybackValue(value);
+                final player = ExampleVideoScaffold(
+                  controller: _controller,
+                  value: value,
+                  title: sampleVideos[_currentVideoIndex].localizedTitle(
+                    _language,
+                  ),
+                  episodes: [
+                    for (final video in sampleVideos)
+                      video.localizedTitle(_language),
+                  ],
+                  currentEpisodeIndex: _currentVideoIndex,
+                  sourceType: sampleVideos[_currentVideoIndex].sourceType,
+                  strings: strings,
+                  isFullscreen: _isFullscreen,
+                  isBusy: _initializing || _switching,
+                  isPrecacheRunning: _precacheTaskId != null,
+                  precacheSupported:
+                      sampleVideos[_currentVideoIndex].supportsPrecache,
+                  autoPlayNext: _autoPlayNext,
+                  loopMode: _loopMode,
+                  onBack: _isFullscreen ? _exitFullscreen : null,
+                  onEnterFullscreen: _enterFullscreen,
+                  onExitFullscreen: _exitFullscreen,
+                  onEpisodeSelected: _selectVideo,
+                  onPrecache: _precacheCurrentSource,
+                  onSpeedSelected: _setPlaybackSpeed,
+                  onAutoPlayNextChanged: _setAutoPlayNext,
+                  onLoopModeChanged: _setLoopMode,
+                );
+                if (_isFullscreen) {
+                  return player;
+                }
                 return ListView(
-                  padding: const EdgeInsets.all(16),
+                  padding: EdgeInsets.zero,
                   children: [
-                    AspectRatio(
-                      aspectRatio: value.aspectRatio,
-                      child: Stack(
-                        fit: StackFit.expand,
+                    player,
+                    const SizedBox(height: 20),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Column(
                         children: [
-                          M3u8Player(controller: _controller),
-                          if (_initializing || _switching || value.isBuffering)
-                            const Center(child: CircularProgressIndicator()),
-                          if (value.hasError)
-                            _ErrorOverlay(
-                              error: value.error!,
-                              onRetry: () => _controller.retry(autoPlay: true),
-                              strings: strings,
-                            ),
+                          _PlaylistControls(
+                            videos: sampleVideos,
+                            currentIndex: _currentVideoIndex,
+                            switching: _switching,
+                            language: _language,
+                            onSelected: _selectVideo,
+                            strings: strings,
+                          ),
+                          const SizedBox(height: 16),
+                          _CacheTaskControls(
+                            event: _latestCacheEvent,
+                            isRunning: _precacheTaskId != null,
+                            isSupported: sampleVideos[_currentVideoIndex]
+                                .supportsPrecache,
+                            onPrecache: _precacheCurrentSource,
+                            onCancel: _cancelPrecacheTask,
+                            strings: strings,
+                          ),
+                          const SizedBox(height: 16),
+                          _Controls(
+                            controller: _controller,
+                            value: value,
+                            sourceType:
+                                sampleVideos[_currentVideoIndex].sourceType,
+                            strings: strings,
+                          ),
+                          const SizedBox(height: 16),
+                          _PlaybackStats(value: value, strings: strings),
+                          const SizedBox(height: 16),
+                          _QoePanel(
+                            snapshots: _qoeSnapshots,
+                            onCopyLatest: _copyLatestQoeSnapshot,
+                            strings: strings,
+                          ),
                         ],
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    _PlaylistControls(
-                      videos: sampleVideos,
-                      currentIndex: _currentVideoIndex,
-                      switching: _switching,
-                      onSelected: _selectVideo,
-                      strings: strings,
-                    ),
-                    const SizedBox(height: 16),
-                    _CacheTaskControls(
-                      event: _latestCacheEvent,
-                      isRunning: _precacheTaskId != null,
-                      isSupported:
-                          sampleVideos[_currentVideoIndex].supportsPrecache,
-                      onPrecache: _precacheCurrentSource,
-                      onCancel: _cancelPrecacheTask,
-                      strings: strings,
-                    ),
-                    const SizedBox(height: 16),
-                    _Controls(
-                      controller: _controller,
-                      value: value,
-                      sourceType: sampleVideos[_currentVideoIndex].sourceType,
-                      strings: strings,
-                    ),
-                    const SizedBox(height: 16),
-                    _PlaybackStats(value: value, strings: strings),
-                    const SizedBox(height: 16),
-                    _QoePanel(
-                      snapshots: _qoeSnapshots,
-                      onCopyLatest: _copyLatestQoeSnapshot,
-                      strings: strings,
                     ),
                   ],
                 );
@@ -538,6 +586,7 @@ class _PlaylistControls extends StatelessWidget {
     required this.videos,
     required this.currentIndex,
     required this.switching,
+    required this.language,
     required this.onSelected,
     required this.strings,
   });
@@ -545,6 +594,7 @@ class _PlaylistControls extends StatelessWidget {
   final List<VideoSource> videos;
   final int currentIndex;
   final bool switching;
+  final ExampleLanguage language;
   final ValueChanged<int> onSelected;
   final ExampleStrings strings;
 
@@ -574,7 +624,7 @@ class _PlaylistControls extends StatelessWidget {
                 DropdownMenuItem<int>(
                   value: index,
                   child: Text(
-                    videos[index].title,
+                    videos[index].localizedTitle(language),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
@@ -657,7 +707,7 @@ class _CacheTaskControls extends StatelessWidget {
     final percent = event.percent?.clamp(0.0, 100.0).round();
     final progress = event.position == null
         ? ''
-        : ' ${_formatDuration(event.position!)}';
+        : ' ${formatDuration(event.position!)}';
     final suffix = percent == null ? progress : ' $percent%$progress';
     final quality = event.quality?.label;
     final qualitySuffix = quality == null ? '' : ' $quality';
@@ -727,7 +777,7 @@ class _Controls extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: _BufferedSeekBar(
+              child: BufferedSeekBar(
                 controller: controller,
                 value: value,
                 strings: strings,
@@ -854,9 +904,9 @@ class _SpeedSelector extends StatelessWidget {
     return SegmentedButton<double>(
       segments: [
         for (final speed in _speeds)
-          ButtonSegment<double>(value: speed, label: Text(_speedLabel(speed))),
+          ButtonSegment<double>(value: speed, label: Text(speedLabel(speed))),
       ],
-      selected: <double>{_nearestSpeed(value.playbackSpeed)},
+      selected: <double>{_nearestConfiguredSpeed(value.playbackSpeed)},
       onSelectionChanged: value.isInitialized
           ? (Set<double> speeds) {
               controller.setPlaybackSpeed(speeds.single);
@@ -866,12 +916,8 @@ class _SpeedSelector extends StatelessWidget {
     );
   }
 
-  double _nearestSpeed(double speed) {
-    return _speeds.reduce((double previous, double next) {
-      final previousDelta = (previous - speed).abs();
-      final nextDelta = (next - speed).abs();
-      return nextDelta < previousDelta ? next : previous;
-    });
+  double _nearestConfiguredSpeed(double speed) {
+    return nearestSpeed(speed, _speeds);
   }
 }
 
@@ -907,7 +953,7 @@ class _QualitySelector extends StatelessWidget {
           DropdownMenuItem<String>(
             value: quality.id,
             child: Text(
-              _qualityLabel(quality, strings),
+              qualityLabel(quality, strings),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -922,263 +968,6 @@ class _QualitySelector extends StatelessWidget {
             }
           : null,
     );
-  }
-}
-
-class _BufferedSeekBar extends StatefulWidget {
-  const _BufferedSeekBar({
-    required this.controller,
-    required this.value,
-    required this.strings,
-  });
-
-  final M3u8PlayerController controller;
-  final M3u8PlayerValue value;
-  final ExampleStrings strings;
-
-  @override
-  State<_BufferedSeekBar> createState() => _BufferedSeekBarState();
-}
-
-class _BufferedSeekBarState extends State<_BufferedSeekBar> {
-  bool _isScrubbing = false;
-  double? _scrubFraction;
-
-  @override
-  Widget build(BuildContext context) {
-    final value = widget.value;
-    final durationMs = value.duration.inMilliseconds;
-    final positionMs = durationMs == 0
-        ? 0
-        : value.position.inMilliseconds.clamp(0, durationMs);
-    final bufferedMs = durationMs == 0
-        ? 0
-        : value.visibleBufferedPosition.inMilliseconds.clamp(0, durationMs);
-    final bufferedStartMs = durationMs == 0
-        ? 0
-        : value.visibleBufferedStartPosition.inMilliseconds.clamp(
-            0,
-            bufferedMs,
-          );
-    final enabled = value.isInitialized && durationMs > 0;
-    final playedFraction = durationMs == 0
-        ? 0.0
-        : (_scrubFraction ?? positionMs / durationMs);
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 160),
-      curve: Curves.easeOutCubic,
-      height: _isScrubbing ? 48 : 36,
-      child: LayoutBuilder(
-        builder: (BuildContext context, BoxConstraints constraints) {
-          return GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTapDown: enabled
-                ? (TapDownDetails details) {
-                    _seekFromDx(details.localPosition.dx, constraints.maxWidth);
-                  }
-                : null,
-            onHorizontalDragStart: enabled
-                ? (DragStartDetails details) {
-                    _beginScrub(details.localPosition.dx, constraints.maxWidth);
-                  }
-                : null,
-            onHorizontalDragUpdate: enabled
-                ? (DragUpdateDetails details) {
-                    _updateScrub(
-                      details.localPosition.dx,
-                      constraints.maxWidth,
-                    );
-                  }
-                : null,
-            onHorizontalDragEnd: enabled ? (_) => _endScrub() : null,
-            onHorizontalDragCancel: enabled ? _cancelScrub : null,
-            child: Semantics(
-              label: widget.strings.playbackProgressSemantics,
-              value: widget.strings.playbackProgressValue(
-                value.position,
-                value.duration,
-              ),
-              child: CustomPaint(
-                painter: _BufferedTrackPainter(
-                  playedFraction: playedFraction,
-                  bufferedStartFraction: durationMs == 0
-                      ? 0
-                      : bufferedStartMs / durationMs,
-                  bufferedFraction: durationMs == 0
-                      ? 0
-                      : bufferedMs / durationMs,
-                  isScrubbing: _isScrubbing,
-                ),
-                child: const SizedBox.expand(),
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _beginScrub(double dx, double width) {
-    setState(() {
-      _isScrubbing = true;
-      _scrubFraction = _fractionForDx(dx, width);
-    });
-  }
-
-  void _updateScrub(double dx, double width) {
-    final fraction = _fractionForDx(dx, width);
-    setState(() {
-      _scrubFraction = fraction;
-    });
-  }
-
-  void _endScrub() {
-    if (!_isScrubbing) {
-      return;
-    }
-    final fraction = _scrubFraction;
-    setState(() {
-      _isScrubbing = false;
-      _scrubFraction = null;
-    });
-    _seekToFraction(fraction);
-  }
-
-  void _cancelScrub() {
-    if (!_isScrubbing) {
-      return;
-    }
-    setState(() {
-      _isScrubbing = false;
-      _scrubFraction = null;
-    });
-  }
-
-  void _seekFromDx(double dx, double width) {
-    final fraction = _fractionForDx(dx, width);
-    _seekToFraction(fraction);
-  }
-
-  double _fractionForDx(double dx, double width) {
-    if (width <= 0) {
-      return 0;
-    }
-    return (dx / width).clamp(0.0, 1.0);
-  }
-
-  void _seekToFraction(double? fraction) {
-    final durationMs = widget.value.duration.inMilliseconds;
-    if (fraction == null || durationMs <= 0) {
-      return;
-    }
-    widget.controller.seekTo(
-      Duration(milliseconds: (durationMs * fraction).round()),
-    );
-  }
-}
-
-class _BufferedTrackPainter extends CustomPainter {
-  const _BufferedTrackPainter({
-    required this.playedFraction,
-    required this.bufferedStartFraction,
-    required this.bufferedFraction,
-    required this.isScrubbing,
-  });
-
-  final double playedFraction;
-  final double bufferedStartFraction;
-  final double bufferedFraction;
-  final bool isScrubbing;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final baseHeight = isScrubbing ? 7.0 : 4.0;
-    final bufferedHeight = isScrubbing ? 9.0 : 6.0;
-    final playedHeight = isScrubbing ? 12.0 : 7.0;
-    final centerY = size.height / 2;
-    final baseRect = Rect.fromLTWH(
-      0,
-      centerY - baseHeight / 2,
-      size.width,
-      baseHeight,
-    );
-    final bufferedRect = Rect.fromLTWH(
-      0,
-      centerY - bufferedHeight / 2,
-      size.width,
-      bufferedHeight,
-    );
-    final playedRect = Rect.fromLTWH(
-      0,
-      centerY - playedHeight / 2,
-      size.width,
-      playedHeight,
-    );
-
-    void drawSegment({
-      required Rect rect,
-      double startFraction = 0,
-      required double fraction,
-      required Color color,
-    }) {
-      final start = startFraction.clamp(0.0, 1.0).toDouble();
-      final end = fraction.clamp(start, 1.0).toDouble();
-      final left = rect.left + rect.width * start;
-      final width = rect.width * (end - start);
-      if (width <= 0) {
-        return;
-      }
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromLTWH(left, rect.top, width, rect.height),
-          Radius.circular(rect.height / 2),
-        ),
-        Paint()..color = color,
-      );
-    }
-
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(baseRect, Radius.circular(baseRect.height / 2)),
-      Paint()..color = const Color(0xFFD6DDD9),
-    );
-    drawSegment(
-      rect: bufferedRect,
-      startFraction: bufferedStartFraction,
-      fraction: bufferedFraction,
-      color: const Color(0xFFFFB74D),
-    );
-    drawSegment(
-      rect: playedRect,
-      fraction: playedFraction,
-      color: const Color(0xFF006B5F),
-    );
-
-    final markerX = size.width * playedFraction.clamp(0.0, 1.0);
-    if (!isScrubbing) {
-      return;
-    }
-    canvas.drawCircle(
-      Offset(markerX, centerY),
-      10,
-      Paint()..color = const Color(0xFFFFFFFF),
-    );
-    canvas.drawCircle(
-      Offset(markerX, centerY),
-      10,
-      Paint()
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..color = const Color(0xFF006B5F),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant _BufferedTrackPainter oldDelegate) {
-    return oldDelegate.playedFraction != playedFraction ||
-        oldDelegate.bufferedStartFraction != bufferedStartFraction ||
-        oldDelegate.bufferedFraction != bufferedFraction ||
-        oldDelegate.isScrubbing != isScrubbing;
   }
 }
 
@@ -1215,23 +1004,23 @@ class _PlaybackStats extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('${strings.positionLabel}: ${_formatDuration(value.position)}'),
-          Text('${strings.durationLabel}: ${_formatDuration(value.duration)}'),
+          Text('${strings.positionLabel}: ${formatDuration(value.position)}'),
+          Text('${strings.durationLabel}: ${formatDuration(value.duration)}'),
           Text(
             '${strings.playerBufferLabel}: '
-            '${_formatDuration(value.bufferedPosition)} / '
-            '${_formatDuration(value.duration)} ($bufferedPercent%)',
+            '${formatDuration(value.bufferedPosition)} / '
+            '${formatDuration(value.duration)} ($bufferedPercent%)',
           ),
           Text(
             '${strings.diskCacheLabel}: '
-            '${_formatDuration(value.diskCacheStartPosition)} - '
-            '${_formatDuration(value.diskCachePosition)} / '
-            '${_formatDuration(value.duration)} ($diskCachePercent%)'
+            '${formatDuration(value.diskCacheStartPosition)} - '
+            '${formatDuration(value.diskCachePosition)} / '
+            '${formatDuration(value.duration)} ($diskCachePercent%)'
             '${value.isDiskCacheComplete ? strings.completeSuffix : ''}',
           ),
           Text(
             '${strings.bufferAheadLabel}: '
-            '${_formatDuration(_positiveDuration(bufferAhead))}',
+            '${formatDuration(positiveDuration(bufferAhead))}',
           ),
           Text(
             '${strings.startupLabel}: ${value.startupTime.inMilliseconds} ms',
@@ -1244,7 +1033,7 @@ class _PlaybackStats extends StatelessWidget {
           Text('${strings.droppedFramesLabel}: ${value.droppedFrames}'),
           Text(
             '${strings.playbackSpeedLabel}: '
-            '${_speedLabel(value.playbackSpeed)}',
+            '${speedLabel(value.playbackSpeed)}',
           ),
           Text(
             '${strings.volumeLabel}: ${(value.volume * 100).round()}%'
@@ -1339,79 +1128,6 @@ class _QoePanel extends StatelessWidget {
       ],
     );
   }
-}
-
-class _ErrorOverlay extends StatelessWidget {
-  const _ErrorOverlay({
-    required this.error,
-    required this.onRetry,
-    required this.strings,
-  });
-
-  final M3u8PlayerError error;
-  final VoidCallback onRetry;
-  final ExampleStrings strings;
-
-  @override
-  Widget build(BuildContext context) {
-    return ColoredBox(
-      color: Colors.black.withValues(alpha: 0.72),
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                error.message,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(color: Colors.white),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 12),
-              FilledButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: Text(strings.retryLabel),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-String _formatDuration(Duration duration) {
-  final hours = duration.inHours;
-  final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
-  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
-  if (hours > 0) {
-    return '${hours.toString().padLeft(2, '0')}:$minutes:$seconds';
-  }
-  return '$minutes:$seconds';
-}
-
-String _speedLabel(double speed) {
-  if (speed == speed.roundToDouble()) {
-    return '${speed.toStringAsFixed(0)}x';
-  }
-  return '${speed.toStringAsFixed(2).replaceFirst(RegExp(r'0$'), '')}x';
-}
-
-String _qualityLabel(M3u8Quality quality, ExampleStrings strings) {
-  if (quality.id == M3u8Quality.auto.id) {
-    return strings.autoQualityLabel;
-  }
-  return quality.label;
-}
-
-Duration _positiveDuration(Duration duration) {
-  if (duration.isNegative) {
-    return Duration.zero;
-  }
-  return duration;
 }
 
 String _formatBitrate(int bitrate, ExampleStrings strings) {

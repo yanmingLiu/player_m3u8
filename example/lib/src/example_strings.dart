@@ -16,12 +16,12 @@ class ExampleStrings {
   String get previousVideoTooltip => _isZh ? '上一个视频' : 'Previous video';
   String get nextVideoTooltip => _isZh ? '下一个视频' : 'Next video';
   String get precacheCurrentSourceTooltip =>
-      _isZh ? '预取当前播放源' : 'Precache current source';
+      _isZh ? '下载当前播放源' : 'Download current source';
   String get precacheUnsupported =>
-      _isZh ? '当前格式不支持预取' : 'Precache unsupported for this source';
-  String get cancelPrecacheTooltip => _isZh ? '取消预取' : 'Cancel precache';
-  String get precacheIdle => _isZh ? '预取空闲' : 'Precache idle';
-  String get precacheCancelled => _isZh ? '预取已取消' : 'Precache cancelled';
+      _isZh ? '当前格式不支持下载' : 'Download unsupported for this source';
+  String get cancelPrecacheTooltip => _isZh ? '取消下载' : 'Cancel download';
+  String get precacheIdle => _isZh ? '下载空闲' : 'Download idle';
+  String get precacheCancelled => _isZh ? '下载已取消' : 'Download cancelled';
   String get playTooltip => _isZh ? '播放' : 'Play';
   String get pauseTooltip => _isZh ? '暂停' : 'Pause';
   String get seekBack10Tooltip => _isZh ? '后退 10 秒' : 'Seek back 10 seconds';
@@ -52,6 +52,26 @@ class ExampleStrings {
   String get completeSuffix => _isZh ? ' 完成' : ' complete';
   String get mutedSuffix => _isZh ? ' 静音' : ' muted';
   String get qoeSnapshotsTitle => _isZh ? 'QoE 快照' : 'QoE snapshots';
+  String get cacheMetricsTitle => _isZh ? '缓存/下载指标' : 'Cache/download metrics';
+  String get downloadListLabel => _isZh ? '下载列表' : 'Downloads';
+  String get downloadListTitle => _isZh ? '下载列表' : 'Downloads';
+  String get noDownloadTasks => _isZh ? '暂无下载任务' : 'No download tasks';
+  String get runningTasksLabel => _isZh ? '运行任务' : 'Running tasks';
+  String get queuedTasksLabel => _isZh ? '队列任务' : 'Queued tasks';
+  String get failedTasksLabel => _isZh ? '失败任务' : 'Failed tasks';
+  String get cacheSizeLabel => _isZh ? '缓存占用' : 'Cache size';
+  String get downloadSpeedLabel => _isZh ? '下载速度' : 'Download speed';
+  String get bytesProgressLabel => _isZh ? '字节进度' : 'Bytes';
+  String get cacheHitLabel => _isZh ? '缓存命中' : 'Cache hits';
+  String get networkFetchLabel => _isZh ? '网络下载' : 'Network fetches';
+  String get segmentProgressLabel => _isZh ? '分片进度' : 'Segments';
+  String get currentDownloadUrlLabel => _isZh ? '当前 URL' : 'Current URL';
+  String get retryCountLabel => _isZh ? '重试' : 'Retries';
+  String get pauseDownloadTooltip => _isZh ? '暂停下载' : 'Pause download';
+  String get resumeDownloadTooltip => _isZh ? '恢复下载' : 'Resume download';
+  String get cancelDownloadTooltip => _isZh ? '取消下载' : 'Cancel download';
+  String get playerOwnedTaskLabel => _isZh ? '播放器缓存' : 'Player cache';
+  String get standaloneTaskLabel => _isZh ? '下载任务' : 'Download task';
   String get copyLatestQoeSnapshotTooltip =>
       _isZh ? '复制最新 QoE 快照' : 'Copy latest QoE snapshot';
   String get qoeWaitingForFirstSample =>
@@ -65,7 +85,7 @@ class ExampleStrings {
   String episodeCount(int count) => _isZh ? '（共$count集）' : ' ($count episodes)';
   String episodeNumber(int index) => _isZh ? '$index 集' : 'Episode $index';
   String get nowPlayingLabel => _isZh ? '正在播放' : 'Now playing';
-  String get notInterestedLabel => _isZh ? '不感兴趣' : 'Not interested';
+  String get notInterestedLabel => downloadListLabel;
   String get watchLaterLabel => _isZh ? '稍后再看' : 'Watch later';
   String get cacheLabel => _isZh ? '缓存' : 'Cache';
   String get cachingLabel => _isZh ? '缓存中' : 'Caching';
@@ -85,17 +105,17 @@ class ExampleStrings {
   }
 
   String precacheComplete(String qualitySuffix) {
-    return _isZh ? '预取完成$qualitySuffix' : 'Precache complete$qualitySuffix';
+    return _isZh ? '下载完成$qualitySuffix' : 'Download complete$qualitySuffix';
   }
 
   String precacheFailed(String error) {
-    return _isZh ? '预取失败：$error' : 'Precache failed: $error';
+    return _isZh ? '下载失败：$error' : 'Download failed: $error';
   }
 
   String precaching(String qualitySuffix, String suffix) {
     return _isZh
-        ? '正在预取$qualitySuffix$suffix'
-        : 'Precaching$qualitySuffix$suffix';
+        ? '正在下载$qualitySuffix$suffix'
+        : 'Downloading$qualitySuffix$suffix';
   }
 
   String latestQoeRebufferRatio(String percent) {

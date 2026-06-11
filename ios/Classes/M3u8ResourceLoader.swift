@@ -5,6 +5,7 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
   private static let cacheScheme = "player-m3u8-cache"
 
   private let headers: [String: String]
+  private let cacheKey: String?
   private let cacheManager: M3u8IosCacheManager
   private let audioUrl: URL?
   private let audioHeaders: [String: String]
@@ -22,12 +23,14 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
 
   init(
     headers: [String: String],
+    cacheKey: String? = nil,
     cacheManager: M3u8IosCacheManager = .shared,
     audioUrl: URL? = nil,
     audioHeaders: [String: String] = [:],
     externalSubtitles: [[String: Any]] = []
   ) {
     self.headers = headers
+    self.cacheKey = cacheKey
     self.cacheManager = cacheManager
     self.audioUrl = audioUrl
     self.audioHeaders = audioHeaders
@@ -108,7 +111,11 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
     queue.async { [weak self, weak loadingRequest] in
       guard let self, let loadingRequest else { return }
       do {
-        var data = try self.cacheManager.data(for: originalUrl, headers: self.headers)
+        var data = try self.cacheManager.data(
+          for: originalUrl,
+          headers: self.headers,
+          cacheKey: self.cacheKey
+        )
         guard !self.isCancelled(loadingRequest) else {
           self.clearRequest(loadingRequest)
           return

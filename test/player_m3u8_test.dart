@@ -41,6 +41,7 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   bool? selectedMuted;
   M3u8RecoveryPolicy? recoveryPolicy;
   int? configuredCacheBytes;
+  int? configuredMaxConcurrentPrecacheTasks;
   M3u8CacheInfo cacheInfo = const M3u8CacheInfo(
     maxSizeBytes: 512,
     sizeBytes: 128,
@@ -48,7 +49,14 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   bool cacheCleared = false;
   M3u8Source? precacheSource;
   Duration? precacheInitialPosition;
+  int? precachePriority;
+  int? precacheMaxRetries;
+  Map<String, Object?>? precacheMetadata;
   String? cancelledPrecacheTaskId;
+  String? pausedPrecacheTaskId;
+  String? resumedPrecacheTaskId;
+  M3u8Source? sourceInfoSource;
+  M3u8Source? clearedSourceCache;
 
   @override
   Future<int> create({
@@ -134,8 +142,12 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   }
 
   @override
-  Future<void> configureCache({required int maxSizeBytes}) async {
+  Future<void> configureCache({
+    required int maxSizeBytes,
+    int maxConcurrentPrecacheTasks = 2,
+  }) async {
     configuredCacheBytes = maxSizeBytes;
+    configuredMaxConcurrentPrecacheTasks = maxConcurrentPrecacheTasks;
   }
 
   @override
@@ -153,16 +165,54 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
     required M3u8Source source,
     Duration initialPosition = Duration.zero,
     M3u8Quality quality = M3u8Quality.auto,
+    int priority = 0,
+    int maxRetries = 2,
+    Map<String, Object?> metadata = const <String, Object?>{},
   }) async {
     precacheSource = source;
     precacheInitialPosition = initialPosition;
     selectedQuality = quality;
+    precachePriority = priority;
+    precacheMaxRetries = maxRetries;
+    precacheMetadata = metadata;
     return 'cache-task-1';
   }
 
   @override
   Future<void> cancelPrecache(String taskId) async {
     cancelledPrecacheTaskId = taskId;
+  }
+
+  @override
+  Future<void> pausePrecache(String taskId) async {
+    pausedPrecacheTaskId = taskId;
+  }
+
+  @override
+  Future<void> resumePrecache(String taskId) async {
+    resumedPrecacheTaskId = taskId;
+  }
+
+  @override
+  Future<List<M3u8CacheTask>> cacheTasks() async {
+    return const [
+      M3u8CacheTask(
+        taskId: 'cache-task-1',
+        url: 'https://example.com/index.m3u8',
+        status: M3u8CacheTaskStatus.running,
+      ),
+    ];
+  }
+
+  @override
+  Future<M3u8CacheInfo> sourceCacheInfo(M3u8Source source) async {
+    sourceInfoSource = source;
+    return cacheInfo;
+  }
+
+  @override
+  Future<void> clearSourceCache(M3u8Source source) async {
+    clearedSourceCache = source;
   }
 }
 
@@ -245,6 +295,54 @@ void main() {
     expect(event.position, const Duration(seconds: 60));
     expect(event.percent, 100.0);
     expect(event.isComplete, true);
+    expect(event.quality?.height, 720);
+  });
+
+  test('parses extended cache event fields', () {
+    final event = M3u8CacheEvent.fromMap(const <Object?, Object?>{
+      'playerId': 9,
+      'event': 'progress',
+      'taskId': 'cache-task-1',
+      'url': 'https://example.com/index.m3u8',
+      'owner': 'standalone',
+      'status': 'running',
+      'sourceType': 'hls',
+      'priority': 6,
+      'duration': 60000,
+      'diskCacheStartPosition': 10000,
+      'diskCachePosition': 20000,
+      'diskCachePercent': 33.3,
+      'bytesCached': 1024,
+      'bytesTotal': 4096,
+      'downloadSpeedBytesPerSecond': 512,
+      'cacheHitCount': 2,
+      'networkFetchCount': 3,
+      'segmentIndex': 4,
+      'segmentCount': 12,
+      'currentUrl': 'https://example.com/segment.ts',
+      'retryCount': 1,
+      'updatedAt': 1700000000000,
+      'metadata': {'title': 'Episode 1'},
+      'quality': {'id': '720p', 'label': '720p', 'height': 720},
+    });
+
+    expect(event.playerId, 9);
+    expect(event.owner, M3u8CacheEventOwner.standalone);
+    expect(event.status, M3u8CacheEventStatus.running);
+    expect(event.sourceType, M3u8SourceType.hls);
+    expect(event.priority, 6);
+    expect(event.bytesCached, 1024);
+    expect(event.bytesTotal, 4096);
+    expect(event.byteProgress, 0.25);
+    expect(event.downloadSpeedBytesPerSecond, 512);
+    expect(event.cacheHitCount, 2);
+    expect(event.networkFetchCount, 3);
+    expect(event.segmentIndex, 4);
+    expect(event.segmentCount, 12);
+    expect(event.currentUrl, 'https://example.com/segment.ts');
+    expect(event.retryCount, 1);
+    expect(event.updatedAt, DateTime.fromMillisecondsSinceEpoch(1700000000000));
+    expect(event.metadata, {'title': 'Episode 1'});
     expect(event.quality?.height, 720);
   });
 
@@ -703,7 +801,10 @@ void main() {
     await M3u8PlayerCache.configure(maxSizeBytes: 128, platform: platform);
     final info = await M3u8PlayerCache.info(platform: platform);
     final taskId = await M3u8PlayerCache.precache(
-      M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+      M3u8Source(
+        videoUrl: 'https://example.com/index.m3u8',
+        cacheKey: 'video-1',
+      ),
       initialPosition: const Duration(seconds: 12),
       quality: const M3u8Quality(
         id: '720p',
@@ -712,21 +813,48 @@ void main() {
         height: 720,
         bitrate: 1500000,
       ),
+      priority: 7,
+      maxRetries: 4,
+      metadata: const {'title': 'Episode 1'},
+      platform: platform,
+    );
+    final tasks = await M3u8PlayerCache.tasks(platform: platform);
+    final sourceInfo = await M3u8PlayerCache.sourceInfo(
+      M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
+      platform: platform,
+    );
+    await M3u8PlayerCache.pausePrecache(taskId, platform: platform);
+    await M3u8PlayerCache.resumePrecache(taskId, platform: platform);
+    await M3u8PlayerCache.clearSource(
+      M3u8Source(videoUrl: 'https://example.com/index.m3u8'),
       platform: platform,
     );
     await M3u8PlayerCache.cancelPrecache(taskId, platform: platform);
     await M3u8PlayerCache.clear(platform: platform);
 
     expect(platform.configuredCacheBytes, 128);
+    expect(platform.configuredMaxConcurrentPrecacheTasks, 2);
     expect(info.maxSizeBytes, 512);
     expect(info.sizeBytes, 128);
+    expect(sourceInfo.sizeBytes, 128);
+    expect(tasks.single.taskId, 'cache-task-1');
     expect(info.usageRatio, 0.25);
     expect(taskId, 'cache-task-1');
     expect(platform.precacheSource?.videoUrl, 'https://example.com/index.m3u8');
+    expect(platform.precacheSource?.cacheKey, 'video-1');
     expect(platform.precacheSource?.videoHeaders, const {});
     expect(platform.precacheSource?.sourceType, M3u8SourceType.auto);
     expect(platform.precacheInitialPosition, const Duration(seconds: 12));
     expect(platform.selectedQuality?.height, 720);
+    expect(platform.precachePriority, 7);
+    expect(platform.precacheMaxRetries, 4);
+    expect(platform.precacheMetadata, {'title': 'Episode 1'});
+    expect(platform.pausedPrecacheTaskId, 'cache-task-1');
+    expect(platform.resumedPrecacheTaskId, 'cache-task-1');
+    expect(
+      platform.clearedSourceCache?.videoUrl,
+      'https://example.com/index.m3u8',
+    );
     expect(platform.cancelledPrecacheTaskId, 'cache-task-1');
     expect(platform.cacheCleared, true);
     await platform.eventController.close();

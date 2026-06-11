@@ -24,6 +24,23 @@ void main() {
               'sizeBytes': 16 * 1024 * 1024,
             };
           }
+          if (methodCall.method == 'sourceCacheInfo') {
+            return <String, Object>{
+              'maxSizeBytes': 64 * 1024 * 1024,
+              'sizeBytes': 8 * 1024 * 1024,
+            };
+          }
+          if (methodCall.method == 'cacheTasks') {
+            return <Object>[
+              <String, Object>{
+                'taskId': 'cache-task-1',
+                'url': 'https://example.com/index.m3u8',
+                'status': 'running',
+                'bytesCached': 100,
+                'bytesTotal': 200,
+              },
+            ];
+          }
           if (methodCall.method == 'precache') {
             return 'cache-task-1';
           }
@@ -68,6 +85,7 @@ void main() {
         'videoHeaders': {'User-Agent': 'test'},
         'audioHeaders': {'User-Agent': 'test'},
         'sourceType': 'auto',
+        'cacheKey': null,
         'recoveryPolicy': {
           'isEnabled': true,
           'rebufferThreshold': 3,
@@ -230,10 +248,16 @@ void main() {
   });
 
   test('configureCache sends maximum cache size', () async {
-    await platform.configureCache(maxSizeBytes: 64 * 1024 * 1024);
+    await platform.configureCache(
+      maxSizeBytes: 64 * 1024 * 1024,
+      maxConcurrentPrecacheTasks: 3,
+    );
 
     expect(log.single.method, 'configureCache');
-    expect(log.single.arguments, {'maxSizeBytes': 64 * 1024 * 1024});
+    expect(log.single.arguments, {
+      'maxSizeBytes': 64 * 1024 * 1024,
+      'maxConcurrentPrecacheTasks': 3,
+    });
   });
 
   test('clearCache sends cache clear command', () async {
@@ -262,6 +286,7 @@ void main() {
       source: const M3u8Source(
         videoUrl: 'https://example.com/index.m3u8',
         videoHeaders: {'Authorization': 'token'},
+        cacheKey: 'video-1',
       ),
       initialPosition: const Duration(seconds: 15),
       quality: const M3u8Quality(
@@ -271,6 +296,9 @@ void main() {
         height: 720,
         bitrate: 1500000,
       ),
+      priority: 8,
+      maxRetries: 4,
+      metadata: const {'title': 'Episode 1'},
     );
 
     expect(taskId, 'cache-task-1');
@@ -281,6 +309,7 @@ void main() {
       'videoHeaders': {'Authorization': 'token'},
       'audioHeaders': {'Authorization': 'token'},
       'sourceType': 'auto',
+      'cacheKey': 'video-1',
       'initialPosition': 15000,
       'quality': {
         'id': '720p',
@@ -290,12 +319,18 @@ void main() {
         'bitrate': 1500000,
         'isAuto': false,
       },
+      'priority': 8,
+      'maxRetries': 4,
+      'metadata': {'title': 'Episode 1'},
     });
   });
 
   test('precache sends explicit HLS source type', () async {
     final taskId = await platform.precache(
-      source: M3u8Source(videoUrl: 'https://example.com/index.m3u8', sourceType: M3u8SourceType.hls),
+      source: M3u8Source(
+        videoUrl: 'https://example.com/index.m3u8',
+        sourceType: M3u8SourceType.hls,
+      ),
     );
 
     expect(taskId, 'cache-task-1');
@@ -308,5 +343,41 @@ void main() {
 
     expect(log.single.method, 'cancelPrecache');
     expect(log.single.arguments, {'taskId': 'cache-task-1'});
+  });
+
+  test('pause and resume precache send task id', () async {
+    await platform.pausePrecache('cache-task-1');
+    await platform.resumePrecache('cache-task-1');
+
+    expect(log[0].method, 'pausePrecache');
+    expect(log[0].arguments, {'taskId': 'cache-task-1'});
+    expect(log[1].method, 'resumePrecache');
+    expect(log[1].arguments, {'taskId': 'cache-task-1'});
+  });
+
+  test('cacheTasks parses task payloads', () async {
+    final tasks = await platform.cacheTasks();
+
+    expect(log.single.method, 'cacheTasks');
+    expect(tasks.single.taskId, 'cache-task-1');
+    expect(tasks.single.status, M3u8CacheTaskStatus.running);
+    expect(tasks.single.progress, 0.5);
+  });
+
+  test('source cache APIs send source payload', () async {
+    const source = M3u8Source(
+      videoUrl: 'https://example.com/index.m3u8',
+      videoHeaders: {'Authorization': 'token'},
+      cacheKey: 'video-1',
+    );
+
+    final info = await platform.sourceCacheInfo(source);
+    await platform.clearSourceCache(source);
+
+    expect(info.sizeBytes, 8 * 1024 * 1024);
+    expect(log[0].method, 'sourceCacheInfo');
+    expect(log[0].arguments, containsPair('cacheKey', 'video-1'));
+    expect(log[1].method, 'clearSourceCache');
+    expect(log[1].arguments, containsPair('cacheKey', 'video-1'));
   });
 }

@@ -36,6 +36,7 @@ class M3u8AndroidPlayer(
     private val audioUrl: String?,
     private val videoHeaders: Map<String, String>,
     private val audioHeaders: Map<String, String>?,
+    private val cacheKey: String?,
     sourceType: M3u8SourceType,
     private val initialPositionMs: Long,
     private var playbackSpeed: Float,
@@ -87,6 +88,7 @@ class M3u8AndroidPlayer(
             context = context,
             url = videoUrl,
             headers = videoHeaders,
+            cacheKey = cacheKey,
             playerIdProvider = { surfaceProducer.id() },
             eventSinkProvider = eventSinkProvider,
             qualityProvider = { selectedQuality },
@@ -454,7 +456,7 @@ class M3u8AndroidPlayer(
         }
         val mediaItem = mediaItemBuilder.build()
         val videoMediaSourceFactory = DefaultMediaSourceFactory(
-            M3u8CacheManager.mediaDataSourceFactory(context, videoHeaders),
+            M3u8CacheManager.mediaDataSourceFactory(context, videoHeaders, cacheKey),
         )
         val loadControl = DefaultLoadControl.Builder()
             .setBufferDurationsMs(
@@ -489,7 +491,7 @@ class M3u8AndroidPlayer(
         newPlayer.volume = effectiveVolume()
         if (audioUrl != null) {
             val audioMediaSourceFactory = DefaultMediaSourceFactory(
-                M3u8CacheManager.mediaDataSourceFactory(context, effectiveAudioHeaders),
+                M3u8CacheManager.mediaDataSourceFactory(context, effectiveAudioHeaders, cacheKey),
             )
             val audioMediaSource = audioMediaSourceFactory.createMediaSource(
                 MediaItem.Builder()
@@ -527,7 +529,7 @@ class M3u8AndroidPlayer(
             return
         }
         try {
-            val dataSource = M3u8CacheManager.mediaDataSourceFactory(context, videoHeaders)
+            val dataSource = M3u8CacheManager.mediaDataSourceFactory(context, videoHeaders, cacheKey)
                 .createDataSource()
             val playlist = ParsingLoadable.load(
                 dataSource,

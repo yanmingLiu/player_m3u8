@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'player_m3u8_platform_interface.dart';
 import 'src/m3u8_cache_event.dart';
 import 'src/m3u8_cache_info.dart';
+import 'src/m3u8_cache_task.dart';
 import 'src/m3u8_player_event.dart';
 import 'src/m3u8_player_value.dart';
 import 'src/m3u8_recovery_policy.dart';
@@ -80,6 +81,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'videoHeaders': source.videoHeaders,
         'audioHeaders': source.effectiveAudioHeaders,
         'sourceType': source.sourceType.platformValue,
+        'cacheKey': source.cacheKey,
         'recoveryPolicy': recoveryPolicy.toMap(),
         'initialPosition': initialPosition.inMilliseconds,
         'playbackSpeed': playbackSpeed,
@@ -214,10 +216,14 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
   }
 
   @override
-  Future<void> configureCache({required int maxSizeBytes}) async {
+  Future<void> configureCache({
+    required int maxSizeBytes,
+    int maxConcurrentPrecacheTasks = 2,
+  }) async {
     try {
       await methodChannel.invokeMethod<void>('configureCache', {
         'maxSizeBytes': maxSizeBytes,
+        'maxConcurrentPrecacheTasks': maxConcurrentPrecacheTasks,
       });
     } on PlatformException catch (error) {
       throw PlayerM3u8PlatformException.fromPlatformException(error);
@@ -256,8 +262,18 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
     required M3u8Source source,
     Duration initialPosition = Duration.zero,
     M3u8Quality quality = M3u8Quality.auto,
+    int priority = 0,
+    int maxRetries = 2,
+    Map<String, Object?> metadata = const <String, Object?>{},
   }) async {
     _debugAssertValidPosition(initialPosition);
+    if (maxRetries < 0) {
+      throw ArgumentError.value(
+        maxRetries,
+        'maxRetries',
+        'Must be greater than or equal to zero.',
+      );
+    }
     try {
       final taskId = await methodChannel.invokeMethod<String>('precache', {
         'videoUrl': source.videoUrl,
@@ -265,8 +281,12 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'videoHeaders': source.videoHeaders,
         'audioHeaders': source.effectiveAudioHeaders,
         'sourceType': source.sourceType.platformValue,
+        'cacheKey': source.cacheKey,
         'initialPosition': initialPosition.inMilliseconds,
         'quality': quality.toMap(),
+        'priority': priority,
+        'maxRetries': maxRetries,
+        'metadata': metadata,
       });
       if (taskId == null || taskId.isEmpty) {
         throw PlayerM3u8PlatformException(
@@ -294,12 +314,99 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
     }
   }
 
+  @override
+  Future<void> pausePrecache(String taskId) async {
+    _debugAssertValidTaskId(taskId);
+    try {
+      await methodChannel.invokeMethod<void>('pausePrecache', {
+        'taskId': taskId,
+      });
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
+  Future<void> resumePrecache(String taskId) async {
+    _debugAssertValidTaskId(taskId);
+    try {
+      await methodChannel.invokeMethod<void>('resumePrecache', {
+        'taskId': taskId,
+      });
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
+  Future<List<M3u8CacheTask>> cacheTasks() async {
+    try {
+      final raw = await methodChannel.invokeListMethod<Object?>('cacheTasks');
+      return (raw ?? const <Object?>[])
+          .whereType<Map>()
+          .map(
+            (item) => M3u8CacheTask.fromMap(Map<Object?, Object?>.from(item)),
+          )
+          .toList(growable: false);
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
+  Future<M3u8CacheInfo> sourceCacheInfo(M3u8Source source) async {
+    try {
+      final raw = await methodChannel.invokeMapMethod<Object?, Object?>(
+        'sourceCacheInfo',
+        _sourceArguments(source),
+      );
+      if (raw == null) {
+        throw PlayerM3u8PlatformException(
+          'invalid_cache_info',
+          'Platform returned a null cache info payload.',
+        );
+      }
+      return M3u8CacheInfo.fromMap(raw);
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
+  @override
+  Future<void> clearSourceCache(M3u8Source source) async {
+    try {
+      await methodChannel.invokeMethod<void>(
+        'clearSourceCache',
+        _sourceArguments(source),
+      );
+    } on PlatformException catch (error) {
+      throw PlayerM3u8PlatformException.fromPlatformException(error);
+    }
+  }
+
   Future<void> _invokeVoid(String method, int playerId) async {
     try {
       await methodChannel.invokeMethod<void>(method, {'playerId': playerId});
     } on PlatformException catch (error) {
       throw PlayerM3u8PlatformException.fromPlatformException(error);
     }
+  }
+}
+
+Map<String, Object?> _sourceArguments(M3u8Source source) {
+  return <String, Object?>{
+    'videoUrl': source.videoUrl,
+    'audioUrl': source.audioUrl,
+    'videoHeaders': source.videoHeaders,
+    'audioHeaders': source.effectiveAudioHeaders,
+    'sourceType': source.sourceType.platformValue,
+    'cacheKey': source.cacheKey,
+  };
+}
+
+void _debugAssertValidTaskId(String taskId) {
+  if (taskId.trim().isEmpty) {
+    throw ArgumentError.value(taskId, 'taskId', 'Task id must not be empty.');
   }
 }
 

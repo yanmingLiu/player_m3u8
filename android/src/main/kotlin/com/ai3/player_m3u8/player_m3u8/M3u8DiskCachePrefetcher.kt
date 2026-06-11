@@ -22,14 +22,20 @@ internal class M3u8DiskCachePrefetcher(
     context: Context,
     private val url: String,
     private val headers: Map<String, String>,
+    private val cacheKey: String? = null,
     private val playerIdProvider: () -> Long,
     private val eventSinkProvider: () -> EventChannel.EventSink?,
-    private val taskId: String? = null,
+    override val taskId: String? = null,
+    private val owner: String = if (taskId == null) "player" else "standalone",
+    private val sourceType: M3u8SourceType = M3u8SourceType.HLS,
+    override val priority: Int = 0,
+    private val maxRetries: Int = 2,
+    private val metadata: Map<String, Any?> = emptyMap(),
     private val onFinished: (() -> Unit)? = null,
     private val qualityProvider: () -> Map<String, Any?> = { autoQuality() },
     private val audioUrl: String? = null,
     private val audioHeaders: Map<String, String>? = null,
-) {
+) : M3u8CacheTaskHandle {
     private val appContext = context.applicationContext
     private val mainHandler = Handler(Looper.getMainLooper())
     private val sourceDebugId = M3u8Log.sourceDebugId(url)
@@ -42,6 +48,9 @@ internal class M3u8DiskCachePrefetcher(
     private var cancelled = false
 
     @Volatile
+    private var status = "queued"
+
+    @Volatile
     private var currentWriter: CacheWriter? = null
 
     @Volatile
@@ -51,15 +60,37 @@ internal class M3u8DiskCachePrefetcher(
     private var playlistQualityKey: String? = null
 
     private var lastProgressSentAt = 0L
+    private var bytesCached = 0L
+    private var bytesTotal = 0L
+    private var cacheHitCount = 0
+    private var networkFetchCount = 0
+    private var retryCount = 0
+    private var currentUrl: String? = null
+    private var segmentIndex = 0
+    private var segmentCount = 0
+    private var lastBytesSample = 0L
+    private var lastBytesSampleAt = SystemClock.elapsedRealtime()
+    private var downloadSpeedBytesPerSecond = 0L
+    private var nextStartPositionMs = 0L
 
-    fun start() {
-        restartFrom(positionMs = 0L)
+    override val isRunning: Boolean
+        get() = status == "running"
+
+    override val isQueued: Boolean
+        get() = status == "queued"
+
+    override val isPaused: Boolean
+        get() = status == "paused"
+
+    override fun start() {
+        restartFrom(positionMs = nextStartPositionMs)
     }
 
-    fun restartFrom(positionMs: Long) {
+    override fun restartFrom(positionMs: Long) {
         if (cancelled) {
             return
         }
+        status = "running"
         val taskGeneration = generation.incrementAndGet()
         currentWriter?.cancel()
         executor.execute {
@@ -67,11 +98,58 @@ internal class M3u8DiskCachePrefetcher(
         }
     }
 
-    fun cancel() {
+    override fun markQueued(positionMs: Long?) {
+        if (cancelled) {
+            return
+        }
+        if (positionMs != null) {
+            nextStartPositionMs = positionMs.coerceAtLeast(0L)
+        }
+        status = "queued"
+        sendDiskCacheProgress(
+            diskCacheStartMs = 0L,
+            diskCachePositionMs = nextStartPositionMs,
+            durationMs = 0L,
+            isComplete = false,
+            force = true,
+            taskGeneration = generation.get(),
+            quality = normalizedQuality(qualityProvider()),
+        )
+    }
+
+    override fun pause() {
+        if (cancelled) {
+            return
+        }
+        status = "paused"
+        generation.incrementAndGet()
+        currentWriter?.cancel()
+        sendStatusEvent("progress")
+    }
+
+    override fun resume() {
+        restartFrom(nextStartPositionMs)
+    }
+
+    override fun cancel() {
         cancelled = true
+        status = "cancelled"
         generation.incrementAndGet()
         currentWriter?.cancel()
         executor.shutdownNow()
+        sendStatusEvent("cancelled")
+    }
+
+    override fun snapshot(): Map<String, Any?> {
+        return baseEvent(
+            eventName = if (status == "completed") "completed" else "progress",
+            diskCacheStartMs = 0L,
+            diskCachePositionMs = 0L,
+            durationMs = 0L,
+            percent = 0.0,
+            isComplete = status == "completed",
+            quality = normalizedQuality(qualityProvider()),
+        )
     }
 
     private fun cacheVod(startPositionMs: Long, taskGeneration: Int) {
@@ -103,6 +181,10 @@ internal class M3u8DiskCachePrefetcher(
                 currentPlaylist.segments.take(startIndex)
             val diskCacheStartMs = currentPlaylist.segments[startIndex].startTimeMs
             var diskCachePositionMs = diskCacheStartMs
+            nextStartPositionMs = diskCacheStartMs
+            segmentCount = currentPlaylist.segments.size
+            segmentIndex = startIndex
+            bytesTotal = currentPlaylist.segments.size.toLong()
             sendDiskCacheProgress(
                 diskCacheStartMs = diskCacheStartMs,
                 diskCachePositionMs = diskCachePositionMs,
@@ -117,16 +199,21 @@ internal class M3u8DiskCachePrefetcher(
                 if (!isCurrent(taskGeneration)) {
                     return
                 }
-                cacheUri(resource, taskGeneration, headers)
+                cacheUriWithRetry(resource, taskGeneration, headers)
             }
 
             for (segment in orderedSegments) {
                 if (!isCurrent(taskGeneration)) {
                     return
                 }
-                cacheUri(segment.uri, taskGeneration, headers)
+                currentUrl = segment.uri.toString()
+                segmentIndex = currentPlaylist.segments.indexOf(segment).coerceAtLeast(0)
+                nextStartPositionMs = segment.startTimeMs
+                cacheUriWithRetry(segment.uri, taskGeneration, headers)
+                bytesCached = (bytesCached + 1L).coerceAtMost(bytesTotal.coerceAtLeast(bytesCached + 1L))
                 if (segment.startTimeMs >= diskCacheStartMs) {
                     diskCachePositionMs = segment.endTimeMs.coerceAtMost(currentPlaylist.durationMs)
+                    nextStartPositionMs = diskCachePositionMs
                     sendDiskCacheProgress(
                         diskCacheStartMs = diskCacheStartMs,
                         diskCachePositionMs = diskCachePositionMs,
@@ -144,6 +231,7 @@ internal class M3u8DiskCachePrefetcher(
             }
 
             if (isCurrent(taskGeneration)) {
+                status = "completed"
                 sendDiskCacheProgress(
                     diskCacheStartMs = 0L,
                     diskCachePositionMs = currentPlaylist.durationMs,
@@ -177,13 +265,13 @@ internal class M3u8DiskCachePrefetcher(
                 if (!isCurrent(taskGeneration)) {
                     return
                 }
-                cacheUri(resource, taskGeneration, audioHeaders)
+                cacheUriWithRetry(resource, taskGeneration, audioHeaders)
             }
             for (segment in playlist.segments) {
                 if (!isCurrent(taskGeneration)) {
                     return
                 }
-                cacheUri(segment.uri, taskGeneration, audioHeaders)
+                cacheUriWithRetry(segment.uri, taskGeneration, audioHeaders)
             }
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
@@ -229,8 +317,8 @@ internal class M3u8DiskCachePrefetcher(
     }
 
     private fun loadHlsPlaylist(uri: Uri, headers: Map<String, String> = this.headers): HlsPlaylist {
-        val dataSource = M3u8CacheManager.mediaDataSourceFactory(appContext, headers)
-            .createDataSource()
+            val dataSource = M3u8CacheManager.mediaDataSourceFactory(appContext, headers, cacheKey)
+                .createDataSource()
         return ParsingLoadable.load(
             dataSource,
             HlsPlaylistParser(),
@@ -380,17 +468,44 @@ internal class M3u8DiskCachePrefetcher(
         return UriUtil.resolveToUri(baseUri, reference)
     }
 
+    private fun cacheUriWithRetry(uri: Uri, taskGeneration: Int, headers: Map<String, String>) {
+        var attempt = 0
+        while (isCurrent(taskGeneration)) {
+            try {
+                cacheUri(uri, taskGeneration, headers)
+                return
+            } catch (error: Throwable) {
+                if (!isCurrent(taskGeneration)) {
+                    return
+                }
+                retryCount = attempt
+                if (attempt >= maxRetries) {
+                    throw error
+                }
+                attempt += 1
+                retryCount = attempt
+                Thread.sleep((attempt * 200L).coerceAtMost(1000L))
+            }
+        }
+    }
+
     private fun cacheUri(uri: Uri, taskGeneration: Int, headers: Map<String, String>) {
         if (!isCurrent(taskGeneration)) {
             return
         }
+        val wasCached = M3u8CacheManager.hasCachedData(appContext, uri.toString(), headers, cacheKey)
+        if (wasCached) {
+            cacheHitCount += 1
+        } else {
+            networkFetchCount += 1
+        }
         val writer = CacheWriter(
-            M3u8CacheManager.downloadDataSourceFactory(appContext, headers)
+            M3u8CacheManager.downloadDataSourceFactory(appContext, headers, cacheKey)
                 .createDataSourceForDownloading(),
             DataSpec.Builder()
                 .setUri(uri)
                 .setHttpRequestHeaders(headers)
-                .setKey(M3u8CacheManager.cacheKey(uri.toString(), headers))
+                .setKey(M3u8CacheManager.cacheKey(uri.toString(), headers, cacheKey))
                 .build(),
             ByteArray(CacheWriter.DEFAULT_BUFFER_SIZE_BYTES),
             null,
@@ -423,6 +538,7 @@ internal class M3u8DiskCachePrefetcher(
         } else {
             lastProgressSentAt = SystemClock.elapsedRealtime()
         }
+        updateDownloadSpeed()
         val percent = if (durationMs <= 0L) {
             0.0
         } else {
@@ -434,18 +550,15 @@ internal class M3u8DiskCachePrefetcher(
             isComplete -> "completed"
             else -> "progress"
         }
-        val event = mapOf(
-            "playerId" to playerIdProvider(),
-            "event" to eventName,
-            "taskId" to taskId,
-            "url" to url,
-            "duration" to durationMs,
-            "diskCacheStartPosition" to diskCacheStartMs,
-            "diskCachePosition" to diskCachePositionMs,
-            "diskCachePercent" to percent,
-            "isDiskCacheComplete" to isComplete,
-            "quality" to quality,
-        ).filterValues { it != null }
+        val event = baseEvent(
+            eventName = eventName,
+            diskCacheStartMs = diskCacheStartMs,
+            diskCachePositionMs = diskCachePositionMs,
+            durationMs = durationMs,
+            percent = percent,
+            isComplete = isComplete,
+            quality = quality,
+        )
         mainHandler.post {
             if (isCurrent(taskGeneration)) {
                 eventSinkProvider()?.success(event)
@@ -453,8 +566,50 @@ internal class M3u8DiskCachePrefetcher(
         }
     }
 
+    private fun baseEvent(
+        eventName: String,
+        diskCacheStartMs: Long,
+        diskCachePositionMs: Long,
+        durationMs: Long,
+        percent: Double,
+        isComplete: Boolean,
+        quality: Map<String, Any?>,
+    ): Map<String, Any?> {
+        return mapOf(
+            "playerId" to playerIdProvider(),
+            "event" to eventName,
+            "taskId" to taskId,
+            "url" to url,
+            "owner" to owner,
+            "status" to if (isComplete) "completed" else status,
+            "sourceType" to sourceType.platformValue(),
+            "priority" to priority,
+            "duration" to durationMs,
+            "diskCacheStartPosition" to diskCacheStartMs,
+            "diskCachePosition" to diskCachePositionMs,
+            "diskCachePercent" to percent,
+            "isDiskCacheComplete" to isComplete,
+            "quality" to quality,
+            "bytesCached" to bytesCached,
+            "bytesTotal" to bytesTotal,
+            "downloadSpeedBytesPerSecond" to downloadSpeedBytesPerSecond,
+            "cacheHitCount" to cacheHitCount,
+            "networkFetchCount" to networkFetchCount,
+            "segmentIndex" to segmentIndex,
+            "segmentCount" to segmentCount,
+            "currentUrl" to currentUrl,
+            "retryCount" to retryCount,
+            "updatedAt" to System.currentTimeMillis(),
+            "metadata" to metadata,
+        ).filterValues { it != null }
+    }
+
     private fun sendCacheError(error: Throwable, taskGeneration: Int) {
         val cacheTaskId = taskId ?: return
+        if (!isCurrent(taskGeneration)) {
+            return
+        }
+        status = "error"
         mainHandler.post {
             if (isCurrent(taskGeneration)) {
                 eventSinkProvider()?.success(
@@ -462,6 +617,21 @@ internal class M3u8DiskCachePrefetcher(
                         "taskId" to cacheTaskId,
                         "url" to url,
                         "event" to "error",
+                        "owner" to owner,
+                        "status" to "error",
+                        "sourceType" to sourceType.platformValue(),
+                        "priority" to priority,
+                        "bytesCached" to bytesCached,
+                        "bytesTotal" to bytesTotal,
+                        "downloadSpeedBytesPerSecond" to downloadSpeedBytesPerSecond,
+                        "cacheHitCount" to cacheHitCount,
+                        "networkFetchCount" to networkFetchCount,
+                        "segmentIndex" to segmentIndex,
+                        "segmentCount" to segmentCount,
+                        "currentUrl" to currentUrl,
+                        "retryCount" to retryCount,
+                        "updatedAt" to System.currentTimeMillis(),
+                        "metadata" to metadata,
                         "error" to mapOf(
                             "code" to "cache_error",
                             "message" to (error.message ?: "Cache task failed."),
@@ -469,6 +639,21 @@ internal class M3u8DiskCachePrefetcher(
                     ),
                 )
             }
+        }
+    }
+
+    private fun sendStatusEvent(eventName: String) {
+        val event = baseEvent(
+            eventName = eventName,
+            diskCacheStartMs = 0L,
+            diskCachePositionMs = 0L,
+            durationMs = 0L,
+            percent = 0.0,
+            isComplete = status == "completed",
+            quality = normalizedQuality(qualityProvider()),
+        )
+        mainHandler.post {
+            eventSinkProvider()?.success(event)
         }
     }
 
@@ -483,6 +668,22 @@ internal class M3u8DiskCachePrefetcher(
 
     private fun isCurrent(taskGeneration: Int): Boolean {
         return !cancelled && generation.get() == taskGeneration
+    }
+
+    private fun updateDownloadSpeed() {
+        val now = SystemClock.elapsedRealtime()
+        val elapsed = now - lastBytesSampleAt
+        if (elapsed < PROGRESS_INTERVAL_MS) {
+            return
+        }
+        val delta = bytesCached - lastBytesSample
+        downloadSpeedBytesPerSecond = if (elapsed > 0L) {
+            (delta * 1000L / elapsed).coerceAtLeast(0L)
+        } else {
+            0L
+        }
+        lastBytesSample = bytesCached
+        lastBytesSampleAt = now
     }
 
     private fun normalizedQuality(quality: Map<String, Any?>): Map<String, Any?> {

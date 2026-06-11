@@ -4,6 +4,7 @@ import 'package:plugin_platform_interface/plugin_platform_interface.dart';
 import 'player_m3u8_method_channel.dart';
 import 'src/m3u8_cache_event.dart';
 import 'src/m3u8_cache_info.dart';
+import 'src/m3u8_cache_task.dart';
 import 'src/m3u8_player_event.dart';
 import 'src/m3u8_player_value.dart';
 import 'src/m3u8_recovery_policy.dart';
@@ -93,7 +94,10 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
     throw UnimplementedError('disposePlayer() has not been implemented.');
   }
 
-  Future<void> configureCache({required int maxSizeBytes}) {
+  Future<void> configureCache({
+    required int maxSizeBytes,
+    int maxConcurrentPrecacheTasks = 2,
+  }) {
     throw UnimplementedError('configureCache() has not been implemented.');
   }
 
@@ -109,12 +113,35 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
     required M3u8Source source,
     Duration initialPosition = Duration.zero,
     M3u8Quality quality = M3u8Quality.auto,
+    int priority = 0,
+    int maxRetries = 2,
+    Map<String, Object?> metadata = const <String, Object?>{},
   }) {
     throw UnimplementedError('precache() has not been implemented.');
   }
 
   Future<void> cancelPrecache(String taskId) {
     throw UnimplementedError('cancelPrecache() has not been implemented.');
+  }
+
+  Future<void> pausePrecache(String taskId) {
+    throw UnimplementedError('pausePrecache() has not been implemented.');
+  }
+
+  Future<void> resumePrecache(String taskId) {
+    throw UnimplementedError('resumePrecache() has not been implemented.');
+  }
+
+  Future<List<M3u8CacheTask>> cacheTasks() {
+    throw UnimplementedError('cacheTasks() has not been implemented.');
+  }
+
+  Future<M3u8CacheInfo> sourceCacheInfo(M3u8Source source) {
+    throw UnimplementedError('sourceCacheInfo() has not been implemented.');
+  }
+
+  Future<void> clearSourceCache(M3u8Source source) {
+    throw UnimplementedError('clearSourceCache() has not been implemented.');
   }
 }
 

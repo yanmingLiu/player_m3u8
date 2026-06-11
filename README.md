@@ -30,8 +30,8 @@
 
 | 平台 | 播放内核 | 渲染 | 缓存策略 |
 | --- | --- | --- | --- |
-| Android | Media3 ExoPlayer + HLS/progressive | Flutter Texture / SurfaceProducer | HLS 播放和预取共用 Media3 `SimpleCache`；MP4/MOV 不启动主动预取 |
-| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | HLS 通过 `AVAssetResourceLoader` 复用 app caches；MP4/MOV 直接使用原始 URL |
+| Android | Media3 ExoPlayer + HLS/progressive | Flutter Texture / SurfaceProducer | HLS 播放、HLS 独立下载和 progressive 独立下载共用 Media3 `SimpleCache` |
+| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | HLS 通过 `AVAssetResourceLoader` 复用 app caches；progressive 完整下载后复用本地缓存文件 |
 
 ### 安装
 
@@ -217,7 +217,29 @@ await M3u8PlayerCache.cancelPrecache(taskId);
 await M3u8PlayerCache.clear();
 ```
 
-配置和清理都要求当前没有活跃 native player 或独立预缓存任务；查询缓存状态和独立预缓存任务可在播放中调用。独立预缓存返回 `taskId`，进度通过 `M3u8PlayerCache.events()` 上报，可按 `taskId` 过滤并取消。`precache` 只支持 HLS，可传入 `quality`，用于预热当前播放档位或下一个 source 的目标档位；事件会回传实际预缓存档位。Android 预缓存复用 Media3 `HlsPlaylistParser` + `CacheWriter` + `SimpleCache`；iOS 复用 AVFoundation resource loader 同一套 app caches。缓存 key 包含 URL 和请求 headers，避免不同 Authorization/Cookie/地区 header 的资源互相复用。MP4/MOV 调用 `precache` 会返回 `unsupported_source_type`。播放器 source 切换会取消播放器内部预取；业务自己发起的独立预缓存任务应按业务生命周期主动取消。
+缓存容量配置和全量清理要求当前没有活跃 native player 或独立下载任务；只调整 `maxConcurrentPrecacheTasks` 可在运行期调用，用于播放中降低后台下载并发。查询缓存状态、source 缓存状态和独立下载任务可在播放中调用。独立下载返回 `taskId`，进度通过 `M3u8PlayerCache.events()` 上报，可按 `taskId` 过滤，并支持暂停、恢复和取消。`precache` 可传入 `priority`、`maxRetries`、`metadata` 和 HLS `quality`；`configure` 可配置 `maxConcurrentPrecacheTasks`。Android HLS 下载复用 Media3 `HlsPlaylistParser` + `CacheWriter` + `SimpleCache`，progressive MP4/MOV 通过 Media3 `CacheWriter` 写入同一 `SimpleCache`；iOS HLS 复用 AVFoundation resource loader 同一套 app caches，progressive MP4/MOV 完整下载后下次播放优先复用本地缓存文件。默认缓存 key 包含 URL 和请求 headers，避免不同 Authorization/Cookie/地区 header 的资源互相复用；如果业务确认同一视频的短期签名 URL 可共享缓存，可在 `M3u8Source.cacheKey` 传入稳定业务 key。播放器 source 切换会取消播放器内部预取；业务自己发起的独立下载任务应按业务生命周期主动取消。
+
+播放器内部磁盘缓存和独立下载任务是两条概念：内部缓存服务当前播放、seek 和短期复用，不进入下载列表；独立下载任务由业务调用 `precache` 创建，可展示任务状态、速度、字节、segment、错误，并支持暂停、恢复和取消。
+
+```dart
+final source = M3u8Source(
+  videoUrl: 'https://example.com/video.mp4?token=short-lived',
+  sourceType: M3u8SourceType.progressive,
+  cacheKey: 'video-123',
+);
+
+final taskId = await M3u8PlayerCache.precache(
+  source,
+  priority: 10,
+  maxRetries: 3,
+  metadata: {'title': 'Episode 1'},
+);
+final tasks = await M3u8PlayerCache.tasks();
+final sourceInfo = await M3u8PlayerCache.sourceInfo(source);
+await M3u8PlayerCache.pausePrecache(taskId);
+await M3u8PlayerCache.resumePrecache(taskId);
+await M3u8PlayerCache.clearSource(source);
+```
 
 ### 清晰度选择
 
@@ -401,10 +423,12 @@ example/
 - 完整缓存思路走磁盘缓存/下载任务。
 - 进度事件默认约 250ms 一次，避免高频 channel 压力。
 - dispose 或 source 切换时释放 player、surface/texture、observer/timer、预取任务。
-- Android 预取使用 Media3 `HlsPlaylistParser` 解析 HLS，并通过 Media3 `CacheWriter` 写入 `SimpleCache`，播放器可复用缓存数据；MP4/MOV 不启动主动预取。
-- iOS HLS 播放通过 `AVAssetResourceLoader` 读取自定义 scheme，playlist、key、map、segment 和外部字幕请求会优先命中 app caches；MP4/MOV 直接用原始 URL 创建 `AVURLAsset`。
+- Android 播放器内部 HLS 预取使用 Media3 `HlsPlaylistParser` 解析 HLS，并通过 Media3 `CacheWriter` 写入 `SimpleCache`；独立 HLS/progressive 下载也写入同一个 `SimpleCache`，播放器可直接复用。
+- iOS HLS 播放通过 `AVAssetResourceLoader` 读取自定义 scheme，playlist、key、map、segment 和外部字幕请求会优先命中 app caches；progressive 独立下载完成后，新建播放器会优先使用本地缓存文件。
 - 磁盘缓存 key 会包含 URL 和请求 headers，避免同 URL 在不同 Authorization/Cookie/地区 header 下复用错误缓存。
-- `M3u8PlayerCache.precache` 可在创建播放器前预热当前/下一个 HLS source 的磁盘缓存，并通过独立 cache event channel 上报进度、完成、取消或错误；传入 `quality` 后会优先预缓存最接近该档位的 HLS variant。
+- `M3u8PlayerCache.precache` 可创建独立 HLS/MP4/MOV 下载任务，并通过独立 cache event channel 上报进度、完成、取消或错误；传入 `quality` 后会优先下载最接近该档位的 HLS variant。
+- 播放器内部预取不是下载任务，不进入 `tasks()` 和下载列表；下载列表只展示业务主动创建的独立任务。
+- 播放中建议降低 `maxConcurrentPrecacheTasks`，避免下载任务与播放器抢占网络和 IO；example 会对同一 source 去重，并在播放活跃时把独立下载并发降为 1。
 - HLS 播放器内部主动预取会跟随手动清晰度、自动降级恢复和 seek 位置重启，不再固定优先最高码率 variant。
 - Android 通过 ExoPlayer track/analytics 上报首帧、rebuffer、丢帧、当前码率和带宽估计；iOS 通过 AVPlayer access log 和视频轨道信息上报对应指标。rebuffer 总时长和清晰度切换次数可用于真实设备 QoE 统计。
 - Android 手动清晰度通过 `DefaultTrackSelector` 约束最高视频尺寸和码率；iOS 手动清晰度通过 ResourceLoader 过滤 HLS master variants。
@@ -414,16 +438,19 @@ example/
 ### 当前限制
 
 - 支持网络 HLS/m3u8 VOD 和 progressive MP4/MOV；不支持 DASH、SmoothStreaming、RTSP、FLV 或本地文件。
-- MP4/MOV 第一版仅支持播放、暂停、seek、进度和 source 切换，不支持磁盘预取或清晰度选择。
+- MP4/MOV 支持独立完整下载和完成后缓存复用，但不支持清晰度选择。
 - 字幕支持以 WebVTT/HLS text track 为主；Android progressive 可挂外部字幕，iOS progressive 暂不支持外部字幕。
 - 暂不支持后台播放、DRM。
 - 当前已支持手动清晰度约束，但尚未暴露自定义自动码率策略。
 - iOS HLS 解析仍是轻量实现，适合常见 VOD playlist；复杂 HLS 特性仍需继续补测试。
-- 磁盘缓存配置和清理必须在没有活跃播放器时调用。
+- 磁盘缓存容量配置和清理必须在没有活跃播放器和独立下载任务时调用；下载并发数可运行期调整，但不会强制取消已经运行中的任务。
+- 原生层不承诺 app 重启后恢复未完成下载队列；example 会持久化下载记录，并在启动后通过 `sourceInfo` 恢复已完成缓存记录。
 
 ### 示例工程
 
 example 默认使用中文界面，顶部按钮可在中文和英文之间切换。示例内置多个公开 HLS 和 MP4 测试源，用于切换播放、清晰度、缓存、seek 后预取，以及 progressive 播放验证：
+
+example 的 More sheet 提供下载列表入口；下载列表使用 `metadata.title` 显示资源名称，完成的任务可点击切换到对应 source 并复用本地缓存播放。QoE 面板上方的缓存/下载指标看板会分开展示播放器内部缓存和独立下载任务，下载当前源时会复用已有任务或已完成缓存记录，避免同源重复下载。
 
 | 名称 | 地址 |
 | --- | --- |
@@ -510,8 +537,8 @@ It is designed for Flutter apps that need HLS/m3u8 VOD or MP4/MOV playback, play
 
 | Platform | Playback Engine | Rendering | Cache Strategy |
 | --- | --- | --- | --- |
-| Android | Media3 ExoPlayer + HLS/progressive | Flutter Texture / SurfaceProducer | HLS playback and prefetch share Media3 `SimpleCache`; MP4/MOV do not start active prefetch |
-| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | HLS reuses app caches through `AVAssetResourceLoader`; MP4/MOV use the original URL directly |
+| Android | Media3 ExoPlayer + HLS/progressive | Flutter Texture / SurfaceProducer | HLS playback, HLS standalone downloads, and progressive standalone downloads share Media3 `SimpleCache` |
+| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | HLS reuses app caches through `AVAssetResourceLoader`; progressive playback reuses fully downloaded local cache files |
 
 ### Installation
 
@@ -666,7 +693,29 @@ await M3u8PlayerCache.cancelPrecache(taskId);
 await M3u8PlayerCache.clear();
 ```
 
-Configure and clear require no active native players or standalone precache tasks; cache info and standalone precache tasks can run while playback is active. Standalone HLS precache returns a `taskId`, emits progress through `M3u8PlayerCache.events()`, and can be cancelled by `taskId`. Pass `quality` to warm the current playback rendition or the next source's target rendition; cache events include the actual warmed quality. Android precache reuses Media3 `HlsPlaylistParser`, `CacheWriter`, and `SimpleCache`; iOS reuses the same app caches path as the AVFoundation resource loader. Cache keys include URL and request headers to avoid reusing data across different Authorization/Cookie/region headers. MP4/MOV precache returns `unsupported_source_type`. Player source switching cancels player-owned prefetch; app-owned standalone precache tasks should be cancelled according to app lifecycle.
+Changing cache capacity and clearing all cache require no active native players or standalone download tasks. Changing only `maxConcurrentPrecacheTasks` can be done at runtime, which lets apps reduce background download concurrency during playback. Cache info, source cache info, and standalone download tasks can run while playback is active. Standalone downloads return a `taskId`, emit progress through `M3u8PlayerCache.events()`, and support pause, resume, and cancel by `taskId`. `precache` accepts `priority`, `maxRetries`, `metadata`, and HLS `quality`; `configure` accepts `maxConcurrentPrecacheTasks`. Android HLS downloads reuse Media3 `HlsPlaylistParser`, `CacheWriter`, and `SimpleCache`, while progressive MP4/MOV uses Media3 `CacheWriter` into the same `SimpleCache`. iOS HLS reuses the AVFoundation resource loader app cache path, while progressive MP4/MOV reuses a fully cached local file on the next playback. Default cache keys include URL and request headers to avoid reusing data across different Authorization/Cookie/region headers. If your business URL is short-lived but identifies the same immutable video, pass a stable `M3u8Source.cacheKey`. Player source switching cancels player-owned prefetch; app-owned standalone download tasks should be cancelled according to app lifecycle.
+
+Player-owned disk cache and standalone downloads are separate concepts. Player-owned cache serves current playback, seek, and short-term reuse, and does not appear in the download list. Standalone downloads are created by app calls to `precache`; they expose status, speed, bytes, segment progress, errors, and pause/resume/cancel controls.
+
+```dart
+final source = M3u8Source(
+  videoUrl: 'https://example.com/video.mp4?token=short-lived',
+  sourceType: M3u8SourceType.progressive,
+  cacheKey: 'video-123',
+);
+
+final taskId = await M3u8PlayerCache.precache(
+  source,
+  priority: 10,
+  maxRetries: 3,
+  metadata: {'title': 'Episode 1'},
+);
+final tasks = await M3u8PlayerCache.tasks();
+final sourceInfo = await M3u8PlayerCache.sourceInfo(source);
+await M3u8PlayerCache.pausePrecache(taskId);
+await M3u8PlayerCache.resumePrecache(taskId);
+await M3u8PlayerCache.clearSource(source);
+```
 
 ### Quality Selection
 
@@ -853,10 +902,12 @@ example/
 - Full-video prefetch is handled through disk cache/download tasks.
 - Progress events are throttled to about 250ms.
 - dispose and source switching release native players, surfaces/textures, observers/timers, and active prefetch tasks.
-- Android prefetch uses Media3 `HlsPlaylistParser` for HLS parsing and Media3 `CacheWriter` to write into `SimpleCache`, which ExoPlayer can reuse. MP4/MOV do not start active prefetch.
-- iOS HLS playback uses `AVAssetResourceLoader` with a custom scheme. Playlist, key, map, segment, and external subtitle requests read from app caches first; MP4/MOV create `AVURLAsset` from the original URL.
+- Android player-owned HLS prefetch uses Media3 `HlsPlaylistParser` for HLS parsing and Media3 `CacheWriter` to write into `SimpleCache`. Standalone HLS/progressive downloads write into the same `SimpleCache`, which ExoPlayer can reuse directly.
+- iOS HLS playback uses `AVAssetResourceLoader` with a custom scheme. Playlist, key, map, segment, and external subtitle requests read from app caches first; progressive playback uses a local cache file after a standalone download completes.
 - Disk cache keys include URL and request headers, so resources with different Authorization, Cookie, or region headers do not share stale cached data.
-- `M3u8PlayerCache.precache` can warm HLS disk cache before creating a player or for the next source, with standalone cache events for progress, completion, cancellation, and errors. Passing `quality` prioritizes the closest HLS variant for that rendition.
+- `M3u8PlayerCache.precache` creates standalone HLS/MP4/MOV download tasks with cache events for progress, completion, cancellation, and errors. Passing `quality` prioritizes the closest HLS variant for that rendition.
+- Player-owned prefetch is not a download task and does not appear in `tasks()` or the download list. The download list only shows app-owned standalone tasks.
+- During playback, reduce `maxConcurrentPrecacheTasks` to avoid network and IO contention. The example de-duplicates same-source downloads and lowers standalone download concurrency to 1 while playback is active.
 - HLS player-owned active prefetch follows manual quality, automatic recovery downshifts, and seek restarts instead of always prioritizing the highest bitrate variant.
 - Android reports startup, rebuffer, dropped-frame, bitrate, and bandwidth metrics through ExoPlayer tracks/analytics. iOS reports the same metric class through AVPlayer access logs and video track data. Total rebuffer duration and quality switch count are available for real-device QoE analytics.
 - Android manual quality constrains maximum video size and bitrate through `DefaultTrackSelector`; iOS manual quality filters HLS master variants through ResourceLoader.
@@ -866,16 +917,19 @@ example/
 ### Current Limitations
 
 - Network HLS/m3u8 VOD and progressive MP4/MOV are supported. DASH, SmoothStreaming, RTSP, FLV, and local files are not supported.
-- MP4/MOV v1 covers playback, pause, seek, progress, and source switching, but not disk prefetch or quality selection.
+- MP4/MOV supports standalone full-file downloads and cache reuse after completion, but not quality selection.
 - Subtitle support targets WebVTT and HLS text tracks. Android progressive sources can attach external subtitles; iOS progressive external subtitles are not exposed yet.
 - No background playback or DRM yet.
 - Manual quality constraints are supported, but custom automatic bitrate policy controls are not exposed yet.
 - iOS HLS parsing remains lightweight and targets common VOD playlists; complex HLS features need additional validation.
-- Disk cache configuration and clearing must be called only when no players are active.
+- Changing cache capacity and clearing cache require no active players or standalone download tasks. Download concurrency can be changed at runtime, but running tasks are not force-cancelled.
+- Native task queues are not restored after app restart. The example persists download records and restores completed cache records through `sourceInfo`.
 
 ### Example App
 
 The example app uses Chinese by default and provides a top-bar language button to switch between Chinese and English. It includes multiple public HLS and MP4 test sources for playback switching, quality selection, cache, seek-aware prefetch, and progressive playback validation:
+
+The More sheet opens the download list. Download items use `metadata.title` as the display name, and completed items can be tapped to switch to the corresponding source and play through the local cache. The cache/download metrics panel above QoE separates player-owned cache from standalone downloads. Downloading the current source reuses an existing task or completed cache record to avoid duplicate same-source work.
 
 | Name | URL |
 | --- | --- |

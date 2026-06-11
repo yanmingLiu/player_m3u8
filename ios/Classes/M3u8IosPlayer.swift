@@ -32,6 +32,17 @@ enum M3u8SourceType {
       }
     }
   }
+
+  var platformValue: String {
+    switch self {
+    case .auto:
+      return "auto"
+    case .hls:
+      return "hls"
+    case .progressive:
+      return "progressive"
+    }
+  }
 }
 
 struct M3u8RecoveryPolicy {
@@ -83,6 +94,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   private let audioUrl: URL?
   private let videoHeaders: [String: String]
   private let audioHeaders: [String: String]?
+  private let cacheKey: String?
   private let sourceType: M3u8SourceType
   private var asset: AVURLAsset
   private let player: AVPlayer
@@ -136,6 +148,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     audioUrl: URL?,
     videoHeaders: [String: String],
     audioHeaders: [String: String]?,
+    cacheKey: String?,
     sourceType: M3u8SourceType,
     initialPositionMs: Int64,
     playbackSpeed: Double,
@@ -154,6 +167,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     self.audioUrl = audioUrl
     self.videoHeaders = videoHeaders
     self.audioHeaders = audioHeaders
+    self.cacheKey = cacheKey
     let resolvedSourceType = sourceType.resolve(url: videoUrl)
     self.sourceType = resolvedSourceType
     self.playbackSpeed = min(max(playbackSpeed, 0.25), 2.0)
@@ -169,13 +183,22 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     self.recoveryPolicy = recoveryPolicy
     self.resourceLoader = M3u8ResourceLoader(
       headers: videoHeaders,
+      cacheKey: cacheKey,
       audioUrl: audioUrl,
       audioHeaders: effectiveAudioHeaders,
       externalSubtitles: self.availableSubtitles,
     )
     let assetOptions: [String: Any]? =
       videoHeaders.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": videoHeaders]
-    let asset = AVURLAsset(url: Self.assetUrl(for: videoUrl, sourceType: self.sourceType), options: assetOptions)
+    let asset = AVURLAsset(
+      url: Self.assetUrl(
+        for: videoUrl,
+        sourceType: self.sourceType,
+        headers: videoHeaders,
+        cacheKey: cacheKey
+      ),
+      options: assetOptions
+    )
     self.asset = asset
     if self.sourceType == .hls {
       self.asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
@@ -205,6 +228,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       diskCachePrefetcher = M3u8DiskCachePrefetcher(
         url: videoUrl,
         headers: videoHeaders,
+        cacheKey: cacheKey,
         playerIdProvider: { [weak self] in self?.textureId ?? -1 },
         eventSinkProvider: eventSinkProvider,
         qualityProvider: { [weak self] in self?.selectedQuality ?? Self.autoQuality() },
@@ -510,7 +534,15 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     asset.resourceLoader.setDelegate(nil, queue: nil)
     let assetOptions: [String: Any]? =
       videoHeaders.isEmpty ? nil : ["AVURLAssetHTTPHeaderFieldsKey": videoHeaders]
-    asset = AVURLAsset(url: Self.assetUrl(for: videoUrl, sourceType: sourceType), options: assetOptions)
+    asset = AVURLAsset(
+      url: Self.assetUrl(
+        for: videoUrl,
+        sourceType: sourceType,
+        headers: videoHeaders,
+        cacheKey: cacheKey
+      ),
+      options: assetOptions
+    )
     if sourceType == .hls {
       asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
     }
@@ -884,8 +916,20 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     }
   }
 
-  private static func assetUrl(for url: URL, sourceType: M3u8SourceType) -> URL {
-    sourceType == .hls ? M3u8ResourceLoader.cachedUrl(for: url) : url
+  private static func assetUrl(
+    for url: URL,
+    sourceType: M3u8SourceType,
+    headers: [String: String],
+    cacheKey: String?
+  ) -> URL {
+    if sourceType == .hls {
+      return M3u8ResourceLoader.cachedUrl(for: url)
+    }
+    return M3u8IosCacheManager.shared.cachedFileIfExists(
+      for: url,
+      headers: headers,
+      cacheKey: cacheKey
+    ) ?? url
   }
 
   private static func qualityPayload(width: Int, height: Int, bitrate: Int) -> [String: Any] {

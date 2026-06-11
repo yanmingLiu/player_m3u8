@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:player_m3u8/player_m3u8.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/buffered_seek_bar.dart';
 import 'src/example_strings.dart';
@@ -12,6 +14,8 @@ import 'src/video_scaffold.dart';
 
 const String sampleM3u8Url =
     'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8';
+const String _downloadRecordsPreferenceKey =
+    'player_m3u8_example_download_records';
 
 const List<VideoSource> sampleVideos = <VideoSource>[
   VideoSource(title: 'Apple BipBop', url: sampleM3u8Url),
@@ -119,7 +123,12 @@ class VideoSource {
     sourceType: sourceType,
   );
 
-  bool get supportsPrecache => sourceType != M3u8SourceType.progressive;
+  Map<String, Object?> downloadMetadata(ExampleLanguage language) => {
+    'title': localizedTitle(language),
+    'source': toSource().toMap(),
+  };
+
+  bool get supportsPrecache => true;
 
   String localizedTitle(ExampleLanguage language) {
     if (language == ExampleLanguage.en) {
@@ -176,6 +185,13 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   int _currentVideoIndex = 0;
   String? _precacheTaskId;
   M3u8CacheEvent? _latestCacheEvent;
+  M3u8CacheInfo? _cacheInfo;
+  final Map<String, M3u8CacheTask> _cacheTasks = <String, M3u8CacheTask>{};
+  final ValueNotifier<List<M3u8CacheTask>> _cacheTasksNotifier =
+      ValueNotifier<List<M3u8CacheTask>>(const <M3u8CacheTask>[]);
+  Timer? _downloadListRefreshTimer;
+  M3u8CacheEvent? _latestDownloadEvent;
+  bool? _lastConfiguredPlaybackActive;
 
   ExampleStrings get _strings => ExampleStrings(_language);
 
@@ -196,6 +212,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   void dispose() {
     _qoeSubscription?.cancel();
     _cacheSubscription?.cancel();
+    _downloadListRefreshTimer?.cancel();
+    _cacheTasksNotifier.dispose();
     _cancelPrecacheTaskSilently();
     unawaited(_restorePortraitChrome());
     _controller.dispose();
@@ -205,6 +223,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   Future<void> _initialize() async {
     try {
       final source = sampleVideos[_currentVideoIndex];
+      await _restoreDownloadRecords();
+      await _configureDownloadConcurrency(playbackActive: false);
       await _controller.initialize(
         source: source.toSource(),
         subtitles: source.subtitles,
@@ -243,6 +263,11 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
             : source.subtitles.first.id,
         autoPlay: true,
       );
+      unawaited(
+        _configureDownloadConcurrency(
+          playbackActive: _controller.value.isPlaying,
+        ),
+      );
       _qoeSnapshots.clear();
     } finally {
       if (mounted) {
@@ -254,6 +279,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   }
 
   void _handlePlaybackValue(M3u8PlayerValue value) {
+    unawaited(_configureDownloadConcurrency(playbackActive: value.isPlaying));
     if (!value.isCompleted) {
       _handledCompletion = false;
       return;
@@ -298,17 +324,27 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   }
 
   void _handleCacheEvent(M3u8CacheEvent event) {
-    if (!mounted || event.taskId != _precacheTaskId) {
+    if (!mounted) {
+      return;
+    }
+    if (event.taskId.isEmpty) {
       return;
     }
     setState(() {
-      _latestCacheEvent = event;
-      if (event.type == M3u8CacheEventType.completed ||
-          event.type == M3u8CacheEventType.cancelled ||
-          event.type == M3u8CacheEventType.error) {
-        _precacheTaskId = null;
+      if (event.taskId == _precacheTaskId) {
+        _latestCacheEvent = event;
+        if (event.type == M3u8CacheEventType.completed ||
+            event.type == M3u8CacheEventType.cancelled ||
+            event.type == M3u8CacheEventType.error) {
+          _precacheTaskId = null;
+        }
       }
+      final task = _taskFromCacheEvent(event);
+      _cacheTasks[task.taskId] = task;
+      _latestDownloadEvent = event;
+      _syncCacheTasksNotifier();
     });
+    unawaited(_refreshCacheRuntimeState());
   }
 
   Future<void> _precacheCurrentSource() async {
@@ -319,10 +355,48 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     if (!source.supportsPrecache) {
       return;
     }
+    final selectedQuality = _controller.value.selectedQuality;
+    final metadata = {
+      ...source.downloadMetadata(_language),
+      'quality': selectedQuality.toMap(),
+    };
+    final existingTask = _findDownloadTaskForSource(source.toSource());
+    if (existingTask != null) {
+      setState(() {
+        _precacheTaskId = _isTerminalTask(existingTask)
+            ? null
+            : existingTask.taskId;
+        _latestCacheEvent = existingTask.event;
+      });
+      await _showDownloadList();
+      return;
+    }
+    final sourceInfo = await M3u8PlayerCache.sourceInfo(source.toSource());
+    if (sourceInfo.sizeBytes > 0) {
+      final taskId = 'cached:${source.url.hashCode}';
+      setState(() {
+        _cacheTasks[taskId] = M3u8CacheTask(
+          taskId: taskId,
+          url: source.url,
+          owner: M3u8CacheTaskOwner.standalone,
+          status: M3u8CacheTaskStatus.completed,
+          sourceType: source.sourceType,
+          bytesCached: sourceInfo.sizeBytes,
+          bytesTotal: sourceInfo.sizeBytes,
+          metadata: metadata,
+          updatedAt: DateTime.now(),
+        );
+        _syncCacheTasksNotifier();
+      });
+      unawaited(_persistDownloadRecords());
+      await _showDownloadList();
+      return;
+    }
     final taskId = await M3u8PlayerCache.precache(
       source.toSource(),
       initialPosition: _controller.value.position,
-      quality: _controller.value.selectedQuality,
+      quality: selectedQuality,
+      metadata: metadata,
     );
     if (!mounted) {
       return;
@@ -335,9 +409,350 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
         type: M3u8CacheEventType.progress,
         position: _controller.value.position,
         startPosition: _controller.value.position,
-        quality: _controller.value.selectedQuality,
+        quality: selectedQuality,
+        metadata: metadata,
+      );
+      _cacheTasks[taskId] = M3u8CacheTask(
+        taskId: taskId,
+        url: source.url,
+        owner: M3u8CacheTaskOwner.standalone,
+        status: M3u8CacheTaskStatus.queued,
+        sourceType: source.sourceType,
+        metadata: metadata,
+        updatedAt: DateTime.now(),
+      );
+      _syncCacheTasksNotifier();
+    });
+    unawaited(_persistDownloadRecords());
+    unawaited(_refreshCacheRuntimeState());
+  }
+
+  Future<void> _refreshCacheRuntimeState() async {
+    try {
+      final info = await M3u8PlayerCache.info();
+      final tasks = await M3u8PlayerCache.tasks();
+      if (!mounted) return;
+      setState(() {
+        _cacheInfo = info;
+        final activeTaskIds = tasks.map((task) => task.taskId).toSet();
+        _cacheTasks.removeWhere((taskId, task) {
+          return !activeTaskIds.contains(taskId) && !_isTerminalTask(task);
+        });
+        for (final task in tasks) {
+          _cacheTasks[task.taskId] = task;
+        }
+        _syncCacheTasksNotifier();
+      });
+      unawaited(_persistDownloadRecords());
+    } catch (_) {
+      // Runtime diagnostics should not interrupt playback.
+    }
+  }
+
+  Future<void> _showDownloadList() async {
+    await _refreshCacheRuntimeState();
+    if (!mounted) return;
+    _startDownloadListRefreshTimer();
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => DownloadListSheet(
+        tasksListenable: _cacheTasksNotifier,
+        strings: _strings,
+        onPlay: (task) {
+          Navigator.of(context).pop();
+          unawaited(_playDownloadedTask(task));
+        },
+        onPause: (taskId) => _runCacheTaskAction(
+          taskId,
+          () => M3u8PlayerCache.pausePrecache(taskId),
+          optimisticStatus: M3u8CacheTaskStatus.paused,
+        ),
+        onResume: (taskId) => _runCacheTaskAction(
+          taskId,
+          () => M3u8PlayerCache.resumePrecache(taskId),
+          optimisticStatus: M3u8CacheTaskStatus.queued,
+        ),
+        onCancel: (taskId) => _runCacheTaskAction(
+          taskId,
+          () => M3u8PlayerCache.cancelPrecache(taskId),
+          removeImmediately: true,
+        ),
+      ),
+    );
+    _stopDownloadListRefreshTimer();
+    unawaited(_refreshCacheRuntimeState());
+  }
+
+  Future<void> _playDownloadedTask(M3u8CacheTask task) async {
+    final source = _sourceFromDownloadTask(task);
+    if (source == null) {
+      return;
+    }
+    setState(() {
+      _switching = true;
+      _latestCacheEvent = null;
+      _handledCompletion = false;
+    });
+    try {
+      await _cancelPrecacheTask();
+      await _controller.setSource(source, autoPlay: true);
+      final quality = _qualityFromDownloadTask(task);
+      if (quality != null && !quality.isAuto) {
+        await _controller.setQuality(quality);
+      }
+      _qoeSnapshots.clear();
+    } finally {
+      if (mounted) {
+        setState(() {
+          _switching = false;
+        });
+      }
+    }
+  }
+
+  M3u8Source? _sourceFromDownloadTask(M3u8CacheTask task) {
+    final sourceMetadata = task.metadata['source'];
+    if (sourceMetadata is Map) {
+      final source = M3u8Source.fromMap(
+        Map<Object?, Object?>.from(sourceMetadata),
+      );
+      if (source.videoUrl.isNotEmpty) {
+        return source;
+      }
+    }
+    if (task.url.isEmpty) {
+      return null;
+    }
+    return M3u8Source(videoUrl: task.url, sourceType: task.sourceType);
+  }
+
+  M3u8Quality? _qualityFromDownloadTask(M3u8CacheTask task) {
+    final quality = task.metadata['quality'];
+    if (quality is! Map) {
+      return null;
+    }
+    return M3u8Quality.fromMap(Map<Object?, Object?>.from(quality));
+  }
+
+  M3u8CacheTask _taskFromCacheEvent(M3u8CacheEvent event) {
+    return M3u8CacheTask.fromMap({
+      'taskId': event.taskId,
+      'url': event.url,
+      'owner': event.owner.name,
+      'status': event.status.name,
+      'sourceType': event.sourceType.platformValue,
+      'priority': event.priority,
+      'bytesCached': event.bytesCached,
+      'bytesTotal': event.bytesTotal,
+      'downloadSpeedBytesPerSecond': event.downloadSpeedBytesPerSecond,
+      'cacheHitCount': event.cacheHitCount,
+      'networkFetchCount': event.networkFetchCount,
+      'segmentIndex': event.segmentIndex,
+      'segmentCount': event.segmentCount,
+      'currentUrl': event.currentUrl,
+      'retryCount': event.retryCount,
+      'updatedAt': event.updatedAt?.millisecondsSinceEpoch,
+      'metadata': event.metadata,
+      'event': event.type.name,
+      'diskCachePercent': event.percent,
+      'quality': event.quality?.toMap(),
+    });
+  }
+
+  Future<void> _runCacheTaskAction(
+    String taskId,
+    Future<void> Function() action, {
+    bool removeImmediately = false,
+    M3u8CacheTaskStatus? optimisticStatus,
+  }) async {
+    if (removeImmediately && mounted) {
+      setState(() {
+        _removeCacheTask(taskId);
+      });
+    } else if (optimisticStatus != null && mounted) {
+      setState(() {
+        _updateCacheTaskStatus(taskId, optimisticStatus);
+      });
+    }
+    try {
+      await action();
+      await _refreshCacheRuntimeState();
+    } catch (error) {
+      if (!error.toString().contains('unknown_cache_task')) {
+        rethrow;
+      }
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _removeCacheTask(taskId);
+      });
+    } finally {
+      unawaited(_persistDownloadRecords());
+      unawaited(_refreshCacheRuntimeState());
+    }
+  }
+
+  void _removeCacheTask(String taskId) {
+    _cacheTasks.remove(taskId);
+    if (_precacheTaskId == taskId) {
+      _precacheTaskId = null;
+    }
+    _syncCacheTasksNotifier();
+  }
+
+  void _updateCacheTaskStatus(String taskId, M3u8CacheTaskStatus status) {
+    final task = _cacheTasks[taskId];
+    if (task == null) {
+      return;
+    }
+    _cacheTasks[taskId] = task.copyWith(
+      status: status,
+      downloadSpeedBytesPerSecond: status == M3u8CacheTaskStatus.paused
+          ? 0
+          : task.downloadSpeedBytesPerSecond,
+      updatedAt: DateTime.now(),
+    );
+    _syncCacheTasksNotifier();
+  }
+
+  void _syncCacheTasksNotifier() {
+    _cacheTasksNotifier.value = _sortedCacheTasks();
+  }
+
+  List<M3u8CacheTask> _sortedCacheTasks() {
+    return _cacheTasks.values.toList(growable: false)..sort((a, b) {
+      final priorityCompare = b.priority.compareTo(a.priority);
+      if (priorityCompare != 0) {
+        return priorityCompare;
+      }
+      return (b.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0)).compareTo(
+        a.updatedAt ?? DateTime.fromMillisecondsSinceEpoch(0),
       );
     });
+  }
+
+  bool _isTerminalTask(M3u8CacheTask task) {
+    return task.status == M3u8CacheTaskStatus.completed ||
+        task.status == M3u8CacheTaskStatus.cancelled ||
+        task.status == M3u8CacheTaskStatus.error;
+  }
+
+  Future<void> _restoreDownloadRecords() async {
+    final preferences = await SharedPreferences.getInstance();
+    final values =
+        preferences.getStringList(_downloadRecordsPreferenceKey) ??
+        const <String>[];
+    if (values.isEmpty) {
+      return;
+    }
+    final restoredTasks = <String, M3u8CacheTask>{};
+    for (final value in values) {
+      final decoded = jsonDecode(value);
+      if (decoded is! Map) {
+        continue;
+      }
+      final task = M3u8CacheTask.fromMap(Map<Object?, Object?>.from(decoded));
+      if (task.taskId.isEmpty) {
+        continue;
+      }
+      if (task.status == M3u8CacheTaskStatus.completed) {
+        final source = _sourceFromDownloadTask(task);
+        if (source == null) {
+          continue;
+        }
+        final info = await M3u8PlayerCache.sourceInfo(source);
+        if (info.sizeBytes <= 0) {
+          continue;
+        }
+      }
+      restoredTasks[task.taskId] = task;
+    }
+    if (restoredTasks.isEmpty) {
+      return;
+    }
+    if (!mounted) {
+      _cacheTasks.addAll(restoredTasks);
+      _syncCacheTasksNotifier();
+      return;
+    }
+    setState(() {
+      _cacheTasks.addAll(restoredTasks);
+      _syncCacheTasksNotifier();
+    });
+  }
+
+  Future<void> _persistDownloadRecords() async {
+    final records = _cacheTasks.values
+        .where((task) => task.owner == M3u8CacheTaskOwner.standalone)
+        .map(_downloadRecordToJson)
+        .toList(growable: false);
+    final preferences = await SharedPreferences.getInstance();
+    await preferences.setStringList(_downloadRecordsPreferenceKey, records);
+  }
+
+  String _downloadRecordToJson(M3u8CacheTask task) {
+    return jsonEncode({
+      'taskId': task.taskId,
+      'url': task.url,
+      'owner': task.owner.name,
+      'status': task.status.name,
+      'sourceType': task.sourceType.platformValue,
+      'priority': task.priority,
+      'bytesCached': task.bytesCached,
+      'bytesTotal': task.bytesTotal,
+      'downloadSpeedBytesPerSecond': task.downloadSpeedBytesPerSecond,
+      'cacheHitCount': task.cacheHitCount,
+      'networkFetchCount': task.networkFetchCount,
+      'segmentIndex': task.segmentIndex,
+      'segmentCount': task.segmentCount,
+      'currentUrl': task.currentUrl,
+      'retryCount': task.retryCount,
+      'updatedAt': task.updatedAt?.millisecondsSinceEpoch,
+      'metadata': task.metadata,
+    });
+  }
+
+  M3u8CacheTask? _findDownloadTaskForSource(M3u8Source source) {
+    for (final task in _cacheTasks.values) {
+      final taskSource = _sourceFromDownloadTask(task);
+      if (taskSource == source) {
+        return task;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _configureDownloadConcurrency({
+    required bool playbackActive,
+  }) async {
+    if (_lastConfiguredPlaybackActive == playbackActive) {
+      return;
+    }
+    _lastConfiguredPlaybackActive = playbackActive;
+    try {
+      await M3u8PlayerCache.configure(
+        maxConcurrentPrecacheTasks: playbackActive ? 1 : 2,
+      );
+    } catch (_) {
+      // Cache policy changes are best-effort in the example UI.
+    }
+  }
+
+  void _startDownloadListRefreshTimer() {
+    _downloadListRefreshTimer?.cancel();
+    _downloadListRefreshTimer = Timer.periodic(
+      const Duration(milliseconds: 700),
+      (_) {
+        unawaited(_refreshCacheRuntimeState());
+      },
+    );
+  }
+
+  void _stopDownloadListRefreshTimer() {
+    _downloadListRefreshTimer?.cancel();
+    _downloadListRefreshTimer = null;
   }
 
   void _setPlaybackSpeed(double speed) {
@@ -519,6 +934,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                   onExitFullscreen: _exitFullscreen,
                   onEpisodeSelected: _selectVideo,
                   onPrecache: _precacheCurrentSource,
+                  onShowDownloads: _showDownloadList,
                   onSpeedSelected: _setPlaybackSpeed,
                   onAutoPlayNextChanged: _setAutoPlayNext,
                   onLoopModeChanged: _setLoopMode,
@@ -563,6 +979,14 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                           ),
                           const SizedBox(height: 16),
                           _PlaybackStats(value: value, strings: strings),
+                          const SizedBox(height: 16),
+                          _CacheMetricsPanel(
+                            value: value,
+                            cacheInfo: _cacheInfo,
+                            tasks: _cacheTasks.values.toList(growable: false),
+                            latestEvent: _latestDownloadEvent,
+                            strings: strings,
+                          ),
                           const SizedBox(height: 16),
                           _QoePanel(
                             snapshots: _qoeSnapshots,
@@ -1058,6 +1482,348 @@ class _PlaybackStats extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _CacheMetricsPanel extends StatelessWidget {
+  const _CacheMetricsPanel({
+    required this.value,
+    required this.cacheInfo,
+    required this.tasks,
+    required this.latestEvent,
+    required this.strings,
+  });
+
+  final M3u8PlayerValue value;
+  final M3u8CacheInfo? cacheInfo;
+  final List<M3u8CacheTask> tasks;
+  final M3u8CacheEvent? latestEvent;
+  final ExampleStrings strings;
+
+  @override
+  Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+    final running = tasks
+        .where((task) => task.status == M3u8CacheTaskStatus.running)
+        .length;
+    final queued = tasks
+        .where((task) => task.status == M3u8CacheTaskStatus.queued)
+        .length;
+    final failed = tasks
+        .where((task) => task.status == M3u8CacheTaskStatus.error)
+        .length;
+    final activeTask = _activeDownloadTask();
+    final event = latestEvent;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(strings.cacheMetricsTitle, style: textTheme.titleMedium),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 12,
+          runSpacing: 6,
+          children: [
+            _MetricChip(
+              label: strings.cacheSizeLabel,
+              value: cacheInfo == null
+                  ? strings.unknown
+                  : '${formatBytes(cacheInfo!.sizeBytes)} / '
+                        '${formatBytes(cacheInfo!.maxSizeBytes)}',
+            ),
+            _MetricChip(
+              label: strings.diskCacheLabel,
+              value: _playbackCacheProgress(),
+            ),
+            _MetricChip(label: strings.runningTasksLabel, value: '$running'),
+            _MetricChip(label: strings.queuedTasksLabel, value: '$queued'),
+            _MetricChip(label: strings.failedTasksLabel, value: '$failed'),
+            _MetricChip(
+              label: strings.downloadSpeedLabel,
+              value: formatBytesPerSecond(
+                activeTask?.downloadSpeedBytesPerSecond ??
+                    event?.downloadSpeedBytesPerSecond ??
+                    0,
+              ),
+            ),
+            _MetricChip(
+              label: strings.bytesProgressLabel,
+              value: _bytesProgress(activeTask, event),
+            ),
+            _MetricChip(
+              label: strings.cacheHitLabel,
+              value:
+                  '${activeTask?.cacheHitCount ?? event?.cacheHitCount ?? 0}',
+            ),
+            _MetricChip(
+              label: strings.networkFetchLabel,
+              value:
+                  '${activeTask?.networkFetchCount ?? event?.networkFetchCount ?? 0}',
+            ),
+            _MetricChip(
+              label: strings.segmentProgressLabel,
+              value: _segmentProgress(activeTask, event),
+            ),
+            _MetricChip(
+              label: strings.retryCountLabel,
+              value: '${activeTask?.retryCount ?? event?.retryCount ?? 0}',
+            ),
+          ],
+        ),
+        if ((activeTask?.currentUrl ?? event?.currentUrl) != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            '${strings.currentDownloadUrlLabel}: '
+            '${activeTask?.currentUrl ?? event?.currentUrl}',
+            style: textTheme.bodySmall,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
+        if (event?.error != null)
+          Text(
+            strings.precacheFailed(event!.error!.message),
+            style: textTheme.bodySmall?.copyWith(color: Colors.red),
+          ),
+      ],
+    );
+  }
+
+  String _bytesProgress(M3u8CacheTask? task, M3u8CacheEvent? event) {
+    final cached = task?.bytesCached ?? event?.bytesCached ?? 0;
+    final total = task?.bytesTotal ?? event?.bytesTotal ?? 0;
+    return '${formatBytes(cached)} / ${formatBytes(total)}';
+  }
+
+  String _segmentProgress(M3u8CacheTask? task, M3u8CacheEvent? event) {
+    final index = task?.segmentIndex ?? event?.segmentIndex ?? 0;
+    final count = task?.segmentCount ?? event?.segmentCount ?? 0;
+    if (count <= 0) {
+      return '0 / 0';
+    }
+    return '${index + 1} / $count';
+  }
+
+  M3u8CacheTask? _activeDownloadTask() {
+    for (final task in tasks) {
+      if (task.status == M3u8CacheTaskStatus.running ||
+          task.status == M3u8CacheTaskStatus.queued ||
+          task.status == M3u8CacheTaskStatus.paused) {
+        return task;
+      }
+    }
+    return tasks.isEmpty ? null : tasks.first;
+  }
+
+  String _playbackCacheProgress() {
+    final percent = value.diskCachePercent.clamp(0, 100).toStringAsFixed(0);
+    final start = formatDuration(value.diskCacheStartPosition);
+    final end = formatDuration(value.diskCachePosition);
+    final duration = formatDuration(value.duration);
+    final suffix = value.isDiskCacheComplete ? strings.completeSuffix : '';
+    return '$start-$end / $duration ($percent%)$suffix';
+  }
+}
+
+class _MetricChip extends StatelessWidget {
+  const _MetricChip({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        child: Text('$label: $value'),
+      ),
+    );
+  }
+}
+
+class DownloadListSheet extends StatelessWidget {
+  const DownloadListSheet({
+    super.key,
+    required this.tasksListenable,
+    required this.strings,
+    required this.onPlay,
+    required this.onPause,
+    required this.onResume,
+    required this.onCancel,
+  });
+
+  final ValueListenable<List<M3u8CacheTask>> tasksListenable;
+  final ExampleStrings strings;
+  final ValueChanged<M3u8CacheTask> onPlay;
+  final ValueChanged<String> onPause;
+  final ValueChanged<String> onResume;
+  final ValueChanged<String> onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    strings.downloadListTitle,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            Flexible(
+              child: ValueListenableBuilder<List<M3u8CacheTask>>(
+                valueListenable: tasksListenable,
+                builder: (context, tasks, _) {
+                  if (tasks.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 24),
+                      child: Text(strings.noDownloadTasks),
+                    );
+                  }
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: tasks.length,
+                    separatorBuilder: (_, _) => const Divider(height: 1),
+                    itemBuilder: (context, index) {
+                      final task = tasks[index];
+                      return _DownloadTaskTile(
+                        key: ValueKey(task.taskId),
+                        task: task,
+                        strings: strings,
+                        onPlay: onPlay,
+                        onPause: onPause,
+                        onResume: onResume,
+                        onCancel: onCancel,
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DownloadTaskTile extends StatelessWidget {
+  const _DownloadTaskTile({
+    super.key,
+    required this.task,
+    required this.strings,
+    required this.onPlay,
+    required this.onPause,
+    required this.onResume,
+    required this.onCancel,
+  });
+
+  final M3u8CacheTask task;
+  final ExampleStrings strings;
+  final ValueChanged<M3u8CacheTask> onPlay;
+  final ValueChanged<String> onPause;
+  final ValueChanged<String> onResume;
+  final ValueChanged<String> onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final isStandalone = task.owner == M3u8CacheTaskOwner.standalone;
+    final isActionable =
+        isStandalone &&
+        (task.status == M3u8CacheTaskStatus.queued ||
+            task.status == M3u8CacheTaskStatus.running ||
+            task.status == M3u8CacheTaskStatus.paused);
+    final isPlayable =
+        isStandalone && task.status == M3u8CacheTaskStatus.completed;
+    final progress = task.bytesTotal > 0
+        ? task.progress
+        : ((task.event?.percent ?? 0) / 100).clamp(0.0, 1.0);
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      enabled: isPlayable || isActionable,
+      onTap: isPlayable ? () => onPlay(task) : null,
+      title: Text(
+        task.metadata['title'] as String? ?? task.url,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 6),
+          LinearProgressIndicator(value: progress),
+          const SizedBox(height: 6),
+          Text(
+            '${_ownerLabel(task.owner)} · ${task.status.name} · '
+            '${formatBytes(task.bytesCached)} / ${formatBytes(task.bytesTotal)} · '
+            '${formatBytesPerSecond(task.downloadSpeedBytesPerSecond)}',
+          ),
+          Text(
+            '${strings.segmentProgressLabel}: '
+            '${task.segmentCount <= 0 ? 0 : task.segmentIndex + 1}/${task.segmentCount} · '
+            '${strings.retryCountLabel}: ${task.retryCount}',
+          ),
+          if (task.currentUrl != null)
+            Text(
+              task.currentUrl!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
+      ),
+      trailing: isActionable
+          ? Wrap(
+              spacing: 4,
+              children: [
+                IconButton(
+                  tooltip: task.status == M3u8CacheTaskStatus.paused
+                      ? strings.resumeDownloadTooltip
+                      : strings.pauseDownloadTooltip,
+                  onPressed: () {
+                    if (task.status == M3u8CacheTaskStatus.paused) {
+                      onResume(task.taskId);
+                    } else {
+                      onPause(task.taskId);
+                    }
+                  },
+                  icon: Icon(
+                    task.status == M3u8CacheTaskStatus.paused
+                        ? Icons.play_arrow
+                        : Icons.pause,
+                  ),
+                ),
+                IconButton(
+                  tooltip: strings.cancelDownloadTooltip,
+                  onPressed: () => onCancel(task.taskId),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            )
+          : const Icon(Icons.lock_outline),
+    );
+  }
+
+  String _ownerLabel(M3u8CacheTaskOwner owner) {
+    return owner == M3u8CacheTaskOwner.player
+        ? strings.playerOwnedTaskLabel
+        : strings.standaloneTaskLabel;
   }
 }
 

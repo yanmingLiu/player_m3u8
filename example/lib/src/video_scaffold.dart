@@ -30,6 +30,7 @@ class ExampleVideoScaffold extends StatefulWidget {
     required this.onExitFullscreen,
     required this.onEpisodeSelected,
     required this.onPrecache,
+    required this.onShowDownloads,
     required this.onSpeedSelected,
     required this.onAutoPlayNextChanged,
     required this.onLoopModeChanged,
@@ -53,6 +54,7 @@ class ExampleVideoScaffold extends StatefulWidget {
   final VoidCallback onExitFullscreen;
   final ValueChanged<int> onEpisodeSelected;
   final VoidCallback onPrecache;
+  final VoidCallback onShowDownloads;
   final ValueChanged<double> onSpeedSelected;
   final ValueChanged<bool> onAutoPlayNextChanged;
   final ValueChanged<ExampleLoopMode> onLoopModeChanged;
@@ -182,6 +184,7 @@ class _ExampleVideoScaffoldState extends State<ExampleVideoScaffold> {
         autoPlayNext: widget.autoPlayNext,
         loopMode: widget.loopMode,
         onPrecache: widget.onPrecache,
+        onShowDownloads: widget.onShowDownloads,
         onSpeedSelected: widget.onSpeedSelected,
         onAutoPlayNextChanged: widget.onAutoPlayNextChanged,
         onLoopModeChanged: widget.onLoopModeChanged,
@@ -281,6 +284,10 @@ class _ExampleVideoScaffoldState extends State<ExampleVideoScaffold> {
         onPrecache: () {
           widget.onPrecache();
           _closeSidePanel();
+        },
+        onShowDownloads: () {
+          _closeSidePanel();
+          widget.onShowDownloads();
         },
         onSpeedSelected: widget.onSpeedSelected,
         onAutoPlayNextChanged: widget.onAutoPlayNextChanged,
@@ -1180,6 +1187,7 @@ class PortraitMoreSheet {
     required bool autoPlayNext,
     required ExampleLoopMode loopMode,
     required VoidCallback onPrecache,
+    required VoidCallback onShowDownloads,
     required ValueChanged<double> onSpeedSelected,
     required ValueChanged<bool> onAutoPlayNextChanged,
     required ValueChanged<ExampleLoopMode> onLoopModeChanged,
@@ -1197,6 +1205,7 @@ class PortraitMoreSheet {
           autoPlayNext: autoPlayNext,
           loopMode: loopMode,
           onPrecache: onPrecache,
+          onShowDownloads: onShowDownloads,
           onSpeedSelected: onSpeedSelected,
           onAutoPlayNextChanged: onAutoPlayNextChanged,
           onLoopModeChanged: onLoopModeChanged,
@@ -1216,6 +1225,7 @@ class LandscapeMorePanel extends StatelessWidget {
     required bool autoPlayNext,
     required ExampleLoopMode loopMode,
     required VoidCallback onPrecache,
+    required VoidCallback onShowDownloads,
     required ValueChanged<double> onSpeedSelected,
     required ValueChanged<bool> onAutoPlayNextChanged,
     required ValueChanged<ExampleLoopMode> onLoopModeChanged,
@@ -1227,6 +1237,7 @@ class LandscapeMorePanel extends StatelessWidget {
          autoPlayNext: autoPlayNext,
          loopMode: loopMode,
          onPrecache: onPrecache,
+         onShowDownloads: onShowDownloads,
          onSpeedSelected: onSpeedSelected,
          onAutoPlayNextChanged: onAutoPlayNextChanged,
          onLoopModeChanged: onLoopModeChanged,
@@ -1256,6 +1267,7 @@ class _PortraitMoreSheetBody extends StatefulWidget {
     required this.autoPlayNext,
     required this.loopMode,
     required this.onPrecache,
+    required this.onShowDownloads,
     required this.onSpeedSelected,
     required this.onAutoPlayNextChanged,
     required this.onLoopModeChanged,
@@ -1268,6 +1280,7 @@ class _PortraitMoreSheetBody extends StatefulWidget {
   final bool autoPlayNext;
   final ExampleLoopMode loopMode;
   final VoidCallback onPrecache;
+  final VoidCallback onShowDownloads;
   final ValueChanged<double> onSpeedSelected;
   final ValueChanged<bool> onAutoPlayNextChanged;
   final ValueChanged<ExampleLoopMode> onLoopModeChanged;
@@ -1313,9 +1326,9 @@ class _PortraitMoreSheetBodyState extends State<_PortraitMoreSheetBody> {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _MoreActionButton(
-                    icon: Icons.sentiment_dissatisfied_outlined,
+                    icon: Icons.download_done_outlined,
                     label: widget.strings.notInterestedLabel,
-                    onPressed: () {},
+                    onPressed: widget.onShowDownloads,
                   ),
                   _MoreActionButton(
                     icon: Icons.replay_circle_filled_outlined,
@@ -1400,6 +1413,7 @@ class _LandscapeMorePanelBody extends StatefulWidget {
     required this.autoPlayNext,
     required this.loopMode,
     required this.onPrecache,
+    required this.onShowDownloads,
     required this.onSpeedSelected,
     required this.onAutoPlayNextChanged,
     required this.onLoopModeChanged,
@@ -1412,6 +1426,7 @@ class _LandscapeMorePanelBody extends StatefulWidget {
   final bool autoPlayNext;
   final ExampleLoopMode loopMode;
   final VoidCallback onPrecache;
+  final VoidCallback onShowDownloads;
   final ValueChanged<double> onSpeedSelected;
   final ValueChanged<bool> onAutoPlayNextChanged;
   final ValueChanged<ExampleLoopMode> onLoopModeChanged;
@@ -1435,6 +1450,12 @@ class _LandscapeMorePanelBodyState extends State<_LandscapeMorePanelBody> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
+              _MoreActionButton(
+                icon: Icons.download_done_outlined,
+                label: widget.strings.downloadListLabel,
+                isDark: true,
+                onPressed: widget.onShowDownloads,
+              ),
               _MoreActionButton(
                 icon: Icons.replay_circle_filled_outlined,
                 label: widget.strings.watchLaterLabel,

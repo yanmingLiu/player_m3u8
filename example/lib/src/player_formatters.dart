@@ -34,6 +34,25 @@ String qualityLabel(M3u8Quality quality, ExampleStrings strings) {
   return quality.label;
 }
 
+String formatBytes(int bytes) {
+  if (bytes <= 0) {
+    return '0 B';
+  }
+  const units = ['B', 'KB', 'MB', 'GB'];
+  var value = bytes.toDouble();
+  var unitIndex = 0;
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+  final decimals = value >= 10 || unitIndex == 0 ? 0 : 1;
+  return '${value.toStringAsFixed(decimals)} ${units[unitIndex]}';
+}
+
+String formatBytesPerSecond(int bytesPerSecond) {
+  return '${formatBytes(bytesPerSecond)}/s';
+}
+
 Duration positiveDuration(Duration duration) {
   if (duration.isNegative) {
     return Duration.zero;

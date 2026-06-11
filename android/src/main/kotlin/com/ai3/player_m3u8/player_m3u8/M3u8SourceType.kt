@@ -17,6 +17,14 @@ enum class M3u8SourceType {
         }
     }
 
+    fun platformValue(): String {
+        return when (this) {
+            AUTO -> "auto"
+            HLS -> "hls"
+            PROGRESSIVE -> "progressive"
+        }
+    }
+
     companion object {
         fun from(value: String?): M3u8SourceType {
             return when (value?.lowercase()) {

@@ -10,6 +10,7 @@ class M3u8Source {
     this.videoHeaders = const {},
     this.audioHeaders,
     this.sourceType = M3u8SourceType.auto,
+    this.cacheKey,
   });
 
   factory M3u8Source.fromMap(Map<Object?, Object?> map) {
@@ -29,6 +30,7 @@ class M3u8Source {
             )
           : null,
       sourceType: M3u8SourceType.from(map['sourceType'] as String?),
+      cacheKey: map['cacheKey'] as String?,
     );
   }
 
@@ -37,9 +39,9 @@ class M3u8Source {
   final Map<String, String> videoHeaders;
   final Map<String, String>? audioHeaders;
   final M3u8SourceType sourceType;
+  final String? cacheKey;
 
-  Map<String, String> get effectiveAudioHeaders =>
-      audioHeaders ?? videoHeaders;
+  Map<String, String> get effectiveAudioHeaders => audioHeaders ?? videoHeaders;
 
   Map<String, Object?> toMap() {
     return <String, Object?>{
@@ -48,6 +50,7 @@ class M3u8Source {
       'videoHeaders': videoHeaders,
       'audioHeaders': audioHeaders,
       'sourceType': sourceType.platformValue,
+      'cacheKey': cacheKey,
     };
   }
 
@@ -58,13 +61,22 @@ class M3u8Source {
         other.audioUrl == audioUrl &&
         mapEquals(other.videoHeaders, videoHeaders) &&
         mapEquals(other.audioHeaders, audioHeaders) &&
-        other.sourceType == sourceType;
+        other.sourceType == sourceType &&
+        other.cacheKey == cacheKey;
   }
 
   @override
-  int get hashCode =>
-      Object.hash(videoUrl, audioUrl, videoHeaders, audioHeaders, sourceType);
+  int get hashCode => Object.hash(
+    videoUrl,
+    audioUrl,
+    videoHeaders,
+    audioHeaders,
+    sourceType,
+    cacheKey,
+  );
 
   @override
-  String toString() => 'M3u8Source($videoUrl, audioUrl: $audioUrl)';
+  String toString() {
+    return 'M3u8Source($videoUrl, audioUrl: $audioUrl, cacheKey: $cacheKey)';
+  }
 }

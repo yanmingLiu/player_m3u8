@@ -7,7 +7,8 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var eventSink: FlutterEventSink?
   private var cacheEventSink: FlutterEventSink?
   private var players: [Int64: M3u8IosPlayer] = [:]
-  private var cacheTasks: [String: M3u8DiskCachePrefetcher] = [:]
+  private var cacheTasks: [String: CacheTaskBox] = [:]
+  private var maxConcurrentPrecacheTasks = 2
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let methodChannel = FlutterMethodChannel(
@@ -192,10 +193,20 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       clearCache(result: result)
     case "getCacheInfo":
       getCacheInfo(result: result)
+    case "sourceCacheInfo":
+      sourceCacheInfo(call: call, result: result)
+    case "clearSourceCache":
+      clearSourceCache(call: call, result: result)
+    case "cacheTasks":
+      cacheTasks(result: result)
     case "precache":
       precache(call: call, result: result)
     case "cancelPrecache":
       cancelPrecache(call: call, result: result)
+    case "pausePrecache":
+      pausePrecache(call: call, result: result)
+    case "resumePrecache":
+      resumePrecache(call: call, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -228,6 +239,7 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
     let videoHeaders = arguments["videoHeaders"] as? [String: String] ?? [:]
     let audioHeaders = arguments["audioHeaders"] as? [String: String]
+    let cacheKey = arguments["cacheKey"] as? String
     let initialPositionMs = (arguments["initialPosition"] as? NSNumber)?.int64Value ?? 0
     guard initialPositionMs >= 0 else {
       result(
@@ -244,6 +256,7 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       audioUrl: audioUrl,
       videoHeaders: videoHeaders,
       audioHeaders: audioHeaders,
+      cacheKey: cacheKey,
       sourceType: M3u8SourceType.from(arguments["sourceType"]),
       initialPositionMs: initialPositionMs,
       playbackSpeed: validPlaybackSpeed(from: arguments["playbackSpeed"]),
@@ -299,28 +312,44 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       )
       return
     }
-    guard players.isEmpty else {
+    let maxConcurrentPrecacheTasks =
+      (arguments["maxConcurrentPrecacheTasks"] as? NSNumber)?.intValue ?? self.maxConcurrentPrecacheTasks
+    guard maxConcurrentPrecacheTasks > 0 else {
       result(
         FlutterError(
-          code: "active_players",
-          message: "Cache cannot be configured while players are active.",
+          code: "invalid_cache_concurrency",
+          message: "maxConcurrentPrecacheTasks must be greater than zero.",
           details: nil
         )
       )
       return
     }
-    guard cacheTasks.isEmpty else {
-      result(
-        FlutterError(
-          code: "active_cache_tasks",
-          message: "Cache cannot be configured while cache tasks are active.",
-          details: nil
+    if maxSizeBytes.int64Value != M3u8IosCacheManager.shared.configuredMaxSizeBytes() {
+      guard players.isEmpty else {
+        result(
+          FlutterError(
+            code: "active_players",
+            message: "Cache size cannot be configured while players are active.",
+            details: nil
+          )
         )
-      )
-      return
+        return
+      }
+      guard cacheTasks.isEmpty else {
+        result(
+          FlutterError(
+            code: "active_cache_tasks",
+            message: "Cache size cannot be configured while cache tasks are active.",
+            details: nil
+          )
+        )
+        return
+      }
     }
     do {
+      self.maxConcurrentPrecacheTasks = Int(maxConcurrentPrecacheTasks)
       try M3u8IosCacheManager.shared.configure(maxSizeBytes: maxSizeBytes.int64Value)
+      scheduleCacheTasks()
       result(nil)
     } catch {
       result(
@@ -382,6 +411,73 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
   }
 
+  private func sourceCacheInfo(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let videoUrlString = arguments["videoUrl"] as? String,
+      let videoUrl = URL(string: videoUrlString)
+    else {
+      result(FlutterError(code: "invalid_url", message: "videoUrl is required.", details: nil))
+      return
+    }
+    do {
+      result(
+        try M3u8IosCacheManager.shared.sourceInfo(
+          url: videoUrl,
+          headers: arguments["videoHeaders"] as? [String: String] ?? [:],
+          cacheKey: arguments["cacheKey"] as? String
+        )
+      )
+    } catch {
+      result(FlutterError(code: "cache_info_failed", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  private func clearSourceCache(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard players.isEmpty else {
+      result(
+        FlutterError(
+          code: "active_players",
+          message: "Source cache cannot be cleared while players are active.",
+          details: nil
+        )
+      )
+      return
+    }
+    guard cacheTasks.isEmpty else {
+      result(
+        FlutterError(
+          code: "active_cache_tasks",
+          message: "Source cache cannot be cleared while cache tasks are active.",
+          details: nil
+        )
+      )
+      return
+    }
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let videoUrlString = arguments["videoUrl"] as? String,
+      let videoUrl = URL(string: videoUrlString)
+    else {
+      result(FlutterError(code: "invalid_url", message: "videoUrl is required.", details: nil))
+      return
+    }
+    do {
+      try M3u8IosCacheManager.shared.clearSource(
+        url: videoUrl,
+        headers: arguments["videoHeaders"] as? [String: String] ?? [:],
+        cacheKey: arguments["cacheKey"] as? String
+      )
+      result(nil)
+    } catch {
+      result(FlutterError(code: "cache_clear_failed", message: error.localizedDescription, details: nil))
+    }
+  }
+
+  private func cacheTasks(result: @escaping FlutterResult) {
+    result(cacheTasks.values.map { $0.snapshot() })
+  }
+
   private func precache(call: FlutterMethodCall, result: @escaping FlutterResult) {
     guard
       let arguments = call.arguments as? [String: Any],
@@ -409,32 +505,76 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     }
     let videoHeaders = arguments["videoHeaders"] as? [String: String] ?? [:]
     let audioHeaders = arguments["audioHeaders"] as? [String: String]
+    let cacheKey = arguments["cacheKey"] as? String
     let sourceType = M3u8SourceType.from(arguments["sourceType"]).resolve(url: videoUrl)
-    guard sourceType == .hls else {
-      result(
-        FlutterError(
-          code: "unsupported_source_type",
-          message: "Precache is only supported for HLS sources.",
-          details: nil
-        )
-      )
+    let priority = (arguments["priority"] as? NSNumber)?.intValue ?? 0
+    let maxRetries = (arguments["maxRetries"] as? NSNumber)?.intValue ?? 2
+    guard maxRetries >= 0 else {
+      result(FlutterError(code: "invalid_max_retries", message: "maxRetries must be non-negative.", details: nil))
       return
     }
+    let metadata = arguments["metadata"] as? [String: Any] ?? [:]
     let quality = arguments["quality"] as? [String: Any] ?? autoQuality()
     let taskId = UUID().uuidString
-    let prefetcher = M3u8DiskCachePrefetcher(
-      url: videoUrl,
-      headers: videoHeaders,
-      playerIdProvider: { -1 },
-      eventSinkProvider: { [weak self] in self?.cacheEventSink },
-      taskId: taskId,
-      onFinished: { [weak self] in self?.cacheTasks.removeValue(forKey: taskId) },
-      qualityProvider: { quality },
-      audioUrl: audioUrl,
-      audioHeaders: audioHeaders
-    )
-    cacheTasks[taskId] = prefetcher
-    prefetcher.restart(from: initialPositionMs)
+    let task: CacheTaskBox
+    if sourceType == .hls {
+      let prefetcher = M3u8DiskCachePrefetcher(
+        url: videoUrl,
+        headers: videoHeaders,
+        cacheKey: cacheKey,
+        playerIdProvider: { -1 },
+        eventSinkProvider: { [weak self] in self?.cacheEventSink },
+        taskId: taskId,
+        owner: "standalone",
+        sourceType: sourceType,
+        priority: Int(priority),
+        maxRetries: Int(maxRetries),
+        metadata: metadata,
+        onFinished: { [weak self] in
+          self?.cacheTasks.removeValue(forKey: taskId)
+          self?.scheduleCacheTasks()
+        },
+        qualityProvider: { quality },
+        audioUrl: audioUrl,
+        audioHeaders: audioHeaders
+      )
+      task = CacheTaskBox(
+        taskId: taskId,
+        priority: Int(priority),
+        markQueued: { positionMs in prefetcher.markQueued(positionMs: positionMs) },
+        start: { prefetcher.start() },
+        pause: { prefetcher.pause() },
+        cancel: { prefetcher.cancel() },
+        snapshot: { prefetcher.snapshot() }
+      )
+    } else {
+      let prefetcher = M3u8ProgressiveCachePrefetcher(
+        url: videoUrl,
+        headers: videoHeaders,
+        cacheKey: cacheKey,
+        taskId: taskId,
+        priority: Int(priority),
+        maxRetries: Int(maxRetries),
+        metadata: metadata,
+        eventSinkProvider: { [weak self] in self?.cacheEventSink },
+        onFinished: { [weak self] in
+          self?.cacheTasks.removeValue(forKey: taskId)
+          self?.scheduleCacheTasks()
+        }
+      )
+      task = CacheTaskBox(
+        taskId: taskId,
+        priority: Int(priority),
+        markQueued: { _ in prefetcher.markQueued() },
+        start: { prefetcher.start() },
+        pause: { prefetcher.pause() },
+        cancel: { prefetcher.cancel() },
+        snapshot: { prefetcher.snapshot() }
+      )
+    }
+    cacheTasks[taskId] = task
+    task.markQueued(positionMs: initialPositionMs)
+    scheduleCacheTasks()
     result(taskId)
   }
 
@@ -447,12 +587,58 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       result(FlutterError(code: "invalid_cache_task", message: "taskId is required.", details: nil))
       return
     }
-    cacheTasks.removeValue(forKey: taskId)?.cancel()
-    cacheEventSink?([
-      "taskId": taskId,
-      "event": "cancelled",
-    ])
+    cacheTasks.removeValue(forKey: taskId)?.cancelTask()
+    scheduleCacheTasks()
     result(nil)
+  }
+
+  private func pausePrecache(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let taskId = arguments["taskId"] as? String,
+      !taskId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else {
+      result(FlutterError(code: "invalid_cache_task", message: "taskId is required.", details: nil))
+      return
+    }
+    guard let task = cacheTasks[taskId] else {
+      result(FlutterError(code: "unknown_cache_task", message: "No cache task exists for taskId \(taskId).", details: nil))
+      return
+    }
+    task.pauseTask()
+    scheduleCacheTasks()
+    result(nil)
+  }
+
+  private func resumePrecache(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    guard
+      let arguments = call.arguments as? [String: Any],
+      let taskId = arguments["taskId"] as? String,
+      !taskId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    else {
+      result(FlutterError(code: "invalid_cache_task", message: "taskId is required.", details: nil))
+      return
+    }
+    guard let task = cacheTasks[taskId] else {
+      result(FlutterError(code: "unknown_cache_task", message: "No cache task exists for taskId \(taskId).", details: nil))
+      return
+    }
+    if task.isPaused {
+      task.resumeTask()
+    }
+    scheduleCacheTasks()
+    result(nil)
+  }
+
+  private func scheduleCacheTasks() {
+    let running = cacheTasks.values.filter { $0.isRunning }.count
+    let capacity = max(maxConcurrentPrecacheTasks - running, 0)
+    guard capacity > 0 else { return }
+    cacheTasks.values
+      .filter { $0.isQueued }
+      .sorted { $0.priority > $1.priority }
+      .prefix(capacity)
+      .forEach { $0.startTask() }
   }
 
   private func withPlayer(
@@ -494,6 +680,75 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     func onCancel(withArguments arguments: Any?) -> FlutterError? {
       plugin?.cacheEventSink = nil
       return nil
+    }
+  }
+
+  private final class CacheTaskBox {
+    let taskId: String
+    let priority: Int
+    private let markQueuedNative: (Int64?) -> Void
+    private let start: () -> Void
+    private let pause: () -> Void
+    private let cancel: () -> Void
+    private let snapshotProvider: () -> [String: Any]
+    private(set) var status = "queued"
+    private var queuedPositionMs: Int64 = 0
+
+    init(
+      taskId: String,
+      priority: Int,
+      markQueued: @escaping (Int64?) -> Void,
+      start: @escaping () -> Void,
+      pause: @escaping () -> Void,
+      cancel: @escaping () -> Void,
+      snapshot: @escaping () -> [String: Any]
+    ) {
+      self.taskId = taskId
+      self.priority = priority
+      self.markQueuedNative = markQueued
+      self.start = start
+      self.pause = pause
+      self.cancel = cancel
+      self.snapshotProvider = snapshot
+    }
+
+    var isRunning: Bool { status == "running" }
+    var isQueued: Bool { status == "queued" }
+    var isPaused: Bool { status == "paused" }
+
+    func markQueued(positionMs: Int64? = nil) {
+      if let positionMs {
+        queuedPositionMs = max(positionMs, 0)
+      }
+      status = "queued"
+      markQueuedNative(positionMs.map { max($0, 0) })
+    }
+
+    func startTask() {
+      status = "running"
+      start()
+    }
+
+    func pauseTask() {
+      status = "paused"
+      pause()
+    }
+
+    func resumeTask() {
+      markQueued()
+    }
+
+    func cancelTask() {
+      status = "cancelled"
+      cancel()
+    }
+
+    func snapshot() -> [String: Any] {
+      var snapshot = snapshotProvider()
+      snapshot["taskId"] = taskId
+      snapshot["status"] = status
+      snapshot["priority"] = priority
+      return snapshot
     }
   }
 

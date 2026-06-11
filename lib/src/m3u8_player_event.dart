@@ -230,9 +230,7 @@ List<M3u8AudioTrack>? _audioTracksFromMap(Object? value) {
   }
   return value
       .whereType<Map>()
-      .map(
-        (map) => M3u8AudioTrack.fromMap(Map<Object?, Object?>.from(map)),
-      )
+      .map((map) => M3u8AudioTrack.fromMap(Map<Object?, Object?>.from(map)))
       .where((track) => track.id.isNotEmpty)
       .toList(growable: false);
 }

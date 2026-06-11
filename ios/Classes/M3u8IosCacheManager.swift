@@ -9,6 +9,12 @@ final class M3u8IosCacheManager {
 
   private init() {}
 
+  func configuredMaxSizeBytes() -> Int64 {
+    lock.lock()
+    defer { lock.unlock() }
+    return maxCacheBytes
+  }
+
   func configure(maxSizeBytes: Int64) throws {
     guard maxSizeBytes > 0 else {
       throw NSError(
@@ -43,15 +49,38 @@ final class M3u8IosCacheManager {
     ]
   }
 
+  func sourceInfo(url: URL, headers: [String: String], cacheKey: String?) throws -> [String: Int64] {
+    lock.lock()
+    let configuredMaxCacheBytes = maxCacheBytes
+    lock.unlock()
+    let size = try matchingCacheFiles(url: url, headers: headers, cacheKey: cacheKey)
+      .reduce(Int64(0)) { total, fileUrl in
+        let values = try? fileUrl.resourceValues(forKeys: [.fileSizeKey])
+        return total + Int64(values?.fileSize ?? 0)
+      }
+    return [
+      "maxSizeBytes": configuredMaxCacheBytes,
+      "sizeBytes": size,
+    ]
+  }
+
+  func clearSource(url: URL, headers: [String: String], cacheKey: String?) throws {
+    for fileUrl in try matchingCacheFiles(url: url, headers: headers, cacheKey: cacheKey) {
+      try? FileManager.default.removeItem(at: fileUrl)
+    }
+  }
+
   func data(
     for url: URL,
     headers: [String: String],
+    cacheKey: String? = nil,
     taskObserver: ((URLSessionTask?) -> Void)? = nil,
     isCancelled: () -> Bool = { false }
   ) throws -> Data {
     let fileUrl = try ensureCached(
       url: url,
       headers: headers,
+      cacheKey: cacheKey,
       taskObserver: taskObserver,
       isCancelled: isCancelled
     )
@@ -65,13 +94,14 @@ final class M3u8IosCacheManager {
   func ensureCached(
     url: URL,
     headers: [String: String],
+    cacheKey: String? = nil,
     taskObserver: ((URLSessionTask?) -> Void)? = nil,
     isCancelled: () -> Bool = { false }
   ) throws -> URL {
     if isCancelled() {
       throw CancellationError()
     }
-    let fileUrl = try cacheFile(for: url, headers: headers)
+    let fileUrl = try cacheFile(for: url, headers: headers, cacheKey: cacheKey)
     lock.lock()
     let exists = FileManager.default.fileExists(atPath: fileUrl.path)
     lock.unlock()
@@ -154,9 +184,34 @@ final class M3u8IosCacheManager {
     }()
   }
 
-  private func cacheFile(for url: URL, headers: [String: String]) throws -> URL {
-    try cacheDirectory(create: true)
-      .appendingPathComponent(cacheKey(for: cacheIdentity(url: url, headers: headers)))
+  func cachedFileIfExists(for url: URL, headers: [String: String], cacheKey: String?) -> URL? {
+    guard let fileUrl = try? cacheFile(for: url, headers: headers, cacheKey: cacheKey),
+      FileManager.default.fileExists(atPath: fileUrl.path)
+    else {
+      return nil
+    }
+    touch(fileUrl)
+    return fileUrl
+  }
+
+  private func cacheFile(
+    for url: URL,
+    headers: [String: String],
+    cacheKey: String? = nil
+  ) throws -> URL {
+    let directory = try cacheDirectory(create: true)
+    if let cacheKey, !cacheKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      let sourceDirectory = directory.appendingPathComponent(
+        self.cacheKey(for: cacheKey),
+        isDirectory: true
+      )
+      try FileManager.default.createDirectory(at: sourceDirectory, withIntermediateDirectories: true)
+      return sourceDirectory
+        .appendingPathComponent(self.cacheKey(for: url.path))
+        .appendingPathExtension("cache")
+    }
+    return directory
+      .appendingPathComponent(self.cacheKey(for: cacheIdentity(url: url, headers: headers)))
       .appendingPathExtension("cache")
   }
 
@@ -175,12 +230,51 @@ final class M3u8IosCacheManager {
       .joined()
   }
 
-  private func cacheIdentity(url: URL, headers: [String: String]) -> String {
+  private func cacheIdentity(url: URL, headers: [String: String], cacheKey: String? = nil) -> String {
+    if let cacheKey, !cacheKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      return "\(cacheKey)\n\(url.path)"
+    }
     let headerIdentity = headers
       .sorted { $0.key.localizedCaseInsensitiveCompare($1.key) == .orderedAscending }
       .map { "\($0.key.lowercased())=\($0.value)" }
       .joined(separator: "\n")
     return "\(url.absoluteString)\n\(headerIdentity)"
+  }
+
+  private func matchingCacheFiles(
+    url: URL,
+    headers: [String: String],
+    cacheKey: String?
+  ) throws -> [URL] {
+    let directory = try cacheDirectory(create: false)
+    guard FileManager.default.fileExists(atPath: directory.path) else { return [] }
+    if let cacheKey, !cacheKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      let sourceDirectory = directory.appendingPathComponent(self.cacheKey(for: cacheKey), isDirectory: true)
+      guard FileManager.default.fileExists(atPath: sourceDirectory.path) else { return [] }
+      return try cachedFiles(in: sourceDirectory)
+    }
+    let file = try cacheFile(for: url, headers: headers)
+    return FileManager.default.fileExists(atPath: file.path) ? [file] : []
+  }
+
+  private func cachedFiles(in directory: URL) throws -> [URL] {
+    guard
+      let enumerator = FileManager.default.enumerator(
+        at: directory,
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+      )
+    else {
+      return []
+    }
+    var files: [URL] = []
+    for case let fileUrl as URL in enumerator {
+      let values = try fileUrl.resourceValues(forKeys: [.isRegularFileKey])
+      if values.isRegularFile == true {
+        files.append(fileUrl)
+      }
+    }
+    return files
   }
 
   private func touch(_ url: URL) {

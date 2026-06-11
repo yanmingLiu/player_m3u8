@@ -17,7 +17,7 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
     private lateinit var eventChannel: EventChannel
     private lateinit var cacheEventChannel: EventChannel
     private val players = mutableMapOf<Long, M3u8AndroidPlayer>()
-    private val cacheTasks = mutableMapOf<String, M3u8DiskCachePrefetcher>()
+    private val cacheTasks = mutableMapOf<String, M3u8CacheTaskHandle>()
     private var eventSink: EventChannel.EventSink? = null
     private var cacheEventSink: EventChannel.EventSink? = null
 
@@ -134,8 +134,13 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
             "configureCache" -> configureCache(call, result)
             "clearCache" -> clearCache(result)
             "getCacheInfo" -> getCacheInfo(result)
+            "sourceCacheInfo" -> sourceCacheInfo(call, result)
+            "clearSourceCache" -> clearSourceCache(call, result)
+            "cacheTasks" -> cacheTasks(result)
             "precache" -> precache(call, result)
             "cancelPrecache" -> cancelPrecache(call, result)
+            "pausePrecache" -> pausePrecache(call, result)
+            "resumePrecache" -> resumePrecache(call, result)
             else -> result.notImplemented()
         }
     }
@@ -169,6 +174,7 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
         val audioUrl = call.argument<String>("audioUrl")
         val videoHeaders = call.argument<Map<String, String>>("videoHeaders") ?: emptyMap()
         val audioHeaders = call.argument<Map<String, String>>("audioHeaders")
+        val cacheKey = call.argument<String>("cacheKey")
         val initialPositionMs = call.argument<Number>("initialPosition")?.toLong() ?: 0L
         if (initialPositionMs < 0L) {
             result.error(
@@ -216,6 +222,7 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
             audioUrl = audioUrl,
             videoHeaders = videoHeaders,
             audioHeaders = audioHeaders,
+            cacheKey = cacheKey,
             sourceType = sourceType,
             initialPositionMs = initialPositionMs,
             playbackSpeed = playbackSpeed,
@@ -234,6 +241,9 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
 
     private fun configureCache(call: MethodCall, result: Result) {
         val maxSizeBytes = call.argument<Number>("maxSizeBytes")?.toLong()
+        val maxConcurrentPrecacheTasks =
+            call.argument<Number>("maxConcurrentPrecacheTasks")?.toInt()
+                ?: M3u8CacheManager.maxConcurrentPrecacheTasks()
         if (maxSizeBytes == null || maxSizeBytes <= 0L) {
             result.error(
                 "invalid_cache_size",
@@ -242,24 +252,35 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
             )
             return
         }
-        if (players.isNotEmpty()) {
+        if (maxConcurrentPrecacheTasks <= 0) {
             result.error(
-                "active_players",
-                "Cache cannot be configured while players are active.",
+                "invalid_cache_concurrency",
+                "maxConcurrentPrecacheTasks must be greater than zero.",
                 null,
             )
             return
         }
-        if (cacheTasks.isNotEmpty()) {
-            result.error(
-                "active_cache_tasks",
-                "Cache cannot be configured while cache tasks are active.",
-                null,
-            )
-            return
+        if (maxSizeBytes != M3u8CacheManager.maxSizeBytes()) {
+            if (players.isNotEmpty()) {
+                result.error(
+                    "active_players",
+                    "Cache size cannot be configured while players are active.",
+                    null,
+                )
+                return
+            }
+            if (cacheTasks.isNotEmpty()) {
+                result.error(
+                    "active_cache_tasks",
+                    "Cache size cannot be configured while cache tasks are active.",
+                    null,
+                )
+                return
+            }
         }
         try {
-            M3u8CacheManager.configure(maxSizeBytes)
+            M3u8CacheManager.configure(maxSizeBytes, maxConcurrentPrecacheTasks)
+            scheduleCacheTasks()
             result.success(null)
         } catch (error: IllegalStateException) {
             result.error("cache_in_use", error.message, null)
@@ -291,6 +312,57 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
         result.success(M3u8CacheManager.info(context))
     }
 
+    private fun sourceCacheInfo(call: MethodCall, result: Result) {
+        val videoUrl = call.argument<String>("videoUrl")
+        if (videoUrl.isNullOrBlank()) {
+            result.error("invalid_url", "videoUrl is required.", null)
+            return
+        }
+        result.success(
+            M3u8CacheManager.sourceInfo(
+                context,
+                videoUrl,
+                call.argument<Map<String, String>>("videoHeaders") ?: emptyMap(),
+                call.argument<String>("cacheKey"),
+            ),
+        )
+    }
+
+    private fun clearSourceCache(call: MethodCall, result: Result) {
+        if (players.isNotEmpty()) {
+            result.error(
+                "active_players",
+                "Source cache cannot be cleared while players are active.",
+                null,
+            )
+            return
+        }
+        if (cacheTasks.isNotEmpty()) {
+            result.error(
+                "active_cache_tasks",
+                "Source cache cannot be cleared while cache tasks are active.",
+                null,
+            )
+            return
+        }
+        val videoUrl = call.argument<String>("videoUrl")
+        if (videoUrl.isNullOrBlank()) {
+            result.error("invalid_url", "videoUrl is required.", null)
+            return
+        }
+        M3u8CacheManager.clearSource(
+            context,
+            videoUrl,
+            call.argument<Map<String, String>>("videoHeaders") ?: emptyMap(),
+            call.argument<String>("cacheKey"),
+        )
+        result.success(null)
+    }
+
+    private fun cacheTasks(result: Result) {
+        result.success(cacheTasks.values.map { it.snapshot() })
+    }
+
     private fun precache(call: MethodCall, result: Result) {
         val videoUrl = call.argument<String>("videoUrl")
         if (videoUrl.isNullOrBlank()) {
@@ -309,31 +381,59 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
         }
         val videoHeaders = call.argument<Map<String, String>>("videoHeaders") ?: emptyMap()
         val audioHeaders = call.argument<Map<String, String>>("audioHeaders")
+        val cacheKey = call.argument<String>("cacheKey")
         val sourceType = M3u8SourceType.from(call.argument<String>("sourceType")).resolve(videoUrl)
-        if (sourceType != M3u8SourceType.HLS) {
-            result.error(
-                "unsupported_source_type",
-                "Precache is only supported for HLS sources.",
-                null,
-            )
+        val quality = call.argument<Map<String, Any?>>("quality") ?: autoQuality()
+        val priority = call.argument<Number>("priority")?.toInt() ?: 0
+        val maxRetries = call.argument<Number>("maxRetries")?.toInt() ?: 2
+        if (maxRetries < 0) {
+            result.error("invalid_max_retries", "maxRetries must be non-negative.", null)
             return
         }
-        val quality = call.argument<Map<String, Any?>>("quality") ?: autoQuality()
+        val metadata = call.argument<Map<String, Any?>>("metadata") ?: emptyMap()
         val taskId = UUID.randomUUID().toString()
-        val prefetcher = M3u8DiskCachePrefetcher(
-            context = context,
-            url = videoUrl,
-            headers = videoHeaders,
-            playerIdProvider = { -1L },
-            eventSinkProvider = { cacheEventSink },
-            taskId = taskId,
-            onFinished = { cacheTasks.remove(taskId) },
-            qualityProvider = { quality },
-            audioUrl = audioUrl,
-            audioHeaders = audioHeaders,
-        )
-        cacheTasks[taskId] = prefetcher
-        prefetcher.restartFrom(initialPositionMs)
+        val task: M3u8CacheTaskHandle = if (sourceType == M3u8SourceType.HLS) {
+            M3u8DiskCachePrefetcher(
+                context = context,
+                url = videoUrl,
+                headers = videoHeaders,
+                cacheKey = cacheKey,
+                playerIdProvider = { -1L },
+                eventSinkProvider = { cacheEventSink },
+                taskId = taskId,
+                owner = "standalone",
+                sourceType = sourceType,
+                priority = priority,
+                maxRetries = maxRetries,
+                metadata = metadata,
+                onFinished = {
+                    cacheTasks.remove(taskId)
+                    scheduleCacheTasks()
+                },
+                qualityProvider = { quality },
+                audioUrl = audioUrl,
+                audioHeaders = audioHeaders,
+            )
+        } else {
+            M3u8ProgressiveCachePrefetcher(
+                context = context,
+                url = videoUrl,
+                headers = videoHeaders,
+                cacheKey = cacheKey,
+                taskId = taskId,
+                priority = priority,
+                maxRetries = maxRetries,
+                metadata = metadata,
+                eventSinkProvider = { cacheEventSink },
+                onFinished = {
+                    cacheTasks.remove(taskId)
+                    scheduleCacheTasks()
+                },
+            )
+        }
+        cacheTasks[taskId] = task
+        task.markQueued(initialPositionMs)
+        scheduleCacheTasks()
         result.success(taskId)
     }
 
@@ -344,13 +444,55 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
             return
         }
         cacheTasks.remove(taskId)?.cancel()
-        cacheEventSink?.success(
-            mapOf(
-                "taskId" to taskId,
-                "event" to "cancelled",
-            ),
-        )
+        scheduleCacheTasks()
         result.success(null)
+    }
+
+    private fun pausePrecache(call: MethodCall, result: Result) {
+        val taskId = call.argument<String>("taskId")
+        if (taskId.isNullOrBlank()) {
+            result.error("invalid_cache_task", "taskId is required.", null)
+            return
+        }
+        val task = cacheTasks[taskId]
+        if (task == null) {
+            result.error("unknown_cache_task", "No cache task exists for taskId $taskId.", null)
+            return
+        }
+        task.pause()
+        scheduleCacheTasks()
+        result.success(null)
+    }
+
+    private fun resumePrecache(call: MethodCall, result: Result) {
+        val taskId = call.argument<String>("taskId")
+        if (taskId.isNullOrBlank()) {
+            result.error("invalid_cache_task", "taskId is required.", null)
+            return
+        }
+        val task = cacheTasks[taskId]
+        if (task == null) {
+            result.error("unknown_cache_task", "No cache task exists for taskId $taskId.", null)
+            return
+        }
+        if (task.isPaused) {
+            task.markQueued()
+        }
+        scheduleCacheTasks()
+        result.success(null)
+    }
+
+    private fun scheduleCacheTasks() {
+        val running = cacheTasks.values.count { it.isRunning }
+        val capacity = (M3u8CacheManager.maxConcurrentPrecacheTasks() - running).coerceAtLeast(0)
+        if (capacity == 0) {
+            return
+        }
+        cacheTasks.values
+            .filter { it.isQueued }
+            .sortedByDescending { it.priority }
+            .take(capacity)
+            .forEach { it.start() }
     }
 
     private fun withPlayer(

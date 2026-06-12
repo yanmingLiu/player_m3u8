@@ -595,6 +595,7 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       selectedAudioTrack: event.selectedAudioTrack,
       recoveryCount: event.recoveryCount,
       lastRecoveryReason: event.lastRecoveryReason,
+      diagnostics: event.diagnostics,
     );
   }
 

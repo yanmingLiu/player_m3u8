@@ -31,7 +31,7 @@
 | 平台 | 播放内核 | 渲染 | 缓存策略 |
 | --- | --- | --- | --- |
 | Android | Media3 ExoPlayer + HLS/progressive | Flutter Texture / SurfaceProducer | HLS 播放、HLS 独立下载和 progressive 独立下载共用 Media3 `SimpleCache` |
-| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | HLS 通过 `AVAssetResourceLoader` 复用 app caches；progressive 完整下载后复用本地缓存文件 |
+| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | HLS 播放通过 `AVAssetResourceLoader` 复用 app caches；HLS 磁盘预取仅支持可完整结束的 VOD playlist；progressive 完整下载后复用本地缓存文件 |
 
 ### 安装
 
@@ -309,6 +309,8 @@ await controller.retry(autoPlay: true);
 
 `retry` 会释放旧 native player，按当前播放位置重新创建 source，并保留恢复策略、倍速、音量和静音状态。
 
+错误码、触发条件和建议处理动作见 `ERROR_CODES.md`。业务上建议至少区分 `unsupported_source_type`、`unsupported_hls_playlist`、`unknown_player`、`active_players`、`active_cache_tasks` 和平台播放错误。
+
 ### 自动恢复策略
 
 默认策略是启用自动恢复、连续 3 次 rebuffer 后触发降档、两次恢复至少间隔 10 秒。可以在初始化、切换 source 或播放中调整：
@@ -341,6 +343,26 @@ controller.startQoeSampling(interval: const Duration(seconds: 5));
 ```
 
 `M3u8QoeSnapshot` 会输出窗口起止时间、当前播放位置、缓冲/磁盘缓存位置、首帧耗时、rebuffer 次数和窗口增量、rebuffer 总时长和窗口增量、丢帧增量、恢复增量、清晰度切换增量、当前码率、观测带宽、当前清晰度和播放倍速。
+
+播放状态中的 `diagnostics` 适合随错误和 QoE 一起上报：
+
+```dart
+controller.addListener(() {
+  final value = controller.value;
+  if (value.hasError) {
+    analytics.logEvent('player_error', {
+      'code': value.error!.code,
+      'message': value.error!.message,
+      'sessionId': value.diagnostics['sessionId'],
+      'sourceId': value.diagnostics['sourceId'],
+      'sourceType': value.diagnostics['sourceType'],
+      'positionMs': value.diagnostics['positionMs'],
+      'rebufferCount': value.rebufferCount,
+      'startupTimeMs': value.startupTime.inMilliseconds,
+    });
+  }
+});
+```
 
 ### 状态监听
 
@@ -431,6 +453,7 @@ example/
 - 播放中建议降低 `maxConcurrentPrecacheTasks`，避免下载任务与播放器抢占网络和 IO；example 会对同一 source 去重，并在播放活跃时把独立下载并发降为 1。
 - HLS 播放器内部主动预取会跟随手动清晰度、自动降级恢复和 seek 位置重启，不再固定优先最高码率 variant。
 - Android 通过 ExoPlayer track/analytics 上报首帧、rebuffer、丢帧、当前码率和带宽估计；iOS 通过 AVPlayer access log 和视频轨道信息上报对应指标。rebuffer 总时长和清晰度切换次数可用于真实设备 QoE 统计。
+- 播放事件会携带 `diagnostics` 上下文，包括平台、session/source 标识、source type、播放位置、缓冲位置和缓存 key 状态，用于线上错误聚合与 QoE 归因；不要把业务敏感数据写入 `cacheKey` 或 URL 查询参数后直接上报。
 - Android 手动清晰度通过 `DefaultTrackSelector` 约束最高视频尺寸和码率；iOS 手动清晰度通过 ResourceLoader 过滤 HLS master variants。
 - 连续 rebuffer 或播放错误触发自动降级恢复，保留当前位置；没有更低档可降时才向 Dart 上报播放错误。
 - seek 后会取消当前主动预取，并从目标时间对应的分片开始向后预取；已写入磁盘的数据保留复用。
@@ -440,11 +463,12 @@ example/
 - 支持网络 HLS/m3u8 VOD 和 progressive MP4/MOV；不支持 DASH、SmoothStreaming、RTSP、FLV 或本地文件。
 - MP4/MOV 支持独立完整下载和完成后缓存复用，但不支持清晰度选择。
 - 字幕支持以 WebVTT/HLS text track 为主；Android progressive 可挂外部字幕，iOS progressive 暂不支持外部字幕。
-- 暂不支持后台播放、DRM。
+- 暂不支持 DRM/FairPlay/Widevine、后台播放、锁屏控制、AirPlay、Cast、Picture in Picture、低延迟直播。
 - 当前已支持手动清晰度约束，但尚未暴露自定义自动码率策略。
-- iOS HLS 解析仍是轻量实现，适合常见 VOD playlist；复杂 HLS 特性仍需继续补测试。
+- iOS HLS 播放仍交给 AVFoundation 尝试；iOS HLS 磁盘预取只承诺常见 VOD playlist。live/event playlist、`#EXT-X-BYTERANGE`、I-frame-only playlist、复杂加密或 DRM playlist 会返回 `unsupported_hls_playlist` 缓存错误，播放链路不因此失败。
 - 磁盘缓存容量配置和清理必须在没有活跃播放器和独立下载任务时调用；下载并发数可运行期调整，但不会强制取消已经运行中的任务。
 - 原生层不承诺 app 重启后恢复未完成下载队列；example 会持久化下载记录，并在启动后通过 `sourceInfo` 恢复已完成缓存记录。
+- 商用试点前请按 `COMMERCIAL_ACCEPTANCE.md` 执行自动化和真机验收。
 
 ### 示例工程
 
@@ -538,7 +562,7 @@ It is designed for Flutter apps that need HLS/m3u8 VOD or MP4/MOV playback, play
 | Platform | Playback Engine | Rendering | Cache Strategy |
 | --- | --- | --- | --- |
 | Android | Media3 ExoPlayer + HLS/progressive | Flutter Texture / SurfaceProducer | HLS playback, HLS standalone downloads, and progressive standalone downloads share Media3 `SimpleCache` |
-| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | HLS reuses app caches through `AVAssetResourceLoader`; progressive playback reuses fully downloaded local cache files |
+| iOS | AVPlayer + AVPlayerItemVideoOutput | FlutterTexture | HLS playback reuses app caches through `AVAssetResourceLoader`; HLS disk prefetch supports complete VOD playlists only; progressive playback reuses fully downloaded local cache files |
 
 ### Installation
 
@@ -785,6 +809,8 @@ await controller.retry(autoPlay: true);
 
 `retry` releases the previous native player, recreates the source at the current playback position, and keeps the recovery policy, playback speed, volume, and mute state.
 
+See `ERROR_CODES.md` for error codes, triggers, and suggested handling. Product code should at least distinguish `unsupported_source_type`, `unsupported_hls_playlist`, `unknown_player`, `active_players`, `active_cache_tasks`, and platform playback errors.
+
 ### Recovery Policy
 
 The default policy enables automatic recovery, steps down after 3 rebuffers, and keeps at least 10 seconds between recovery attempts. Configure it during initialization, source switching, or playback:
@@ -817,6 +843,26 @@ controller.startQoeSampling(interval: const Duration(seconds: 5));
 ```
 
 `M3u8QoeSnapshot` includes the window start/end time, playback position, buffer/disk-cache position, startup time, rebuffer totals and window deltas, rebuffer duration totals and window deltas, dropped-frame deltas, recovery deltas, quality-switch deltas, current bitrate, observed bitrate, selected quality, and playback speed.
+
+The current value's `diagnostics` map is designed to be sent with errors and QoE events:
+
+```dart
+controller.addListener(() {
+  final value = controller.value;
+  if (value.hasError) {
+    analytics.logEvent('player_error', {
+      'code': value.error!.code,
+      'message': value.error!.message,
+      'sessionId': value.diagnostics['sessionId'],
+      'sourceId': value.diagnostics['sourceId'],
+      'sourceType': value.diagnostics['sourceType'],
+      'positionMs': value.diagnostics['positionMs'],
+      'rebufferCount': value.rebufferCount,
+      'startupTimeMs': value.startupTime.inMilliseconds,
+    });
+  }
+});
+```
 
 ### State Listening
 
@@ -910,6 +956,7 @@ example/
 - During playback, reduce `maxConcurrentPrecacheTasks` to avoid network and IO contention. The example de-duplicates same-source downloads and lowers standalone download concurrency to 1 while playback is active.
 - HLS player-owned active prefetch follows manual quality, automatic recovery downshifts, and seek restarts instead of always prioritizing the highest bitrate variant.
 - Android reports startup, rebuffer, dropped-frame, bitrate, and bandwidth metrics through ExoPlayer tracks/analytics. iOS reports the same metric class through AVPlayer access logs and video track data. Total rebuffer duration and quality switch count are available for real-device QoE analytics.
+- Playback events include `diagnostics` context with platform, session/source identifiers, source type, playback position, buffered position, and cache-key state for production error aggregation and QoE attribution. Do not put sensitive business data in `cacheKey` or URL query parameters if those values are forwarded to analytics.
 - Android manual quality constrains maximum video size and bitrate through `DefaultTrackSelector`; iOS manual quality filters HLS master variants through ResourceLoader.
 - Repeated rebuffering or playback errors trigger automatic lower-quality recovery and preserve the playback position. Playback errors are reported to Dart only when no lower variant is available.
 - After seek, active prefetch is canceled and restarted from the segment that matches the target time. Already cached data remains reusable.
@@ -919,11 +966,12 @@ example/
 - Network HLS/m3u8 VOD and progressive MP4/MOV are supported. DASH, SmoothStreaming, RTSP, FLV, and local files are not supported.
 - MP4/MOV supports standalone full-file downloads and cache reuse after completion, but not quality selection.
 - Subtitle support targets WebVTT and HLS text tracks. Android progressive sources can attach external subtitles; iOS progressive external subtitles are not exposed yet.
-- No background playback or DRM yet.
+- DRM/FairPlay/Widevine, background playback, lock-screen controls, AirPlay, Cast, Picture in Picture, and low-latency live streaming are not supported yet.
 - Manual quality constraints are supported, but custom automatic bitrate policy controls are not exposed yet.
-- iOS HLS parsing remains lightweight and targets common VOD playlists; complex HLS features need additional validation.
+- iOS HLS playback is still delegated to AVFoundation. iOS HLS disk prefetch only commits to common VOD playlists. Live/event playlists, `#EXT-X-BYTERANGE`, I-frame-only playlists, complex encryption, and DRM playlists report an `unsupported_hls_playlist` cache error; playback is not failed by that guard.
 - Changing cache capacity and clearing cache require no active players or standalone download tasks. Download concurrency can be changed at runtime, but running tasks are not force-cancelled.
 - Native task queues are not restored after app restart. The example persists download records and restores completed cache records through `sourceInfo`.
+- Before commercial pilot usage, run the automated checks and real-device checklist in `COMMERCIAL_ACCEPTANCE.md`.
 
 ### Example App
 

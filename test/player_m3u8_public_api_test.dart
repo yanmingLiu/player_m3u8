@@ -264,19 +264,23 @@ void main() {
       selectedQuality: qualityByHeight,
       selectedSubtitle: const M3u8SubtitleTrack(id: 'en', label: 'English'),
       selectedAudioTrack: const M3u8AudioTrack(id: 'main', label: 'Main'),
+      diagnostics: const {'sessionId': 'session-1'},
       size: const Size(1920, 1080),
       error: const M3u8PlayerError(code: 'source', message: 'failed'),
     );
 
     expect(value.hasError, true);
+    expect(value.diagnostics, {'sessionId': 'session-1'});
     expect(value.visibleBufferedPosition, const Duration(seconds: 40));
     expect(value.visibleBufferedStartPosition, const Duration(seconds: 30));
     expect(value.aspectRatio, 1920 / 1080);
     expect(value.toString(), contains('M3u8PlayerError(source, failed)'));
+    expect(value.toString(), contains('diagnostics'));
     expect(
       value.copyWith(
         selectedSubtitle: null,
         selectedAudioTrack: null,
+        diagnostics: const {'sessionId': 'session-2'},
         error: null,
       )..toString(),
       isA<M3u8PlayerValue>()
@@ -285,6 +289,11 @@ void main() {
             (item) => item.selectedAudioTrack,
             'selectedAudioTrack',
             isNull,
+          )
+          .having(
+            (item) => item.diagnostics['sessionId'],
+            'diagnostics.sessionId',
+            'session-2',
           )
           .having((item) => item.error, 'error', isNull),
     );

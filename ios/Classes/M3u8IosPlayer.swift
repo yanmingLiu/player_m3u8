@@ -45,6 +45,12 @@ enum M3u8SourceType {
   }
 }
 
+enum M3u8LogSourceId {
+  static func value(for url: URL) -> String {
+    String(abs(url.absoluteString.hashValue), radix: 16)
+  }
+}
+
 struct M3u8RecoveryPolicy {
   static let defaultRebufferThreshold = 3
   static let defaultMinimumRecoveryIntervalMs: Int64 = 10_000
@@ -136,6 +142,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   private var volume: Double
   private var isMuted: Bool
   private var recoveryPolicy: M3u8RecoveryPolicy
+  private let playbackSessionId: String
   private var recoveryCount = 0
   private var lastRecoveryReason = ""
   private var lastRecoveredRebufferCount = 0
@@ -173,6 +180,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     self.playbackSpeed = min(max(playbackSpeed, 0.25), 2.0)
     self.volume = min(max(volume, 0), 1)
     self.isMuted = isMuted
+    self.playbackSessionId = "\(M3u8LogSourceId.value(for: videoUrl))-\(Int64(Date().timeIntervalSince1970 * 1000))"
     self.availableSubtitles = resolvedSourceType == .hls
       ? Self.normalizeExternalSubtitles(externalSubtitles)
       : []
@@ -677,6 +685,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       "selectedAudioTrack": selectedAudioTrack as Any,
       "recoveryCount": recoveryCount,
       "lastRecoveryReason": lastRecoveryReason,
+      "diagnostics": playbackDiagnostics(),
     ]
   }
 
@@ -980,9 +989,31 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       "error": [
         "code": error?.domain ?? "playback_error",
         "message": error?.localizedDescription ?? "Playback failed.",
-        "details": error?.userInfo.description,
+        "details": [
+          "platform": "ios",
+          "domain": error?.domain as Any,
+          "code": error?.code as Any,
+          "userInfo": error?.userInfo.description as Any,
+          "diagnostics": playbackDiagnostics(),
+        ],
       ],
     ])
+  }
+
+  private func playbackDiagnostics() -> [String: Any] {
+    [
+      "platform": "ios",
+      "sessionId": playbackSessionId,
+      "sourceId": M3u8LogSourceId.value(for: videoUrl),
+      "sourceType": sourceType.platformValue,
+      "hasCacheKey": !(cacheKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
+      "hasAudioUrl": audioUrl != nil,
+      "positionMs": milliseconds(from: player.currentTime()),
+      "durationMs": milliseconds(from: playerItem.duration),
+      "bufferedPositionMs": bufferedPositionMs(),
+      "playWhenReady": player.rate > 0 || player.timeControlStatus == .waitingToPlayAtSpecifiedRate,
+      "playbackState": "\(player.timeControlStatus.rawValue)",
+    ]
   }
 
   private func sendEvent(_ payload: [String: Any]) {

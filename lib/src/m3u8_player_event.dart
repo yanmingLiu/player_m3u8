@@ -45,6 +45,7 @@ class M3u8PlayerEvent {
     this.selectedAudioTrack,
     this.recoveryCount,
     this.lastRecoveryReason,
+    this.diagnostics,
     this.size,
     this.error,
   });
@@ -81,6 +82,7 @@ class M3u8PlayerEvent {
       selectedAudioTrack: _audioTrackFromMap(map['selectedAudioTrack']),
       recoveryCount: _asNullableInt(map['recoveryCount']),
       lastRecoveryReason: map['lastRecoveryReason'] as String?,
+      diagnostics: _objectMapFromMap(map['diagnostics']),
       size: _sizeFromMap(map),
       error: errorMap is Map
           ? M3u8PlayerError(
@@ -120,6 +122,7 @@ class M3u8PlayerEvent {
   final M3u8AudioTrack? selectedAudioTrack;
   final int? recoveryCount;
   final String? lastRecoveryReason;
+  final Map<String, Object?>? diagnostics;
   final Size? size;
   final M3u8PlayerError? error;
 }
@@ -241,4 +244,13 @@ M3u8AudioTrack? _audioTrackFromMap(Object? value) {
   }
   final track = M3u8AudioTrack.fromMap(Map<Object?, Object?>.from(value));
   return track.id.isEmpty ? null : track;
+}
+
+Map<String, Object?>? _objectMapFromMap(Object? value) {
+  if (value is! Map) {
+    return null;
+  }
+  return Map<Object?, Object?>.from(
+    value,
+  ).map((key, value) => MapEntry(key.toString(), value));
 }

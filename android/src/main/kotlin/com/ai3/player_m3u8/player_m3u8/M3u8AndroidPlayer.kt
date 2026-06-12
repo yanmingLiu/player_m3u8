@@ -82,6 +82,7 @@ class M3u8AndroidPlayer(
     private var lastRecoveredRebufferCount = 0
     private var lastRecoveryAtMs = 0L
     private val sourceDebugId = M3u8Log.sourceDebugId(videoUrl)
+    private val playbackSessionId = "${sourceDebugId}-${createdAtMs}"
     private val videoTrackCompatLimit = videoTrackCompatLimit()
     private val diskCachePrefetcher = if (isHlsSource) {
         M3u8DiskCachePrefetcher(
@@ -951,6 +952,7 @@ class M3u8AndroidPlayer(
             "selectedAudioTrack" to selectedAudioTrack,
             "recoveryCount" to recoveryCount,
             "lastRecoveryReason" to lastRecoveryReason,
+            "diagnostics" to playbackDiagnostics(),
         )
     }
 
@@ -999,6 +1001,7 @@ class M3u8AndroidPlayer(
                 "sdkInt" to Build.VERSION.SDK_INT,
             ),
             "trackCompat" to videoTrackCompatLimit?.description(),
+            "diagnostics" to playbackDiagnostics(),
             "cause" to error.cause?.javaClass?.name,
             "causeMessage" to error.cause?.message,
         )
@@ -1038,6 +1041,23 @@ class M3u8AndroidPlayer(
 
     private fun logInfo(message: String) {
         M3u8Log.info(message)
+    }
+
+    private fun playbackDiagnostics(): Map<String, Any?> {
+        val currentPlayer = player
+        return mapOf(
+            "platform" to "android",
+            "sessionId" to playbackSessionId,
+            "sourceId" to sourceDebugId,
+            "sourceType" to resolvedSourceType.platformValue(),
+            "hasCacheKey" to !cacheKey.isNullOrBlank(),
+            "hasAudioUrl" to (audioUrl != null),
+            "positionMs" to (currentPlayer?.currentPosition?.coerceAtLeast(0L) ?: 0L),
+            "durationMs" to (currentPlayer?.duration?.takeIf { it >= 0L } ?: 0L),
+            "bufferedPositionMs" to (currentPlayer?.bufferedPosition?.coerceAtLeast(0L) ?: 0L),
+            "playWhenReady" to currentPlayer?.playWhenReady,
+            "playbackState" to currentPlayer?.playbackState?.name(),
+        )
     }
 
     private fun sendEvent(payload: Map<String, Any?>) {

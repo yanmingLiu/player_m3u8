@@ -2,6 +2,11 @@
 
 ### 中文
 
+- 增加商用试点边界说明和 `COMMERCIAL_ACCEPTANCE.md` 验收清单，明确自动化检查、真机播放矩阵、弱网/缓存/生命周期验收项。
+- iOS HLS 磁盘预取新增 playlist capability guard；live/event playlist、`#EXT-X-BYTERANGE`、I-frame-only、复杂加密或 DRM playlist 会上报 `unsupported_hls_playlist`，播放链路继续交给 AVFoundation。
+- 播放事件新增跨平台 `diagnostics` 上下文，包含 session/source 标识、sourceType、播放位置、缓冲位置、平台和缓存 key 状态，便于线上错误和 QoE 归因。
+- 补充 Android、iOS 和 Dart 测试覆盖，强化缓存任务参数校验、未知任务错误、HLS capability 判断和 cache error code 解析。
+- README 明确当前不支持 DRM/FairPlay/Widevine、后台播放、锁屏控制、AirPlay、Cast、Picture in Picture、低延迟直播，以及 iOS progressive 外部字幕限制。
 - 初始化 Flutter HLS/m3u8 播放插件。
 - 增强缓存系统：支持 source 级 `cacheKey`、独立预缓存任务列表、暂停/恢复/取消、优先级、并发限制、source 级缓存查询/清理，以及扩展缓存观测字段。
 - 支持 progressive MP4/MOV 独立磁盘预取；Android 复用 Media3 `SimpleCache`，iOS 完整预取后复用 app caches 文件。
@@ -19,6 +24,11 @@
 
 ### English
 
+- Added commercial-pilot boundaries and `COMMERCIAL_ACCEPTANCE.md` with automated checks, real-device playback matrix, weak-network, cache, and lifecycle acceptance items.
+- Added an iOS HLS disk-prefetch playlist capability guard. Live/event playlists, `#EXT-X-BYTERANGE`, I-frame-only playlists, complex encryption, and DRM playlists now report `unsupported_hls_playlist` while playback remains delegated to AVFoundation.
+- Added cross-platform `diagnostics` context to playback events with session/source identifiers, sourceType, playback position, buffered position, platform, and cache-key state for production error and QoE attribution.
+- Expanded Android, iOS, and Dart tests for cache task validation, unknown task errors, HLS capability detection, and cache error-code parsing.
+- README now explicitly documents unsupported DRM/FairPlay/Widevine, background playback, lock-screen controls, AirPlay, Cast, Picture in Picture, low-latency live streaming, and iOS progressive external subtitle limitations.
 - Initial Flutter HLS/m3u8 player plugin.
 - Expanded cache support with source-level `cacheKey`, standalone cache task listing, pause/resume/cancel, priority, concurrency limit, source-level cache info/clear, and richer cache telemetry.
 - Added standalone progressive MP4/MOV disk precache. Android reuses Media3 `SimpleCache`; iOS reuses fully cached app cache files.

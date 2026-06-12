@@ -1,6 +1,65 @@
 import Flutter
 import Foundation
 
+public enum M3u8HlsPlaylistCapability {
+  public static let unsupportedCode = "unsupported_hls_playlist"
+
+  public static func unsupportedReason(in text: String) -> String? {
+    let normalized = text.uppercased()
+    if !normalized.contains("#EXTM3U") {
+      return "playlist_missing_extm3u"
+    }
+    if normalized.contains("#EXT-X-PLAYLIST-TYPE:EVENT") {
+      return "event_playlist_not_precacheable"
+    }
+    if !normalized.contains("#EXT-X-ENDLIST") && normalized.contains("#EXTINF:") {
+      return "live_playlist_not_precacheable"
+    }
+    if normalized.contains("#EXT-X-BYTERANGE") {
+      return "byterange_not_supported"
+    }
+    if normalized.contains("#EXT-X-I-FRAMES-ONLY") {
+      return "iframe_playlist_not_supported"
+    }
+    if unsupportedKeyReason(in: text) != nil {
+      return "encrypted_playlist_not_supported"
+    }
+    return nil
+  }
+
+  private static func unsupportedKeyReason(in text: String) -> String? {
+    for rawLine in text.components(separatedBy: .newlines) {
+      let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard line.uppercased().hasPrefix("#EXT-X-KEY:") else { continue }
+      let method = attribute("METHOD", in: line).uppercased()
+      if method.isEmpty || method == "NONE" {
+        continue
+      }
+      if attribute("URI", in: line).isEmpty {
+        return "key_uri_missing"
+      }
+      let keyFormat = attribute("KEYFORMAT", in: line)
+      if !keyFormat.isEmpty && keyFormat != "identity" {
+        return "drm_keyformat_not_supported"
+      }
+    }
+    return nil
+  }
+
+  private static func attribute(_ name: String, in line: String) -> String {
+    let pattern = "\(name)=([^,]+)"
+    guard let regex = try? NSRegularExpression(pattern: pattern) else { return "" }
+    let range = NSRange(line.startIndex..<line.endIndex, in: line)
+    guard
+      let match = regex.firstMatch(in: line, range: range),
+      let valueRange = Range(match.range(at: 1), in: line)
+    else {
+      return ""
+    }
+    return String(line[valueRange]).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+  }
+}
+
 final class M3u8DiskCachePrefetcher {
   private let url: URL
   private let headers: [String: String]
@@ -254,6 +313,9 @@ final class M3u8DiskCachePrefetcher {
     guard let text = String(data: data, encoding: .utf8) else {
       return Playlist(segments: [], resources: [], durationMs: 0, quality: selectedQuality)
     }
+    if let reason = M3u8HlsPlaylistCapability.unsupportedReason(in: text) {
+      throw UnsupportedHlsPlaylistError(reason: reason)
+    }
 
     var segments: [Segment] = []
     var resources: [URL] = []
@@ -482,7 +544,7 @@ final class M3u8DiskCachePrefetcher {
         "updatedAt": Int64(Date().timeIntervalSince1970 * 1000),
         "metadata": self.metadata,
         "error": [
-          "code": "cache_error",
+          "code": (error as? CacheErrorCodeProviding)?.cacheErrorCode ?? "cache_error",
           "message": error.localizedDescription,
         ],
       ])
@@ -707,5 +769,17 @@ final class M3u8DiskCachePrefetcher {
     let url: URL
     let startTimeMs: Int64
     let endTimeMs: Int64
+  }
+
+  private protocol CacheErrorCodeProviding {
+    var cacheErrorCode: String { get }
+  }
+
+  private struct UnsupportedHlsPlaylistError: LocalizedError, CacheErrorCodeProviding {
+    let reason: String
+    var cacheErrorCode: String { M3u8HlsPlaylistCapability.unsupportedCode }
+    var errorDescription: String? {
+      "iOS HLS disk precache supports VOD playlists only. Unsupported playlist: \(reason)."
+    }
   }
 }

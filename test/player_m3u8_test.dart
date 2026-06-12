@@ -245,6 +245,13 @@ void main() {
         },
       ],
       'selectedQuality': {'id': 'auto', 'label': 'Auto', 'isAuto': true},
+      'diagnostics': {
+        'platform': 'android',
+        'sessionId': 'session-1',
+        'sourceId': 'source-1',
+        'sourceType': 'hls',
+        'positionMs': 4000,
+      },
     });
 
     expect(event.playerId, 4);
@@ -266,6 +273,8 @@ void main() {
     expect(event.availableQualities, hasLength(1));
     expect(event.availableQualities!.single.height, 1080);
     expect(event.selectedQuality, M3u8Quality.auto);
+    expect(event.diagnostics?['sessionId'], 'session-1');
+    expect(event.diagnostics?['sourceType'], 'hls');
   });
 
   test('parses standalone cache event fields', () {
@@ -344,6 +353,26 @@ void main() {
     expect(event.updatedAt, DateTime.fromMillisecondsSinceEpoch(1700000000000));
     expect(event.metadata, {'title': 'Episode 1'});
     expect(event.quality?.height, 720);
+  });
+
+  test('parses unsupported HLS cache error event code', () {
+    final event = M3u8CacheEvent.fromMap(const <Object?, Object?>{
+      'taskId': 'cache-task-unsupported',
+      'url': 'https://example.com/live.m3u8',
+      'event': 'error',
+      'owner': 'standalone',
+      'status': 'error',
+      'sourceType': 'hls',
+      'error': {
+        'code': 'unsupported_hls_playlist',
+        'message': 'iOS HLS disk precache supports VOD playlists only.',
+      },
+    });
+
+    expect(event.type, M3u8CacheEventType.error);
+    expect(event.status, M3u8CacheEventStatus.error);
+    expect(event.error?.code, 'unsupported_hls_playlist');
+    expect(event.error?.message, contains('VOD playlists only'));
   });
 
   test('player event parser handles fallback values and track filtering', () {
@@ -479,6 +508,7 @@ void main() {
           ),
         ],
         selectedQuality: M3u8Quality.auto,
+        diagnostics: {'sessionId': 'session-1', 'sourceType': 'hls'},
         size: Size(1920, 1080),
       ),
     );
@@ -508,6 +538,8 @@ void main() {
     expect(controller.value.lastRecoveryReason, 'error:SOURCE');
     expect(controller.value.availableQualities.single.height, 720);
     expect(controller.value.selectedQuality, M3u8Quality.auto);
+    expect(controller.value.diagnostics['sessionId'], 'session-1');
+    expect(controller.value.diagnostics['sourceType'], 'hls');
     expect(controller.value.size, const Size(1920, 1080));
 
     platform.eventController.add(

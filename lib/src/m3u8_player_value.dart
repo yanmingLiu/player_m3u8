@@ -38,6 +38,7 @@ class M3u8PlayerValue {
     this.selectedAudioTrack,
     this.recoveryCount = 0,
     this.lastRecoveryReason = '',
+    this.diagnostics = const <String, Object?>{},
     this.size = Size.zero,
     this.error,
   });
@@ -72,6 +73,7 @@ class M3u8PlayerValue {
   final M3u8AudioTrack? selectedAudioTrack;
   final int recoveryCount;
   final String lastRecoveryReason;
+  final Map<String, Object?> diagnostics;
   final Size size;
   final M3u8PlayerError? error;
 
@@ -127,6 +129,7 @@ class M3u8PlayerValue {
     Object? selectedAudioTrack = _sentinel,
     int? recoveryCount,
     String? lastRecoveryReason,
+    Map<String, Object?>? diagnostics,
     Size? size,
     Object? error = _sentinel,
   }) {
@@ -166,6 +169,7 @@ class M3u8PlayerValue {
           : selectedAudioTrack as M3u8AudioTrack?,
       recoveryCount: recoveryCount ?? this.recoveryCount,
       lastRecoveryReason: lastRecoveryReason ?? this.lastRecoveryReason,
+      diagnostics: diagnostics ?? this.diagnostics,
       size: size ?? this.size,
       error: identical(error, _sentinel)
           ? this.error
@@ -206,6 +210,7 @@ class M3u8PlayerValue {
         'selectedAudioTrack: $selectedAudioTrack, '
         'recoveryCount: $recoveryCount, '
         'lastRecoveryReason: $lastRecoveryReason, '
+        'diagnostics: $diagnostics, '
         'size: $size, '
         'error: $error'
         ')';

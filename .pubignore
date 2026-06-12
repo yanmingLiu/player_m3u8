@@ -15,6 +15,15 @@ example/ios/Flutter/ephemeral/
 example/ios/Flutter/Generated.xcconfig
 example/ios/Flutter/flutter_export_environment.sh
 example/android/.gradle/
+example/android/app/build/
+example/ios/Flutter/Flutter.podspec
+example/ios/Runner.xcworkspace/xcuserdata/
+example/ios/Runner.xcworkspace/xcshareddata/swiftpm/
+example/ios/Runner.xcodeproj/xcuserdata/
+example/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+example/ios/**/*.xcresult
+example/ios/**/*.xcuserstate
+example/ios/DerivedData/
 
 android/local.properties
 example/android/local.properties

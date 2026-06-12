@@ -82,6 +82,52 @@ internal class PlayerM3u8PluginTest {
     }
 
     @Test
+    fun onMethodCall_precacheInvalidMaxRetries_returnsError() {
+        val plugin = PlayerM3u8Plugin()
+        val result: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+
+        plugin.onMethodCall(
+            MethodCall(
+                "precache",
+                mapOf(
+                    "videoUrl" to "https://example.com/index.m3u8",
+                    "maxRetries" to -1,
+                ),
+            ),
+            result,
+        )
+
+        Mockito.verify(result).error(
+            Mockito.eq("invalid_max_retries"),
+            Mockito.anyString(),
+            Mockito.isNull(),
+        )
+    }
+
+    @Test
+    fun onMethodCall_configureCacheInvalidConcurrency_returnsError() {
+        val plugin = PlayerM3u8Plugin()
+        val result: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+
+        plugin.onMethodCall(
+            MethodCall(
+                "configureCache",
+                mapOf(
+                    "maxSizeBytes" to 4096,
+                    "maxConcurrentPrecacheTasks" to 0,
+                ),
+            ),
+            result,
+        )
+
+        Mockito.verify(result).error(
+            Mockito.eq("invalid_cache_concurrency"),
+            Mockito.anyString(),
+            Mockito.isNull(),
+        )
+    }
+
+    @Test
     fun onMethodCall_cacheTasks_returnsEmptyList() {
         val plugin = PlayerM3u8Plugin()
         val result: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
@@ -91,6 +137,27 @@ internal class PlayerM3u8PluginTest {
 
         Mockito.verify(result).success(captor.capture())
         assertEquals(emptyList<Any>(), captor.value)
+    }
+
+    @Test
+    fun onMethodCall_pauseResumeUnknownPrecache_returnsError() {
+        val plugin = PlayerM3u8Plugin()
+        val pauseResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+        val resumeResult: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+
+        plugin.onMethodCall(MethodCall("pausePrecache", mapOf("taskId" to "missing")), pauseResult)
+        plugin.onMethodCall(MethodCall("resumePrecache", mapOf("taskId" to "missing")), resumeResult)
+
+        Mockito.verify(pauseResult).error(
+            Mockito.eq("unknown_cache_task"),
+            Mockito.anyString(),
+            Mockito.isNull(),
+        )
+        Mockito.verify(resumeResult).error(
+            Mockito.eq("unknown_cache_task"),
+            Mockito.anyString(),
+            Mockito.isNull(),
+        )
     }
 
     @Test
@@ -106,6 +173,14 @@ internal class PlayerM3u8PluginTest {
         assertEquals(
             M3u8SourceType.PROGRESSIVE,
             M3u8SourceType.AUTO.resolve("https://example.com/video.mov"),
+        )
+        assertEquals(
+            M3u8SourceType.HLS,
+            M3u8SourceType.HLS.resolve("https://example.com/video.mp4"),
+        )
+        assertEquals(
+            M3u8SourceType.PROGRESSIVE,
+            M3u8SourceType.PROGRESSIVE.resolve("https://example.com/index.m3u8"),
         )
     }
 

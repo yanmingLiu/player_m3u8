@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../player_m3u8_platform_interface.dart';
+import 'm3u8_debug_log.dart';
 import 'm3u8_audio_track.dart';
 import 'm3u8_player_event.dart';
 import 'm3u8_player_value.dart';
@@ -538,6 +539,16 @@ class M3u8PlayerController extends ValueNotifier<M3u8PlayerValue> {
       ),
     };
     if (event.type == M3u8PlayerEventType.error) {
+      debugLogPlayerError(
+        context: 'playback',
+        error:
+            event.error ??
+            const M3u8PlayerError(
+              code: 'player_error',
+              message: 'Playback failed.',
+            ),
+        diagnostics: event.diagnostics ?? const <String, Object?>{},
+      );
       _wasPlayingBeforeLastError = value.isPlaying;
     } else if (event.type == M3u8PlayerEventType.playing ||
         event.type == M3u8PlayerEventType.paused ||

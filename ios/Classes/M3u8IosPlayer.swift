@@ -86,7 +86,9 @@ struct M3u8RecoveryPolicy {
   }
 }
 
-final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPushDelegate {
+final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPushDelegate,
+  AVPlayerItemOutputPullDelegate
+{
   var textureId: Int64 = -1 {
     didSet {
       displayLink?.isPaused = false
@@ -108,6 +110,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   private var videoOutput: AVPlayerItemVideoOutput
   private var legibleOutput: AVPlayerItemLegibleOutput
   private let resourceLoader: M3u8ResourceLoader
+  private let usesResourceLoader: Bool
   private var diskCachePrefetcher: M3u8DiskCachePrefetcher?
   private var displayLink: CADisplayLink?
   private var progressTimer: Timer?
@@ -117,6 +120,15 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   private var playbackLikelyToKeepUpObservation: NSKeyValueObservation?
   private var rateObservation: NSKeyValueObservation?
   private var latestPixelBuffer: CVPixelBuffer?
+  private var lastPixelBufferAt = Date.distantPast
+  private var didLogMissingVideoFrame = false
+  private var targetFrameTime: CFTimeInterval = 0
+  private var copiedFrameCount = 0
+  private var nilFrameCount = 0
+  private var selfRefreshFrameCount = 0
+  private var latestPixelBufferWidth = 0
+  private var latestPixelBufferHeight = 0
+  private var latestFrameLuma = -1
   private var disposed = false
   private var initialized = false
   private let createdAt = Date()
@@ -189,6 +201,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     self.selectedAudioTrackId = selectedAudioTrackId
     let effectiveAudioHeaders = audioHeaders ?? videoHeaders
     self.recoveryPolicy = recoveryPolicy
+    self.usesResourceLoader = false
     self.resourceLoader = M3u8ResourceLoader(
       headers: videoHeaders,
       cacheKey: cacheKey,
@@ -203,18 +216,17 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
         for: videoUrl,
         sourceType: self.sourceType,
         headers: videoHeaders,
-        cacheKey: cacheKey
+        cacheKey: cacheKey,
+        useResourceLoader: usesResourceLoader
       ),
       options: assetOptions
     )
     self.asset = asset
-    if self.sourceType == .hls {
+    if usesResourceLoader {
       self.asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
     }
     self.playerItem = AVPlayerItem(asset: self.asset)
-    self.videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
-      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-    ])
+    self.videoOutput = Self.makeVideoOutput()
     self.legibleOutput = AVPlayerItemLegibleOutput()
     self.player = AVPlayer(playerItem: playerItem)
     self.player.volume = Float(self.volume)
@@ -224,7 +236,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       self?.selectedQuality ?? Self.autoQuality()
     }
     if self.sourceType == .hls {
-      loadAvailableQualities()
+      loadAvailableQualitiesAsync()
     } else {
       availableQualities = []
     }
@@ -232,32 +244,21 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       let seconds = Double(initialPositionMs) / 1000.0
       player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
     }
-    if self.sourceType == .hls {
-      diskCachePrefetcher = M3u8DiskCachePrefetcher(
-        url: videoUrl,
-        headers: videoHeaders,
-        cacheKey: cacheKey,
-        playerIdProvider: { [weak self] in self?.textureId ?? -1 },
-        eventSinkProvider: eventSinkProvider,
-        qualityProvider: { [weak self] in self?.selectedQuality ?? Self.autoQuality() },
-        audioUrl: audioUrl,
-        audioHeaders: effectiveAudioHeaders,
-      )
-    } else {
-      diskCachePrefetcher = nil
-    }
+    diskCachePrefetcher = nil
     playerItem.add(videoOutput)
+    videoOutput.setDelegate(self, queue: DispatchQueue.main)
+    videoOutput.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.03)
     legibleOutput.setDelegate(self, queue: DispatchQueue.main)
     playerItem.add(legibleOutput)
     player.actionAtItemEnd = .pause
     configureObservers()
     configureTimers()
-    diskCachePrefetcher?.restart(from: initialPositionMs)
   }
 
   func play() {
     guard !disposed else { return }
-    player.rate = Float(playbackSpeed)
+    requestVideoOutputNotification()
+    player.playImmediately(atRate: Float(playbackSpeed))
     sendPlaybackEvent("playing")
   }
 
@@ -270,12 +271,12 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   func seek(to positionMs: Int64) {
     guard !disposed else { return }
     let seconds = Double(max(positionMs, 0)) / 1000.0
-    diskCachePrefetcher?.restart(from: positionMs)
     player.seek(
       to: CMTime(seconds: seconds, preferredTimescale: 600),
       toleranceBefore: CMTime(seconds: 3, preferredTimescale: 600),
       toleranceAfter: .zero
     ) { [weak self] _ in
+      self?.requestVideoOutputNotification()
       self?.sendProgress()
       self?.textureRegistry.textureFrameAvailable(self?.textureId ?? -1)
     }
@@ -294,11 +295,11 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     let position = player.currentTime()
     let shouldPlay = player.rate > 0
     replacePlayerItem()
-    diskCachePrefetcher?.restart(from: milliseconds(from: position))
     player.seek(to: position) { [weak self] _ in
       if shouldPlay {
         self?.player.rate = Float(self?.playbackSpeed ?? 1.0)
       }
+      self?.requestVideoOutputNotification()
       self?.sendProgress()
     }
   }
@@ -368,6 +369,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     player.replaceCurrentItem(with: nil)
     asset.resourceLoader.setDelegate(nil, queue: nil)
     playerItem.remove(legibleOutput)
+    videoOutput.setDelegate(nil, queue: nil)
     playerItem.remove(videoOutput)
     latestPixelBuffer = nil
   }
@@ -389,12 +391,14 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
 
   func copyPixelBuffer() -> Unmanaged<CVPixelBuffer>? {
     guard !disposed else { return nil }
-    let hostTime = CACurrentMediaTime()
-    let itemTime = videoOutput.itemTime(forHostTime: hostTime)
-    if videoOutput.hasNewPixelBuffer(forItemTime: itemTime),
-      let pixelBuffer = videoOutput.copyPixelBuffer(forItemTime: itemTime, itemTimeForDisplay: nil)
-    {
+    if let pixelBuffer = copyCurrentPixelBuffer() {
       latestPixelBuffer = pixelBuffer
+      lastPixelBufferAt = Date()
+      didLogMissingVideoFrame = false
+      copiedFrameCount += 1
+      latestPixelBufferWidth = CVPixelBufferGetWidth(pixelBuffer)
+      latestPixelBufferHeight = CVPixelBufferGetHeight(pixelBuffer)
+      latestFrameLuma = Self.sampleCenterLuma(pixelBuffer)
       if startupTimeMs == 0 {
         startupTimeMs = max(Int64(Date().timeIntervalSince(createdAt) * 1000), 0)
         sendProgress()
@@ -402,10 +406,29 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       if !initialized {
         sendInitializedIfReady()
       }
+    } else {
+      nilFrameCount += 1
+      logMissingVideoFrameIfNeeded()
+    }
+
+    if player.rate > 0 || player.timeControlStatus == .playing {
+      selfRefreshFrameCount += 1
+      DispatchQueue.main.async { [weak self] in
+        guard let self, !self.disposed, self.textureId >= 0 else { return }
+        self.textureRegistry.textureFrameAvailable(self.textureId)
+      }
     }
 
     guard let latestPixelBuffer else { return nil }
     return Unmanaged.passRetained(latestPixelBuffer)
+  }
+
+  func outputMediaDataWillChange(_ sender: AVPlayerItemOutput) {
+    guard !disposed else { return }
+    displayLink?.isPaused = false
+    if textureId >= 0 {
+      textureRegistry.textureFrameAvailable(textureId)
+    }
   }
 
   func onTextureUnregistered(_ texture: FlutterTexture) {
@@ -551,17 +574,18 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
         for: videoUrl,
         sourceType: sourceType,
         headers: videoHeaders,
-        cacheKey: cacheKey
+        cacheKey: cacheKey,
+        useResourceLoader: usesResourceLoader
       ),
       options: assetOptions
     )
-    if sourceType == .hls {
+    if usesResourceLoader {
       asset.resourceLoader.setDelegate(resourceLoader, queue: DispatchQueue.main)
     }
     playerItem = AVPlayerItem(asset: asset)
-    videoOutput = AVPlayerItemVideoOutput(pixelBufferAttributes: [
-      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-    ])
+    videoOutput = Self.makeVideoOutput()
+    videoOutput.setDelegate(self, queue: DispatchQueue.main)
+    videoOutput.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.03)
     legibleOutput = AVPlayerItemLegibleOutput()
     legibleOutput.setDelegate(self, queue: DispatchQueue.main)
     playerItem.add(videoOutput)
@@ -569,12 +593,16 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     player.replaceCurrentItem(with: playerItem)
     initialized = false
     latestPixelBuffer = nil
+    lastPixelBufferAt = Date.distantPast
+    didLogMissingVideoFrame = false
+    resetVideoFrameDiagnostics()
     configureItemObservers()
     applySelectedSubtitle()
   }
 
   private func configureTimers() {
     displayLink = CADisplayLink(target: self, selector: #selector(displayLinkFired))
+    displayLink?.preferredFramesPerSecond = 30
     displayLink?.add(to: .main, forMode: .common)
     progressTimer = Timer.scheduledTimer(
       timeInterval: 0.25,
@@ -585,17 +613,35 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     )
   }
 
-  private func loadAvailableQualities() {
+  private func loadAvailableQualitiesAsync() {
     guard sourceType == .hls else {
       availableQualities = []
       return
     }
-    guard let data = try? M3u8IosCacheManager.shared.data(for: videoUrl, headers: videoHeaders),
-      let text = String(data: data, encoding: .utf8)
-    else {
-      availableQualities = []
-      return
+    var request = URLRequest(url: videoUrl)
+    videoHeaders.forEach { key, value in
+      request.setValue(value, forHTTPHeaderField: key)
     }
+    URLSession.shared.dataTask(with: request) { [weak self] data, _, _ in
+      guard let self, !self.disposed else { return }
+      guard let data, let text = String(data: data, encoding: .utf8) else {
+        DispatchQueue.main.async { [weak self] in
+          guard let self, !self.disposed else { return }
+          self.availableQualities = []
+          self.sendProgress()
+        }
+        return
+      }
+      let qualities = Self.parseQualities(from: text)
+      DispatchQueue.main.async { [weak self] in
+        guard let self, !self.disposed else { return }
+        self.availableQualities = qualities
+        self.sendProgress()
+      }
+    }.resume()
+  }
+
+  private static func parseQualities(from text: String) -> [[String: Any]] {
     var qualities: [[String: Any]] = []
     for rawLine in text.components(separatedBy: .newlines) {
       let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -608,7 +654,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       qualities.append(Self.qualityPayload(width: width, height: height, bitrate: bitrate))
     }
     var seen = Set<String>()
-    availableQualities = qualities
+    return qualities
       .filter { quality in
         let id = quality["id"] as? String ?? "unknown"
         guard !seen.contains(id) else { return false }
@@ -625,8 +671,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     guard !disposed, textureId >= 0, !initialized, playerItem.status == .readyToPlay else {
       return
     }
-    let size = naturalSize()
-    guard size.width > 0, size.height > 0 else { return }
+    let size = naturalSizeOrFallback()
     initialized = true
     updateQualityMetrics()
     updateAvailableSubtitles()
@@ -638,6 +683,9 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   }
 
   private func naturalSize() -> CGSize {
+    if playerItem.presentationSize.width > 0, playerItem.presentationSize.height > 0 {
+      return playerItem.presentationSize
+    }
     if let track = playerItem.asset.tracks(withMediaType: .video).first {
       let transformedSize = track.naturalSize.applying(track.preferredTransform)
       return CGSize(width: abs(transformedSize.width), height: abs(transformedSize.height))
@@ -649,6 +697,61 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       )
     }
     return .zero
+  }
+
+  private func naturalSizeOrFallback() -> CGSize {
+    let size = naturalSize()
+    if size.width > 0, size.height > 0 {
+      return size
+    }
+    return CGSize(width: 16, height: 9)
+  }
+
+  private func copyCurrentPixelBuffer() -> CVPixelBuffer? {
+    let currentHostTime = CACurrentMediaTime()
+    let frameDuration = displayLink?.duration ?? (1.0 / 30.0)
+    let resetThreshold = frameDuration * 0.5
+    if abs(targetFrameTime - currentHostTime) > resetThreshold {
+      targetFrameTime = currentHostTime
+    }
+    targetFrameTime += frameDuration
+
+    let targetItemTime = videoOutput.itemTime(forHostTime: targetFrameTime)
+    if videoOutput.hasNewPixelBuffer(forItemTime: targetItemTime),
+      let pixelBuffer = videoOutput.copyPixelBuffer(
+        forItemTime: targetItemTime,
+        itemTimeForDisplay: nil
+      )
+    {
+      return pixelBuffer
+    }
+    return nil
+  }
+
+  private func logMissingVideoFrameIfNeeded() {
+    guard !didLogMissingVideoFrame else { return }
+    guard player.rate > 0 || player.timeControlStatus == .playing else { return }
+    guard Date().timeIntervalSince(createdAt) > 2 else { return }
+    guard latestPixelBuffer == nil else { return }
+    didLogMissingVideoFrame = true
+    NSLog("player_m3u8 ios no video frame diagnostics=\(playbackDiagnostics())")
+  }
+
+  private func requestVideoOutputNotification() {
+    videoOutput.requestNotificationOfMediaDataChange(withAdvanceInterval: 0.03)
+    if textureId >= 0 {
+      textureRegistry.textureFrameAvailable(textureId)
+    }
+  }
+
+  private func resetVideoFrameDiagnostics() {
+    targetFrameTime = 0
+    copiedFrameCount = 0
+    nilFrameCount = 0
+    selfRefreshFrameCount = 0
+    latestPixelBufferWidth = 0
+    latestPixelBufferHeight = 0
+    latestFrameLuma = -1
   }
 
   private func sendPlaybackEvent(_ event: String) {
@@ -707,11 +810,11 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       "player_m3u8 recover playerId=\(textureId) reason=\(reason) quality=\(lowerQuality["id"] ?? "unknown")"
     )
     replacePlayerItem()
-    diskCachePrefetcher?.restart(from: milliseconds(from: position))
     player.seek(to: position) { [weak self] _ in
       if shouldPlay {
         self?.player.rate = Float(self?.playbackSpeed ?? 1.0)
       }
+      self?.requestVideoOutputNotification()
       self?.sendProgress()
     }
     return true
@@ -886,7 +989,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     return rebufferDurationMs + max(Int64(Date().timeIntervalSince(startedAt) * 1000), 0)
   }
 
-  private func parseAttribute(_ line: String, name: String) -> String? {
+  private static func parseAttribute(_ line: String, name: String) -> String? {
     let pattern = "\(name)=([^,]+)"
     guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
     let range = NSRange(line.startIndex..<line.endIndex, in: line)
@@ -933,16 +1036,37 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     for url: URL,
     sourceType: M3u8SourceType,
     headers: [String: String],
-    cacheKey: String?
+    cacheKey: String?,
+    useResourceLoader: Bool
   ) -> URL {
     if sourceType == .hls {
-      return M3u8ResourceLoader.cachedUrl(for: url)
+      return useResourceLoader ? M3u8ResourceLoader.cachedUrl(for: url) : url
     }
     return M3u8IosCacheManager.shared.cachedFileIfExists(
       for: url,
       headers: headers,
       cacheKey: cacheKey
     ) ?? url
+  }
+
+  private static func makeVideoOutput() -> AVPlayerItemVideoOutput {
+    AVPlayerItemVideoOutput(pixelBufferAttributes: [
+      kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+      kCVPixelBufferIOSurfacePropertiesKey as String: [:],
+    ])
+  }
+
+  private static func shouldUseResourceLoader(
+    sourceType: M3u8SourceType,
+    headers: [String: String],
+    cacheKey: String?,
+    audioUrl: URL?,
+    externalSubtitles: [[String: Any]]
+  ) -> Bool {
+    guard sourceType == .hls else { return false }
+    return !headers.isEmpty ||
+      !(cacheKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true) ||
+      audioUrl != nil
   }
 
   private static func qualityPayload(width: Int, height: Int, bitrate: Int) -> [String: Any] {
@@ -1005,15 +1129,55 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       "platform": "ios",
       "sessionId": playbackSessionId,
       "sourceId": M3u8LogSourceId.value(for: videoUrl),
+      "url": videoUrl.absoluteString,
+      "assetUrl": asset.url.absoluteString,
       "sourceType": sourceType.platformValue,
       "hasCacheKey": !(cacheKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
+      "hasHeaders": !videoHeaders.isEmpty,
       "hasAudioUrl": audioUrl != nil,
+      "hasExternalSubtitles": !availableSubtitles.isEmpty,
+      "usesResourceLoader": usesResourceLoader,
       "positionMs": milliseconds(from: player.currentTime()),
       "durationMs": milliseconds(from: playerItem.duration),
       "bufferedPositionMs": bufferedPositionMs(),
       "playWhenReady": player.rate > 0 || player.timeControlStatus == .waitingToPlayAtSpecifiedRate,
       "playbackState": "\(player.timeControlStatus.rawValue)",
+      "copiedFrameCount": copiedFrameCount,
+      "nilFrameCount": nilFrameCount,
+      "selfRefreshFrameCount": selfRefreshFrameCount,
+      "latestPixelBufferWidth": latestPixelBufferWidth,
+      "latestPixelBufferHeight": latestPixelBufferHeight,
+      "latestFrameLuma": latestFrameLuma,
+      "lastPixelBufferAgeMs": max(Int64(Date().timeIntervalSince(lastPixelBufferAt) * 1000), 0),
     ]
+  }
+
+  private static func sampleCenterLuma(_ pixelBuffer: CVPixelBuffer) -> Int {
+    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+    defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+    let width = CVPixelBufferGetWidth(pixelBuffer)
+    let height = CVPixelBufferGetHeight(pixelBuffer)
+    guard width > 0, height > 0 else { return -1 }
+    let format = CVPixelBufferGetPixelFormatType(pixelBuffer)
+    if format == kCVPixelFormatType_32BGRA,
+      let base = CVPixelBufferGetBaseAddress(pixelBuffer)
+    {
+      let rowBytes = CVPixelBufferGetBytesPerRow(pixelBuffer)
+      let offset = (height / 2) * rowBytes + (width / 2) * 4
+      let pointer = base.assumingMemoryBound(to: UInt8.self)
+      let blue = Int(pointer[offset])
+      let green = Int(pointer[offset + 1])
+      let red = Int(pointer[offset + 2])
+      return (red * 299 + green * 587 + blue * 114) / 1000
+    }
+    if CVPixelBufferGetPlaneCount(pixelBuffer) > 0,
+      let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0)
+    {
+      let rowBytes = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+      let offset = (height / 2) * rowBytes + width / 2
+      return Int(base.assumingMemoryBound(to: UInt8.self)[offset])
+    }
+    return -1
   }
 
   private func sendEvent(_ payload: [String: Any]) {

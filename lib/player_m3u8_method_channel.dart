@@ -7,6 +7,7 @@ import 'player_m3u8_platform_interface.dart';
 import 'src/m3u8_cache_event.dart';
 import 'src/m3u8_cache_info.dart';
 import 'src/m3u8_cache_task.dart';
+import 'src/m3u8_debug_log.dart';
 import 'src/m3u8_player_event.dart';
 import 'src/m3u8_player_value.dart';
 import 'src/m3u8_recovery_policy.dart';
@@ -54,7 +55,25 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         .where((Object? event) => event is Map)
         .map((Object? event) {
           final raw = Map<Object?, Object?>.from(event! as Map);
-          return M3u8CacheEvent.fromMap(raw);
+          final cacheEvent = M3u8CacheEvent.fromMap(raw);
+          final error = cacheEvent.error;
+          if (cacheEvent.type == M3u8CacheEventType.error && error != null) {
+            debugLogPlayerError(
+              context: 'cache:${cacheEvent.taskId}',
+              error: error,
+              diagnostics: <String, Object?>{
+                'url': cacheEvent.url,
+                'owner': cacheEvent.owner.name,
+                'sourceType': cacheEvent.sourceType.platformValue,
+                'status': cacheEvent.status.name,
+                'currentUrl': cacheEvent.currentUrl,
+                'retryCount': cacheEvent.retryCount,
+                'segmentIndex': cacheEvent.segmentIndex,
+                'segmentCount': cacheEvent.segmentCount,
+              },
+            );
+          }
+          return cacheEvent;
         });
   }
 
@@ -99,7 +118,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
       }
       return playerId;
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('create', error);
     }
   }
 
@@ -118,7 +137,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'position': position.inMilliseconds,
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('seekTo', error);
     }
   }
 
@@ -133,7 +152,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'quality': quality.toMap(),
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('setQuality', error);
     }
   }
 
@@ -149,7 +168,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'recoveryPolicy': recoveryPolicy.toMap(),
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('setRecoveryPolicy', error);
     }
   }
 
@@ -162,7 +181,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'speed': speed,
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('setPlaybackSpeed', error);
     }
   }
 
@@ -175,7 +194,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'volume': volume,
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('setVolume', error);
     }
   }
 
@@ -187,7 +206,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'isMuted': isMuted,
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('setMuted', error);
     }
   }
 
@@ -199,7 +218,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'subtitleId': subtitleId,
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('setSubtitle', error);
     }
   }
 
@@ -211,7 +230,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'audioTrackId': audioTrackId,
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('setAudioTrack', error);
     }
   }
 
@@ -226,7 +245,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'maxConcurrentPrecacheTasks': maxConcurrentPrecacheTasks,
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('configureCache', error);
     }
   }
 
@@ -235,7 +254,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
     try {
       await methodChannel.invokeMethod<void>('clearCache');
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('clearCache', error);
     }
   }
 
@@ -253,7 +272,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
       }
       return M3u8CacheInfo.fromMap(raw);
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('getCacheInfo', error);
     }
   }
 
@@ -296,7 +315,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
       }
       return taskId;
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('precache', error);
     }
   }
 
@@ -310,7 +329,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'taskId': taskId,
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('cancelPrecache', error);
     }
   }
 
@@ -322,7 +341,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'taskId': taskId,
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('pausePrecache', error);
     }
   }
 
@@ -334,7 +353,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'taskId': taskId,
       });
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('resumePrecache', error);
     }
   }
 
@@ -349,7 +368,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
           )
           .toList(growable: false);
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('cacheTasks', error);
     }
   }
 
@@ -368,7 +387,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
       }
       return M3u8CacheInfo.fromMap(raw);
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('sourceCacheInfo', error);
     }
   }
 
@@ -380,7 +399,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         _sourceArguments(source),
       );
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException('clearSourceCache', error);
     }
   }
 
@@ -388,9 +407,25 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
     try {
       await methodChannel.invokeMethod<void>(method, {'playerId': playerId});
     } on PlatformException catch (error) {
-      throw PlayerM3u8PlatformException.fromPlatformException(error);
+      throw _mapPlatformException(method, error);
     }
   }
+}
+
+PlayerM3u8PlatformException _mapPlatformException(
+  String context,
+  PlatformException error,
+) {
+  final mapped = PlayerM3u8PlatformException.fromPlatformException(error);
+  debugLogPlayerError(
+    context: 'platform:$context',
+    error: M3u8PlayerError(
+      code: mapped.code,
+      message: mapped.message,
+      details: mapped.details,
+    ),
+  );
+  return mapped;
 }
 
 Map<String, Object?> _sourceArguments(M3u8Source source) {

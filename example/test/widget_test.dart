@@ -17,7 +17,7 @@ void main() {
     expect(find.text('EN'), findsOneWidget);
     expect(find.byIcon(Icons.skip_previous), findsOneWidget);
     expect(find.byIcon(Icons.skip_next), findsOneWidget);
-    expect(find.text('Apple BipBop'), findsOneWidget);
+    expect(find.text('Mux Big Buck Bunny'), findsOneWidget);
 
     await _scrollTo(tester, find.byIcon(Icons.download));
 
@@ -73,7 +73,7 @@ void main() {
     expect(find.text('中文'), findsOneWidget);
     expect(find.byIcon(Icons.skip_previous), findsOneWidget);
     expect(find.byIcon(Icons.skip_next), findsOneWidget);
-    expect(find.text('Apple BipBop'), findsOneWidget);
+    expect(find.text('Mux Big Buck Bunny'), findsOneWidget);
 
     await _scrollTo(tester, find.byIcon(Icons.download));
 

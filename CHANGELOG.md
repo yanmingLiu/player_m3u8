@@ -1,3 +1,25 @@
+## 0.1.1
+
+### 中文
+
+- 修复 iOS Texture 黑屏问题：`AVPlayerItemVideoOutput` 现在输出 IOSurface-backed `CVPixelBuffer`，确保 Flutter/Metal 合成路径能显示真实视频帧。
+- iOS HLS 播放主链路恢复为直接 AVPlayer 播放远程 HLS，避免磁盘预取和 ResourceLoader 影响播放兼容性；独立预缓存能力保留。
+- 改进 iOS 取帧节奏、seek/播放后的帧刷新通知，以及首帧/空帧/像素缓冲诊断字段。
+- 修复 Flutter Texture 初始化死锁：拿到 native texture id 后即创建 `Texture`，在真实视频尺寸返回前使用 16:9 临时尺寸。
+- 播放、平台调用、缓存/下载错误现在会在 debug 控制台输出结构化上下文；example 会通过 SnackBar 反馈播放、下载和操作错误。
+- Android HLS/progressive 缓存错误事件新增 `details`，并同步输出 Logcat，方便定位任务、URL、分片、重试和底层异常。
+- example 默认源切换为 Mux Big Buck Bunny，便于验证 iOS HLS 画面渲染。
+
+### English
+
+- Fixed iOS Texture black screen rendering. `AVPlayerItemVideoOutput` now emits IOSurface-backed `CVPixelBuffer` frames so Flutter/Metal can composite actual video frames.
+- Restored direct AVPlayer remote-HLS playback as the primary iOS playback path to avoid disk-prefetch and ResourceLoader interference; standalone precache remains available.
+- Improved iOS frame sampling cadence, frame refresh notifications after play/seek, and first-frame, nil-frame, and pixel-buffer diagnostics.
+- Fixed Flutter Texture initialization deadlock by creating the `Texture` as soon as the native texture id is available, using a temporary 16:9 size until the real video size is reported.
+- Playback, platform-call, cache, and download errors now print structured debug context; the example app surfaces playback, download, and action failures through SnackBars.
+- Android HLS/progressive cache error events now include `details` and Logcat output with task, URL, segment, retry, and underlying exception context.
+- Switched the example default source to Mux Big Buck Bunny for easier iOS HLS rendering verification.
+
 ## 0.1.0
 
 ### 中文

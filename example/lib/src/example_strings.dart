@@ -77,6 +77,9 @@ class ExampleStrings {
   String get qoeWaitingForFirstSample =>
       _isZh ? '等待首个 QoE 采样' : 'QoE waiting for first sample';
   String get retryLabel => _isZh ? '重试' : 'Retry';
+  String get playbackErrorTitle => _isZh ? '播放失败' : 'Playback failed';
+  String get cacheErrorTitle => _isZh ? '下载失败' : 'Download failed';
+  String get actionErrorTitle => _isZh ? '操作失败' : 'Action failed';
   String get autoQualityLabel => _isZh ? '自动' : 'Auto';
   String get unknown => _isZh ? '未知' : 'unknown';
   String get moreTooltip => _isZh ? '更多' : 'More';

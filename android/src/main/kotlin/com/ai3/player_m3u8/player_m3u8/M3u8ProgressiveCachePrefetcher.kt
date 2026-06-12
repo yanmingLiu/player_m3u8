@@ -231,16 +231,40 @@ internal class M3u8ProgressiveCachePrefetcher(
     }
 
     private fun sendError(error: Throwable) {
+        val details = cacheErrorDetails(error)
+        M3u8Log.error(
+            "progressive cache error taskId=$taskId source=$url " +
+                "retryCount=$retryCount bytes=$bytesCached/$bytesTotal " +
+                "cause=${details["cause"]} causeMessage=${details["causeMessage"]}",
+            error,
+        )
         mainHandler.post {
             eventSinkProvider()?.success(
                 baseEvent("error") + mapOf(
                     "error" to mapOf(
                         "code" to "cache_error",
                         "message" to (error.message ?: "Cache task failed."),
+                        "details" to details,
                     ),
                 ),
             )
         }
+    }
+
+    private fun cacheErrorDetails(error: Throwable): Map<String, Any?> {
+        return mapOf(
+            "platform" to "android",
+            "taskId" to taskId,
+            "owner" to "standalone",
+            "sourceType" to M3u8SourceType.PROGRESSIVE.platformValue(),
+            "url" to url,
+            "currentUrl" to url,
+            "retryCount" to retryCount,
+            "bytesCached" to bytesCached,
+            "bytesTotal" to bytesTotal,
+            "cause" to error.javaClass.name,
+            "causeMessage" to error.message,
+        )
     }
 
     private fun isCurrent(taskGeneration: Int): Boolean {

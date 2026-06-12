@@ -410,6 +410,8 @@ ValueListenableBuilder<M3u8PlayerValue>(
 - `size`
 - `error`
 
+播放错误会通过 `value.error` 暴露；debug 模式下插件会把播放错误、平台调用异常、缓存/下载错误及其 `diagnostics` 输出到控制台，example 也会用 SnackBar 提示关键错误。
+
 ### 项目架构
 
 ```text
@@ -446,12 +448,12 @@ example/
 - 进度事件默认约 250ms 一次，避免高频 channel 压力。
 - dispose 或 source 切换时释放 player、surface/texture、observer/timer、预取任务。
 - Android 播放器内部 HLS 预取使用 Media3 `HlsPlaylistParser` 解析 HLS，并通过 Media3 `CacheWriter` 写入 `SimpleCache`；独立 HLS/progressive 下载也写入同一个 `SimpleCache`，播放器可直接复用。
-- iOS HLS 播放通过 `AVAssetResourceLoader` 读取自定义 scheme，playlist、key、map、segment 和外部字幕请求会优先命中 app caches；progressive 独立下载完成后，新建播放器会优先使用本地缓存文件。
+- iOS HLS 播放主链路使用 AVPlayer 直接播放远程 HLS，以保持 AVFoundation 兼容性；独立预缓存仍可下载 HLS 资源并通过缓存/下载事件观测进度。progressive 独立下载完成后，新建播放器会优先使用本地缓存文件。
 - 磁盘缓存 key 会包含 URL 和请求 headers，避免同 URL 在不同 Authorization/Cookie/地区 header 下复用错误缓存。
 - `M3u8PlayerCache.precache` 可创建独立 HLS/MP4/MOV 下载任务，并通过独立 cache event channel 上报进度、完成、取消或错误；传入 `quality` 后会优先下载最接近该档位的 HLS variant。
 - 播放器内部预取不是下载任务，不进入 `tasks()` 和下载列表；下载列表只展示业务主动创建的独立任务。
 - 播放中建议降低 `maxConcurrentPrecacheTasks`，避免下载任务与播放器抢占网络和 IO；example 会对同一 source 去重，并在播放活跃时把独立下载并发降为 1。
-- HLS 播放器内部主动预取会跟随手动清晰度、自动降级恢复和 seek 位置重启，不再固定优先最高码率 variant。
+- Android HLS 播放器内部主动预取会跟随手动清晰度、自动降级恢复和 seek 位置重启，不再固定优先最高码率 variant；iOS HLS 播放不在播放主链路中接管 ResourceLoader。
 - Android 通过 ExoPlayer track/analytics 上报首帧、rebuffer、丢帧、当前码率和带宽估计；iOS 通过 AVPlayer access log 和视频轨道信息上报对应指标。rebuffer 总时长和清晰度切换次数可用于真实设备 QoE 统计。
 - 播放事件会携带 `diagnostics` 上下文，包括平台、session/source 标识、source type、播放位置、缓冲位置和缓存 key 状态，用于线上错误聚合与 QoE 归因；不要把业务敏感数据写入 `cacheKey` 或 URL 查询参数后直接上报。
 - Android 手动清晰度通过 `DefaultTrackSelector` 约束最高视频尺寸和码率；iOS 手动清晰度通过 ResourceLoader 过滤 HLS master variants。
@@ -508,7 +510,7 @@ cd example && flutter build ios --simulator --debug
 
 1. 检查包名、描述、版本、homepage、repository、issue_tracker、topics。
 2. 确认 `LICENSE`、`README.md`、`CHANGELOG.md` 存在且内容完整。
-3. 更新 `CHANGELOG.md` 中当前版本说明。
+3. 递增 `pubspec.yaml` 的版本号，并更新 `CHANGELOG.md` 中对应版本说明。pub.dev 不支持覆盖已经发布的版本，每次发布都必须使用新的版本号。
 4. 运行本地验证命令。
 5. 运行 dry-run：
 
@@ -910,6 +912,8 @@ Common fields:
 - `size`
 - `error`
 
+Playback errors are exposed through `value.error`. In debug mode, the plugin prints playback errors, platform-call exceptions, cache/download errors, and their `diagnostics` context to the console. The example app also surfaces important playback, download, and action failures through SnackBars.
+
 ### Architecture
 
 ```text
@@ -949,12 +953,12 @@ example/
 - Progress events are throttled to about 250ms.
 - dispose and source switching release native players, surfaces/textures, observers/timers, and active prefetch tasks.
 - Android player-owned HLS prefetch uses Media3 `HlsPlaylistParser` for HLS parsing and Media3 `CacheWriter` to write into `SimpleCache`. Standalone HLS/progressive downloads write into the same `SimpleCache`, which ExoPlayer can reuse directly.
-- iOS HLS playback uses `AVAssetResourceLoader` with a custom scheme. Playlist, key, map, segment, and external subtitle requests read from app caches first; progressive playback uses a local cache file after a standalone download completes.
+- iOS HLS playback uses direct remote-HLS AVPlayer playback as the primary path to preserve AVFoundation compatibility. Standalone HLS precache remains available and reports progress through cache/download events. Progressive playback uses a local cache file after a standalone download completes.
 - Disk cache keys include URL and request headers, so resources with different Authorization, Cookie, or region headers do not share stale cached data.
 - `M3u8PlayerCache.precache` creates standalone HLS/MP4/MOV download tasks with cache events for progress, completion, cancellation, and errors. Passing `quality` prioritizes the closest HLS variant for that rendition.
 - Player-owned prefetch is not a download task and does not appear in `tasks()` or the download list. The download list only shows app-owned standalone tasks.
 - During playback, reduce `maxConcurrentPrecacheTasks` to avoid network and IO contention. The example de-duplicates same-source downloads and lowers standalone download concurrency to 1 while playback is active.
-- HLS player-owned active prefetch follows manual quality, automatic recovery downshifts, and seek restarts instead of always prioritizing the highest bitrate variant.
+- Android HLS player-owned active prefetch follows manual quality, automatic recovery downshifts, and seek restarts instead of always prioritizing the highest bitrate variant. iOS HLS playback does not take over the playback path with ResourceLoader.
 - Android reports startup, rebuffer, dropped-frame, bitrate, and bandwidth metrics through ExoPlayer tracks/analytics. iOS reports the same metric class through AVPlayer access logs and video track data. Total rebuffer duration and quality switch count are available for real-device QoE analytics.
 - Playback events include `diagnostics` context with platform, session/source identifiers, source type, playback position, buffered position, and cache-key state for production error aggregation and QoE attribution. Do not put sensitive business data in `cacheKey` or URL query parameters if those values are forwarded to analytics.
 - Android manual quality constrains maximum video size and bitrate through `DefaultTrackSelector`; iOS manual quality filters HLS master variants through ResourceLoader.
@@ -1011,7 +1015,7 @@ Publishing a Flutter plugin to pub.dev is a standardized flow:
 
 1. Check package name, description, version, homepage, repository, issue_tracker, and topics.
 2. Make sure `LICENSE`, `README.md`, and `CHANGELOG.md` exist and are complete.
-3. Update the current version entry in `CHANGELOG.md`.
+3. Increment the `pubspec.yaml` version and update the matching `CHANGELOG.md` entry. pub.dev does not allow overwriting an already published version, so every release must use a new version number.
 4. Run local verification.
 5. Run a dry run:
 

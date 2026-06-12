@@ -122,19 +122,21 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
         }
         let isPlaylist = self.isPlaylist(url: originalUrl, data: data)
         if isPlaylist {
+          let isMaster = self.isMasterPlaylist(data: data)
+          let shouldInjectAudio = isMaster && self.prepareAudioPlaylist()
+          let shouldInjectSubtitles = isMaster && self.prepareSubtitlePlaylists()
           data = self.rewritePlaylist(
             data: data,
             playlistUrl: originalUrl,
-            selectedQuality: self.qualityProvider()
+            selectedQuality: self.qualityProvider(),
+            includeAudioGroup: shouldInjectAudio,
+            includeSubtitleGroup: shouldInjectSubtitles
           )
-          if self.isMasterPlaylist(data: data),
-             let audioUrl = self.audioUrl,
-             self.audioPlaylistData != nil || !self.audioPlaylistInjected
-          {
-            data = self.injectAudioMedia(data: data, audioUrl: audioUrl)
+          if shouldInjectAudio {
+            data = self.injectAudioMedia(data: data)
             self.audioPlaylistInjected = true
           }
-          if self.isMasterPlaylist(data: data), !self.externalSubtitles.isEmpty {
+          if shouldInjectSubtitles {
             data = self.injectSubtitleMedia(data: data)
           }
         }
@@ -199,7 +201,9 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
   private func rewritePlaylist(
     data: Data,
     playlistUrl: URL,
-    selectedQuality: [String: Any]
+    selectedQuality: [String: Any],
+    includeAudioGroup: Bool,
+    includeSubtitleGroup: Bool
   ) -> Data {
     guard let text = String(data: data, encoding: .utf8) else { return data }
     let selectedHeight = selectedQuality["height"] as? Int ?? 0
@@ -212,10 +216,10 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
       guard !line.isEmpty else { return rawLine }
       if line.hasPrefix("#EXT-X-STREAM-INF:") {
         var streamInf = rawLine
-        if audioUrl != nil {
+        if includeAudioGroup {
           streamInf = withAttribute(streamInf, name: "AUDIO", value: audioGroupId)
         }
-        if !externalSubtitles.isEmpty {
+        if includeSubtitleGroup {
           streamInf = withAttribute(streamInf, name: "SUBTITLES", value: subtitleGroupId)
         }
         pendingStreamInf = streamInf
@@ -338,19 +342,54 @@ final class M3u8ResourceLoader: NSObject, AVAssetResourceLoaderDelegate {
     return text.contains("#EXT-X-STREAM-INF:")
   }
 
-  private func injectAudioMedia(data: Data, audioUrl: URL) -> Data {
-    guard var text = String(data: data, encoding: .utf8) else { return data }
-    if audioPlaylistData == nil {
-      do {
-        let audioData = try cacheManager.data(for: audioUrl, headers: audioHeaders)
-        audioPlaylistData = Self.rewriteAudioPlaylist(
-          data: audioData,
-          playlistUrl: audioUrl
+  private func prepareAudioPlaylist() -> Bool {
+    guard let audioUrl else { return false }
+    if audioPlaylistData != nil {
+      return true
+    }
+    do {
+      let audioData = try cacheManager.data(for: audioUrl, headers: audioHeaders)
+      audioPlaylistData = Self.rewriteAudioPlaylist(
+        data: audioData,
+        playlistUrl: audioUrl
+      )
+      return audioPlaylistData != nil
+    } catch {
+      return false
+    }
+  }
+
+  private func prepareSubtitlePlaylists() -> Bool {
+    guard !externalSubtitles.isEmpty else { return false }
+    var didPrepareAny = false
+    for subtitle in externalSubtitles {
+      guard
+        let id = subtitle["id"] as? String,
+        !id.isEmpty,
+        let urlString = subtitle["url"] as? String,
+        let subtitleUrl = URL(string: urlString)
+      else {
+        continue
+      }
+      if subtitlePlaylistDataById[id] == nil {
+        let subtitleHeaders = subtitle["headers"] as? [String: String] ?? [:]
+        subtitlePlaylistDataById[id] = Self.rewriteSubtitlePlaylist(
+          subtitleUrl: subtitleUrl,
+          headers: subtitleHeaders,
+          cacheManager: cacheManager
         )
-      } catch {
-        return data
+      }
+      if subtitlePlaylistDataById[id] != nil {
+        didPrepareAny = true
       }
     }
+    return didPrepareAny
+  }
+
+  private func injectAudioMedia(data: Data) -> Data {
+    guard let audioUrl else { return data }
+    guard var text = String(data: data, encoding: .utf8) else { return data }
+    guard audioPlaylistData != nil else { return data }
     text = Self.removingMediaTags(from: text, type: "AUDIO", groupId: audioGroupId)
     let cachedAudioUrl = Self.audioPlaylistUrl(for: audioUrl)
     let audioTag = (

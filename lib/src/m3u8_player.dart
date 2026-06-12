@@ -21,14 +21,17 @@ class M3u8Player extends StatelessWidget {
       valueListenable: controller,
       builder: (BuildContext context, M3u8PlayerValue value, Widget? child) {
         final playerId = controller.playerId;
-        if (!value.isInitialized || playerId == null) {
+        if (playerId == null) {
           return ColoredBox(color: backgroundColor);
         }
 
         final texture = Texture(textureId: playerId);
+        final textureSize = value.size.width > 0 && value.size.height > 0
+            ? value.size
+            : const Size(16, 9);
         final sizedTexture = SizedBox(
-          width: value.size.width,
-          height: value.size.height,
+          width: textureSize.width,
+          height: textureSize.height,
           child: texture,
         );
 

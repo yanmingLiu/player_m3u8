@@ -13,12 +13,12 @@ import 'src/player_formatters.dart';
 import 'src/video_scaffold.dart';
 
 const String sampleM3u8Url =
-    'https://devstreaming-cdn.apple.com/videos/streaming/examples/bipbop_4x3/bipbop_4x3_variant.m3u8';
+    'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';
 const String _downloadRecordsPreferenceKey =
     'player_m3u8_example_download_records';
 
 const List<VideoSource> sampleVideos = <VideoSource>[
-  VideoSource(title: 'Apple BipBop', url: sampleM3u8Url),
+  VideoSource(title: 'Mux Big Buck Bunny', url: sampleM3u8Url),
   VideoSource(
     title: 'Apple Adv (音视频分离)',
     titleEn: 'Apple Advanced (separate audio/video)',
@@ -192,6 +192,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   Timer? _downloadListRefreshTimer;
   M3u8CacheEvent? _latestDownloadEvent;
   bool? _lastConfiguredPlaybackActive;
+  String? _lastReportedPlaybackErrorKey;
+  String? _lastReportedCacheErrorKey;
 
   ExampleStrings get _strings => ExampleStrings(_language);
 
@@ -233,6 +235,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
             : source.subtitles.first.id,
       );
       _controller.startQoeSampling(interval: const Duration(seconds: 5));
+    } catch (error) {
+      _showActionError(error);
     } finally {
       if (mounted) {
         setState(() {
@@ -269,6 +273,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
         ),
       );
       _qoeSnapshots.clear();
+    } catch (error) {
+      _showActionError(error);
     } finally {
       if (mounted) {
         setState(() {
@@ -280,6 +286,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
 
   void _handlePlaybackValue(M3u8PlayerValue value) {
     unawaited(_configureDownloadConcurrency(playbackActive: value.isPlaying));
+    _reportPlaybackError(value.error);
     if (!value.isCompleted) {
       _handledCompletion = false;
       return;
@@ -290,7 +297,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     _handledCompletion = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        unawaited(_advanceAfterCompletion());
+        unawaited(_runExampleAction(_advanceAfterCompletion));
       }
     });
   }
@@ -344,6 +351,9 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
       _latestDownloadEvent = event;
       _syncCacheTasksNotifier();
     });
+    if (event.type == M3u8CacheEventType.error) {
+      _reportCacheError(event);
+    }
     unawaited(_refreshCacheRuntimeState());
   }
 
@@ -461,7 +471,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
         strings: _strings,
         onPlay: (task) {
           Navigator.of(context).pop();
-          unawaited(_playDownloadedTask(task));
+          unawaited(_runExampleAction(() => _playDownloadedTask(task)));
         },
         onPause: (taskId) => _runCacheTaskAction(
           taskId,
@@ -502,6 +512,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
         await _controller.setQuality(quality);
       }
       _qoeSnapshots.clear();
+    } catch (error) {
+      _showActionError(error);
     } finally {
       if (mounted) {
         setState(() {
@@ -580,7 +592,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
       await _refreshCacheRuntimeState();
     } catch (error) {
       if (!error.toString().contains('unknown_cache_task')) {
-        rethrow;
+        _showActionError(error);
+        return;
       }
       if (!mounted) {
         return;
@@ -759,7 +772,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     if (!_controller.value.isInitialized) {
       return;
     }
-    unawaited(_controller.setPlaybackSpeed(speed));
+    unawaited(_runExampleAction(() => _controller.setPlaybackSpeed(speed)));
   }
 
   void _setAutoPlayNext(bool value) {
@@ -786,7 +799,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     } else {
       _precacheTaskId = null;
     }
-    await M3u8PlayerCache.cancelPrecache(taskId);
+    await _runExampleAction(() => M3u8PlayerCache.cancelPrecache(taskId));
   }
 
   void _cancelPrecacheTaskSilently() {
@@ -796,6 +809,61 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     }
     _precacheTaskId = null;
     unawaited(M3u8PlayerCache.cancelPrecache(taskId));
+  }
+
+  Future<void> _runExampleAction(Future<void> Function() action) async {
+    try {
+      await action();
+    } catch (error) {
+      _showActionError(error);
+    }
+  }
+
+  void _reportPlaybackError(M3u8PlayerError? error) {
+    if (error == null) {
+      _lastReportedPlaybackErrorKey = null;
+      return;
+    }
+    final key = '${error.code}:${error.message}:${error.details}';
+    if (_lastReportedPlaybackErrorKey == key) {
+      return;
+    }
+    _lastReportedPlaybackErrorKey = key;
+    _showErrorSnackBar(_strings.playbackErrorTitle, error.message);
+  }
+
+  void _reportCacheError(M3u8CacheEvent event) {
+    final error = event.error;
+    if (error == null) {
+      return;
+    }
+    final key = '${event.taskId}:${error.code}:${error.message}';
+    if (_lastReportedCacheErrorKey == key) {
+      return;
+    }
+    _lastReportedCacheErrorKey = key;
+    _showErrorSnackBar(_strings.cacheErrorTitle, error.message);
+  }
+
+  void _showActionError(Object error) {
+    _showErrorSnackBar(_strings.actionErrorTitle, error.toString());
+  }
+
+  void _showErrorSnackBar(String title, String message) {
+    if (!mounted) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$title: $message'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    });
   }
 
   Future<void> _copyLatestQoeSnapshot() async {
@@ -933,8 +1001,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                   onEnterFullscreen: _enterFullscreen,
                   onExitFullscreen: _exitFullscreen,
                   onEpisodeSelected: _selectVideo,
-                  onPrecache: _precacheCurrentSource,
-                  onShowDownloads: _showDownloadList,
+                  onPrecache: () => _runExampleAction(_precacheCurrentSource),
+                  onShowDownloads: () => _runExampleAction(_showDownloadList),
                   onSpeedSelected: _setPlaybackSpeed,
                   onAutoPlayNextChanged: _setAutoPlayNext,
                   onLoopModeChanged: _setLoopMode,
@@ -965,7 +1033,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                             isRunning: _precacheTaskId != null,
                             isSupported: sampleVideos[_currentVideoIndex]
                                 .supportsPrecache,
-                            onPrecache: _precacheCurrentSource,
+                            onPrecache: () =>
+                                _runExampleAction(_precacheCurrentSource),
                             onCancel: _cancelPrecacheTask,
                             strings: strings,
                           ),

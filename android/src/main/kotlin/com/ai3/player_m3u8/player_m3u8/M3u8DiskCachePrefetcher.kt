@@ -609,6 +609,14 @@ internal class M3u8DiskCachePrefetcher(
         if (!isCurrent(taskGeneration)) {
             return
         }
+        val details = cacheErrorDetails(error)
+        M3u8Log.error(
+            "cache error taskId=$cacheTaskId owner=$owner source=$url " +
+                "currentUrl=$currentUrl segment=$segmentIndex/$segmentCount " +
+                "retryCount=$retryCount cause=${details["cause"]} " +
+                "causeMessage=${details["causeMessage"]}",
+            error,
+        )
         status = "error"
         mainHandler.post {
             if (isCurrent(taskGeneration)) {
@@ -635,11 +643,30 @@ internal class M3u8DiskCachePrefetcher(
                         "error" to mapOf(
                             "code" to "cache_error",
                             "message" to (error.message ?: "Cache task failed."),
+                            "details" to details,
                         ),
                     ),
                 )
             }
         }
+    }
+
+    private fun cacheErrorDetails(error: Throwable): Map<String, Any?> {
+        return mapOf(
+            "platform" to "android",
+            "taskId" to taskId,
+            "owner" to owner,
+            "sourceType" to sourceType.platformValue(),
+            "url" to url,
+            "currentUrl" to currentUrl,
+            "segmentIndex" to segmentIndex,
+            "segmentCount" to segmentCount,
+            "retryCount" to retryCount,
+            "bytesCached" to bytesCached,
+            "bytesTotal" to bytesTotal,
+            "cause" to error.javaClass.name,
+            "causeMessage" to error.message,
+        ).filterValues { it != null }
     }
 
     private fun sendStatusEvent(eventName: String) {

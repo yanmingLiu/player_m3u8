@@ -632,7 +632,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
         }
         return
       }
-      let qualities = Self.parseQualities(from: text)
+      let qualities = Self.parseQualities(from: text, baseUrl: self.videoUrl)
       DispatchQueue.main.async { [weak self] in
         guard let self, !self.disposed else { return }
         self.availableQualities = qualities
@@ -641,30 +641,15 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     }.resume()
   }
 
-  private static func parseQualities(from text: String) -> [[String: Any]] {
-    var qualities: [[String: Any]] = []
-    for rawLine in text.components(separatedBy: .newlines) {
-      let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
-      guard line.hasPrefix("#EXT-X-STREAM-INF:") else { continue }
-      let resolution = parseAttribute(line, name: "RESOLUTION")
-      let parts = resolution?.split(separator: "x")
-      let width = Int(parts?.first ?? "") ?? 0
-      let height = Int(parts?.last ?? "") ?? 0
-      let bitrate = Int(parseAttribute(line, name: "BANDWIDTH") ?? "") ?? 0
-      qualities.append(Self.qualityPayload(width: width, height: height, bitrate: bitrate))
+  static func parseQualities(from text: String, baseUrl: URL) -> [[String: Any]] {
+    M3u8HlsPlaylistParser.parseVariants(in: text, baseUrl: baseUrl).map { variant in
+      Self.qualityPayload(
+        width: variant.width,
+        height: variant.height,
+        bitrate: variant.effectiveBitrate,
+        sourceId: M3u8HlsPlaylistParser.sourceId(for: variant.uri)
+      )
     }
-    var seen = Set<String>()
-    return qualities
-      .filter { quality in
-        let id = quality["id"] as? String ?? "unknown"
-        guard !seen.contains(id) else { return false }
-        seen.insert(id)
-        return true
-      }
-      .sorted {
-        (($0["height"] as? Int ?? 0), ($0["bitrate"] as? Int ?? 0)) >
-          (($1["height"] as? Int ?? 0), ($1["bitrate"] as? Int ?? 0))
-      }
   }
 
   private func sendInitializedIfReady() {
@@ -989,19 +974,6 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     return rebufferDurationMs + max(Int64(Date().timeIntervalSince(startedAt) * 1000), 0)
   }
 
-  private static func parseAttribute(_ line: String, name: String) -> String? {
-    let pattern = "\(name)=([^,]+)"
-    guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-    let range = NSRange(line.startIndex..<line.endIndex, in: line)
-    guard
-      let match = regex.firstMatch(in: line, range: range),
-      let valueRange = Range(match.range(at: 1), in: line)
-    else {
-      return nil
-    }
-    return String(line[valueRange]).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-  }
-
   private static func autoQuality() -> [String: Any] {
     [
       "id": "auto",
@@ -1069,7 +1041,12 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       audioUrl != nil
   }
 
-  private static func qualityPayload(width: Int, height: Int, bitrate: Int) -> [String: Any] {
+  private static func qualityPayload(
+    width: Int,
+    height: Int,
+    bitrate: Int,
+    sourceId: String? = nil
+  ) -> [String: Any] {
     let label: String
     let id: String
     if height > 0 {
@@ -1082,7 +1059,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       label = "Unknown"
       id = "unknown"
     }
-    return [
+    var payload: [String: Any] = [
       "id": id,
       "label": label,
       "width": max(width, 0),
@@ -1090,6 +1067,10 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       "bitrate": max(bitrate, 0),
       "isAuto": false,
     ]
+    if let sourceId {
+      payload["sourceId"] = sourceId
+    }
+    return payload
   }
 
   private func bufferedPositionMs() -> Int64 {
@@ -1129,8 +1110,8 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
       "platform": "ios",
       "sessionId": playbackSessionId,
       "sourceId": M3u8LogSourceId.value(for: videoUrl),
-      "url": videoUrl.absoluteString,
-      "assetUrl": asset.url.absoluteString,
+      "host": videoUrl.host as Any,
+      "assetHost": asset.url.host as Any,
       "sourceType": sourceType.platformValue,
       "hasCacheKey": !(cacheKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
       "hasHeaders": !videoHeaders.isEmpty,

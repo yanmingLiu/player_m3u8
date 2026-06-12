@@ -217,7 +217,7 @@ await M3u8PlayerCache.cancelPrecache(taskId);
 await M3u8PlayerCache.clear();
 ```
 
-缓存容量配置和全量清理要求当前没有活跃 native player 或独立下载任务；只调整 `maxConcurrentPrecacheTasks` 可在运行期调用，用于播放中降低后台下载并发。查询缓存状态、source 缓存状态和独立下载任务可在播放中调用。独立下载返回 `taskId`，进度通过 `M3u8PlayerCache.events()` 上报，可按 `taskId` 过滤，并支持暂停、恢复和取消。`precache` 可传入 `priority`、`maxRetries`、`metadata` 和 HLS `quality`；`configure` 可配置 `maxConcurrentPrecacheTasks`。Android HLS 下载复用 Media3 `HlsPlaylistParser` + `CacheWriter` + `SimpleCache`，progressive MP4/MOV 通过 Media3 `CacheWriter` 写入同一 `SimpleCache`；iOS HLS 复用 AVFoundation resource loader 同一套 app caches，progressive MP4/MOV 完整下载后下次播放优先复用本地缓存文件。默认缓存 key 包含 URL 和请求 headers，避免不同 Authorization/Cookie/地区 header 的资源互相复用；如果业务确认同一视频的短期签名 URL 可共享缓存，可在 `M3u8Source.cacheKey` 传入稳定业务 key。播放器 source 切换会取消播放器内部预取；业务自己发起的独立下载任务应按业务生命周期主动取消。
+缓存容量配置和全量清理要求当前没有活跃 native player 或独立下载任务；只调整 `maxConcurrentPrecacheTasks` 可在运行期调用，用于播放中降低后台下载并发。查询缓存状态、source 缓存状态和独立下载任务可在播放中调用。独立下载返回 `taskId`，进度通过 `M3u8PlayerCache.events()` 上报，可按 `taskId` 过滤，并支持暂停、恢复和取消。`precache` 可传入 `priority`、`maxRetries`、`metadata` 和 HLS `quality`；`configure` 可配置 `maxConcurrentPrecacheTasks`。Android HLS 下载复用 Media3 `HlsPlaylistParser` + `CacheWriter` + `SimpleCache`，progressive MP4/MOV 通过 Media3 `CacheWriter` 写入同一 `SimpleCache`；iOS HLS 播放主链路保持直接 AVPlayer 远程播放，独立 HLS 预缓存走 app caches，progressive MP4/MOV 完整下载后下次播放优先复用本地缓存文件。默认缓存 key 包含 URL 和请求 headers，避免不同 Authorization/Cookie/地区 header 的资源互相复用；如果业务确认同一视频的短期签名 URL 可共享缓存，可在 `M3u8Source.cacheKey` 传入稳定业务 key。播放器 source 切换会取消播放器内部预取；业务自己发起的独立下载任务应按业务生命周期主动取消。
 
 播放器内部磁盘缓存和独立下载任务是两条概念：内部缓存服务当前播放、seek 和短期复用，不进入下载列表；独立下载任务由业务调用 `precache` 创建，可展示任务状态、速度、字节、segment、错误，并支持暂停、恢复和取消。
 
@@ -251,7 +251,7 @@ await controller.setQuality(M3u8Quality.auto);
 await controller.setQuality(qualities.first);
 ```
 
-`M3u8Quality.auto` 使用平台播放器的自适应选择。手动清晰度会对 Android ExoPlayer 施加 track selector 约束；iOS 会在 `AVAssetResourceLoader` 返回给 AVPlayer 的 master playlist 中过滤到目标 variant。连续 rebuffer 或播放错误时，如果存在更低档 variant，播放器会自动降到下一档并尝试恢复到原播放位置；`recoveryCount` 和 `lastRecoveryReason` 可用于 UI 提示或埋点。
+`M3u8Quality.auto` 使用平台播放器的自适应选择。手动清晰度会对 Android ExoPlayer 施加 track selector 约束；iOS 当前 HLS 播放主链路不接管 `AVAssetResourceLoader`，因此清晰度列表可用于展示和独立预缓存选择，手动清晰度属于 best-effort，最终播放选择仍由 AVPlayer ABR 决定。连续 rebuffer 或播放错误时，如果存在更低档 variant，播放器会自动尝试降到下一档并恢复到原播放位置；`recoveryCount` 和 `lastRecoveryReason` 可用于 UI 提示或埋点。
 
 ### 播放倍速
 
@@ -456,7 +456,7 @@ example/
 - Android HLS 播放器内部主动预取会跟随手动清晰度、自动降级恢复和 seek 位置重启，不再固定优先最高码率 variant；iOS HLS 播放不在播放主链路中接管 ResourceLoader。
 - Android 通过 ExoPlayer track/analytics 上报首帧、rebuffer、丢帧、当前码率和带宽估计；iOS 通过 AVPlayer access log 和视频轨道信息上报对应指标。rebuffer 总时长和清晰度切换次数可用于真实设备 QoE 统计。
 - 播放事件会携带 `diagnostics` 上下文，包括平台、session/source 标识、source type、播放位置、缓冲位置和缓存 key 状态，用于线上错误聚合与 QoE 归因；不要把业务敏感数据写入 `cacheKey` 或 URL 查询参数后直接上报。
-- Android 手动清晰度通过 `DefaultTrackSelector` 约束最高视频尺寸和码率；iOS 手动清晰度通过 ResourceLoader 过滤 HLS master variants。
+- Android 手动清晰度通过 `DefaultTrackSelector` 约束最高视频尺寸和码率；iOS 当前 HLS 播放主链路保持直接 AVPlayer 远程播放，手动清晰度不再承诺强制过滤 master variants。
 - 连续 rebuffer 或播放错误触发自动降级恢复，保留当前位置；没有更低档可降时才向 Dart 上报播放错误。
 - seek 后会取消当前主动预取，并从目标时间对应的分片开始向后预取；已写入磁盘的数据保留复用。
 
@@ -719,7 +719,7 @@ await M3u8PlayerCache.cancelPrecache(taskId);
 await M3u8PlayerCache.clear();
 ```
 
-Changing cache capacity and clearing all cache require no active native players or standalone download tasks. Changing only `maxConcurrentPrecacheTasks` can be done at runtime, which lets apps reduce background download concurrency during playback. Cache info, source cache info, and standalone download tasks can run while playback is active. Standalone downloads return a `taskId`, emit progress through `M3u8PlayerCache.events()`, and support pause, resume, and cancel by `taskId`. `precache` accepts `priority`, `maxRetries`, `metadata`, and HLS `quality`; `configure` accepts `maxConcurrentPrecacheTasks`. Android HLS downloads reuse Media3 `HlsPlaylistParser`, `CacheWriter`, and `SimpleCache`, while progressive MP4/MOV uses Media3 `CacheWriter` into the same `SimpleCache`. iOS HLS reuses the AVFoundation resource loader app cache path, while progressive MP4/MOV reuses a fully cached local file on the next playback. Default cache keys include URL and request headers to avoid reusing data across different Authorization/Cookie/region headers. If your business URL is short-lived but identifies the same immutable video, pass a stable `M3u8Source.cacheKey`. Player source switching cancels player-owned prefetch; app-owned standalone download tasks should be cancelled according to app lifecycle.
+Changing cache capacity and clearing all cache require no active native players or standalone download tasks. Changing only `maxConcurrentPrecacheTasks` can be done at runtime, which lets apps reduce background download concurrency during playback. Cache info, source cache info, and standalone download tasks can run while playback is active. Standalone downloads return a `taskId`, emit progress through `M3u8PlayerCache.events()`, and support pause, resume, and cancel by `taskId`. `precache` accepts `priority`, `maxRetries`, `metadata`, and HLS `quality`; `configure` accepts `maxConcurrentPrecacheTasks`. Android HLS downloads reuse Media3 `HlsPlaylistParser`, `CacheWriter`, and `SimpleCache`, while progressive MP4/MOV uses Media3 `CacheWriter` into the same `SimpleCache`. iOS HLS playback stays on direct remote AVPlayer playback; standalone HLS precache uses app caches, while progressive MP4/MOV reuses a fully cached local file on the next playback. Default cache keys include URL and request headers to avoid reusing data across different Authorization/Cookie/region headers. If your business URL is short-lived but identifies the same immutable video, pass a stable `M3u8Source.cacheKey`. Player source switching cancels player-owned prefetch; app-owned standalone download tasks should be cancelled according to app lifecycle.
 
 Player-owned disk cache and standalone downloads are separate concepts. Player-owned cache serves current playback, seek, and short-term reuse, and does not appear in the download list. Standalone downloads are created by app calls to `precache`; they expose status, speed, bytes, segment progress, errors, and pause/resume/cancel controls.
 
@@ -753,7 +753,7 @@ await controller.setQuality(M3u8Quality.auto);
 await controller.setQuality(qualities.first);
 ```
 
-`M3u8Quality.auto` uses the platform player's adaptive selection. Manual quality constrains Android ExoPlayer through the track selector; iOS filters the master playlist returned by `AVAssetResourceLoader` to the target variant. After repeated rebuffering or playback errors, the player automatically steps down to a lower variant when one is available and tries to resume at the previous position. Use `recoveryCount` and `lastRecoveryReason` for UI hints or analytics.
+`M3u8Quality.auto` uses the platform player's adaptive selection. Manual quality constrains Android ExoPlayer through the track selector. iOS HLS playback currently does not take over the playback path with `AVAssetResourceLoader`, so the quality list is reliable for display and standalone precache selection, while manual playback quality is best-effort and the final rendition is still chosen by AVPlayer ABR. After repeated rebuffering or playback errors, the player automatically tries to step down to a lower variant when one is available and resume at the previous position. Use `recoveryCount` and `lastRecoveryReason` for UI hints or analytics.
 
 ### Playback Speed
 
@@ -961,7 +961,7 @@ example/
 - Android HLS player-owned active prefetch follows manual quality, automatic recovery downshifts, and seek restarts instead of always prioritizing the highest bitrate variant. iOS HLS playback does not take over the playback path with ResourceLoader.
 - Android reports startup, rebuffer, dropped-frame, bitrate, and bandwidth metrics through ExoPlayer tracks/analytics. iOS reports the same metric class through AVPlayer access logs and video track data. Total rebuffer duration and quality switch count are available for real-device QoE analytics.
 - Playback events include `diagnostics` context with platform, session/source identifiers, source type, playback position, buffered position, and cache-key state for production error aggregation and QoE attribution. Do not put sensitive business data in `cacheKey` or URL query parameters if those values are forwarded to analytics.
-- Android manual quality constrains maximum video size and bitrate through `DefaultTrackSelector`; iOS manual quality filters HLS master variants through ResourceLoader.
+- Android manual quality constrains maximum video size and bitrate through `DefaultTrackSelector`; iOS HLS playback currently stays on direct remote AVPlayer playback, so manual quality no longer promises forced master-variant filtering.
 - Repeated rebuffering or playback errors trigger automatic lower-quality recovery and preserve the playback position. Playback errors are reported to Dart only when no lower variant is available.
 - After seek, active prefetch is canceled and restarted from the segment that matches the target time. Already cached data remains reusable.
 

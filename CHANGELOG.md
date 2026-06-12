@@ -8,6 +8,7 @@
 - 修复 Flutter Texture 初始化死锁：拿到 native texture id 后即创建 `Texture`，在真实视频尺寸返回前使用 16:9 临时尺寸。
 - 播放、平台调用、缓存/下载错误现在会在 debug 控制台输出结构化上下文；example 会通过 SnackBar 反馈播放、下载和操作错误。
 - Android HLS/progressive 缓存错误事件新增 `details`，并同步输出 Logcat，方便定位任务、URL、分片、重试和底层异常。
+- 收紧 iOS 播放 diagnostics，不再输出完整播放 URL，并改用更稳健的 HLS master playlist parser 解析清晰度列表。
 - example 默认源切换为 Mux Big Buck Bunny，便于验证 iOS HLS 画面渲染。
 
 ### English
@@ -18,6 +19,7 @@
 - Fixed Flutter Texture initialization deadlock by creating the `Texture` as soon as the native texture id is available, using a temporary 16:9 size until the real video size is reported.
 - Playback, platform-call, cache, and download errors now print structured debug context; the example app surfaces playback, download, and action failures through SnackBars.
 - Android HLS/progressive cache error events now include `details` and Logcat output with task, URL, segment, retry, and underlying exception context.
+- Tightened iOS playback diagnostics so full playback URLs are no longer emitted, and switched HLS quality discovery to a more robust master-playlist parser.
 - Switched the example default source to Mux Big Buck Bunny for easier iOS HLS rendering verification.
 
 ## 0.1.0

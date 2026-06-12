@@ -31,14 +31,17 @@ public enum M3u8HlsPlaylistCapability {
     for rawLine in text.components(separatedBy: .newlines) {
       let line = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
       guard line.uppercased().hasPrefix("#EXT-X-KEY:") else { continue }
-      let method = attribute("METHOD", in: line).uppercased()
+      let attributes = M3u8HlsPlaylistParser.parseAttributes(
+        String(line.dropFirst("#EXT-X-KEY:".count))
+      )
+      let method = (attributes["METHOD"] ?? "").uppercased()
       if method.isEmpty || method == "NONE" {
         continue
       }
-      if attribute("URI", in: line).isEmpty {
+      if (attributes["URI"] ?? "").isEmpty {
         return "key_uri_missing"
       }
-      let keyFormat = attribute("KEYFORMAT", in: line)
+      let keyFormat = attributes["KEYFORMAT"] ?? ""
       if !keyFormat.isEmpty && keyFormat != "identity" {
         return "drm_keyformat_not_supported"
       }
@@ -46,18 +49,6 @@ public enum M3u8HlsPlaylistCapability {
     return nil
   }
 
-  private static func attribute(_ name: String, in line: String) -> String {
-    let pattern = "\(name)=([^,]+)"
-    guard let regex = try? NSRegularExpression(pattern: pattern) else { return "" }
-    let range = NSRange(line.startIndex..<line.endIndex, in: line)
-    guard
-      let match = regex.firstMatch(in: line, range: range),
-      let valueRange = Range(match.range(at: 1), in: line)
-    else {
-      return ""
-    }
-    return String(line[valueRange]).trimmingCharacters(in: CharacterSet(charactersIn: "\""))
-  }
 }
 
 final class M3u8DiskCachePrefetcher {

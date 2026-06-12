@@ -4,7 +4,7 @@
 #
 Pod::Spec.new do |s|
   s.name             = 'player_m3u8'
-  s.version          = '0.1.0'
+  s.version          = '0.1.2'
   s.summary          = 'A Flutter plugin for HLS/m3u8 playback.'
   s.description      = <<-DESC
 Texture-based HLS/m3u8 playback for iOS and Android Flutter apps.

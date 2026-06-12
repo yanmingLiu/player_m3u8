@@ -1,6 +1,6 @@
 name: player_m3u8
 description: Texture-based Flutter HLS/m3u8 player for iOS and Android with playback controls, events, playlist switching, and disk prefetch progress.
-version: 0.1.1
+version: 0.1.2
 homepage: https://github.com/yanmingLiu/player_m3u8
 repository: https://github.com/yanmingLiu/player_m3u8
 issue_tracker: https://github.com/yanmingLiu/player_m3u8/issues

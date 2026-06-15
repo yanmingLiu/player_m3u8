@@ -211,6 +211,36 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
   }
 
   @override
+  Future<double> getScreenBrightness() async {
+    try {
+      final brightness = await methodChannel.invokeMethod<double>(
+        'getScreenBrightness',
+      );
+      if (brightness == null) {
+        throw PlayerM3u8PlatformException(
+          'invalid_brightness',
+          'Platform returned a null brightness.',
+        );
+      }
+      return brightness.clamp(0.0, 1.0);
+    } on PlatformException catch (error) {
+      throw _mapPlatformException('getScreenBrightness', error);
+    }
+  }
+
+  @override
+  Future<void> setScreenBrightness(double brightness) async {
+    _debugAssertValidBrightness(brightness);
+    try {
+      await methodChannel.invokeMethod<void>('setScreenBrightness', {
+        'brightness': brightness,
+      });
+    } on PlatformException catch (error) {
+      throw _mapPlatformException('setScreenBrightness', error);
+    }
+  }
+
+  @override
   Future<void> setSubtitle(int playerId, String? subtitleId) async {
     try {
       await methodChannel.invokeMethod<void>('setSubtitle', {
@@ -470,6 +500,19 @@ void _debugAssertValidVolume(double volume) {
     throw ArgumentError.value(
       volume,
       'volume',
+      'Must be finite and between 0.0 and 1.0.',
+    );
+  }
+}
+
+void _debugAssertValidBrightness(double brightness) {
+  if (brightness < 0 ||
+      brightness > 1 ||
+      brightness.isNaN ||
+      brightness.isInfinite) {
+    throw ArgumentError.value(
+      brightness,
+      'brightness',
       'Must be finite and between 0.0 and 1.0.',
     );
   }

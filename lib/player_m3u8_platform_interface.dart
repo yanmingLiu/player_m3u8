@@ -82,6 +82,14 @@ abstract class PlayerM3u8Platform extends PlatformInterface {
     throw UnimplementedError('setMuted() has not been implemented.');
   }
 
+  Future<double> getScreenBrightness() {
+    throw UnimplementedError('getScreenBrightness() has not been implemented.');
+  }
+
+  Future<void> setScreenBrightness(double brightness) {
+    throw UnimplementedError('setScreenBrightness() has not been implemented.');
+  }
+
   Future<void> setSubtitle(int playerId, String? subtitleId) {
     throw UnimplementedError('setSubtitle() has not been implemented.');
   }

@@ -1,3 +1,19 @@
+## 0.1.3
+
+### 中文
+
+- 新增可选 `M3u8PlayerGestureControls` 手势层：播放区域左侧上下滑动调节亮度，右侧上下滑动调节播放器内音量，左右滑动预览并在松手后 seek。
+- 新增屏幕亮度平台能力；Android 调节当前 Activity window 亮度，iOS 调节 `UIScreen.main.brightness`。
+- 手势层默认不内置进 `M3u8Player`，业务需要时显式包裹；也可以通过 `M3u8GestureControlsConfig` 关闭整体手势、单项手势或模拟器亮度遮罩兜底。
+- example 播放区域接入手势层，并优化竖屏嵌套滚动列表时的手势识别。
+
+### English
+
+- Added optional `M3u8PlayerGestureControls`: vertical drags on the left adjust brightness, vertical drags on the right adjust player volume, and horizontal drags preview and seek on release.
+- Added screen-brightness platform APIs. Android adjusts the current Activity window brightness, and iOS adjusts `UIScreen.main.brightness`.
+- Gesture controls are not built into `M3u8Player` by default. Apps opt in by wrapping the player and can disable all gestures, individual gestures, or the simulator-friendly brightness dimming fallback through `M3u8GestureControlsConfig`.
+- The example player now uses the gesture layer and handles portrait nested-scroll playback areas more reliably.
+
 ## 0.1.2
 
 ### 中文

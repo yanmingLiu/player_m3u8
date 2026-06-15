@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:player_m3u8/player_m3u8.dart';
 import 'package:player_m3u8_example/main.dart';
+import 'package:player_m3u8_example/src/example_panels.dart';
 import 'package:player_m3u8_example/src/example_strings.dart';
 import 'package:player_m3u8_example/src/video_scaffold.dart';
 

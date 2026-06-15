@@ -45,6 +45,34 @@ internal class PlayerM3u8PluginTest {
     }
 
     @Test
+    fun onMethodCall_getScreenBrightnessWithoutActivity_returnsError() {
+        val plugin = PlayerM3u8Plugin()
+        val result: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+
+        plugin.onMethodCall(MethodCall("getScreenBrightness", null), result)
+
+        Mockito.verify(result).error(
+            Mockito.eq("activity_unavailable"),
+            Mockito.anyString(),
+            Mockito.isNull(),
+        )
+    }
+
+    @Test
+    fun onMethodCall_setScreenBrightnessInvalidValue_returnsError() {
+        val plugin = PlayerM3u8Plugin()
+        val result: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)
+
+        plugin.onMethodCall(MethodCall("setScreenBrightness", mapOf("brightness" to 1.2)), result)
+
+        Mockito.verify(result).error(
+            Mockito.eq("invalid_brightness"),
+            Mockito.anyString(),
+            Mockito.isNull(),
+        )
+    }
+
+    @Test
     fun onMethodCall_precacheInvalidUrl_returnsError() {
         val plugin = PlayerM3u8Plugin()
         val result: MethodChannel.Result = Mockito.mock(MethodChannel.Result::class.java)

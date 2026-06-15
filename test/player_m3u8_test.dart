@@ -1,6 +1,5 @@
 import 'dart:async';
-import 'dart:ui';
-
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:player_m3u8/player_m3u8.dart';
 import 'package:player_m3u8/player_m3u8_platform_interface.dart';
@@ -39,6 +38,8 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   double? selectedPlaybackSpeed;
   double? selectedVolume;
   bool? selectedMuted;
+  double brightness = 0.5;
+  double? selectedBrightness;
   M3u8RecoveryPolicy? recoveryPolicy;
   int? configuredCacheBytes;
   int? configuredMaxConcurrentPrecacheTasks;
@@ -124,6 +125,15 @@ class FakePlayerM3u8Platform extends PlayerM3u8Platform
   @override
   Future<void> setMuted(int playerId, bool isMuted) async {
     selectedMuted = isMuted;
+  }
+
+  @override
+  Future<double> getScreenBrightness() async => brightness;
+
+  @override
+  Future<void> setScreenBrightness(double brightness) async {
+    selectedBrightness = brightness;
+    this.brightness = brightness;
   }
 
   @override
@@ -1104,6 +1114,100 @@ void main() {
     await subscription.cancel();
     await platform.eventController.close();
     await platform.cacheEventController.close();
+  });
+
+  test('gesture calculator locks side and clamps values', () {
+    const calculator = M3u8GestureDragCalculator(
+      size: Size(300, 200),
+      startPosition: Offset(50, 100),
+      startPlaybackPosition: Duration(seconds: 30),
+      duration: Duration(seconds: 100),
+      startBrightness: 0.4,
+      startVolume: 0.6,
+      seekSensitivity: 1,
+      verticalSensitivity: 1,
+    );
+
+    expect(calculator.isLeftSide, isTrue);
+    expect(calculator.brightnessFor(const Offset(0, -400)), 1);
+    expect(calculator.volumeFor(const Offset(0, 400)), 0);
+    expect(
+      calculator.seekPositionFor(const Offset(150, 0)),
+      const Duration(seconds: 60),
+    );
+    expect(calculator.seekPositionFor(const Offset(-300, 0)), Duration.zero);
+  });
+
+  testWidgets('gesture controls render child and forward taps', (tester) async {
+    final platform = FakePlayerM3u8Platform();
+    PlayerM3u8Platform.instance = platform;
+    final controller = M3u8PlayerController();
+    addTearDown(platform.eventController.close);
+    addTearDown(platform.cacheEventController.close);
+    addTearDown(controller.dispose);
+
+    var tapped = false;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 300,
+          height: 200,
+          child: M3u8PlayerGestureControls(
+            controller: controller,
+            onTap: () {
+              tapped = true;
+            },
+            child: const ColoredBox(color: Color(0xFF000000)),
+          ),
+        ),
+      ),
+    );
+
+    expect(find.byType(M3u8PlayerGestureControls), findsOneWidget);
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ColoredBox && widget.color == const Color(0xFF000000),
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(find.byType(M3u8PlayerGestureControls));
+    expect(tapped, isTrue);
+  });
+
+  testWidgets('gesture controls render brightness dimming fallback', (
+    tester,
+  ) async {
+    final platform = FakePlayerM3u8Platform();
+    PlayerM3u8Platform.instance = platform;
+    final controller = M3u8PlayerController();
+    addTearDown(platform.eventController.close);
+    addTearDown(platform.cacheEventController.close);
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SizedBox(
+          width: 300,
+          height: 200,
+          child: M3u8PlayerGestureControls(
+            controller: controller,
+            child: const ColoredBox(color: Color(0xFF000000)),
+          ),
+        ),
+      ),
+    );
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is ColoredBox &&
+            widget.color == const Color.fromRGBO(0, 0, 0, 0.325),
+      ),
+      findsOneWidget,
+    );
   });
 }
 

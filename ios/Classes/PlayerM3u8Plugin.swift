@@ -157,6 +157,27 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
         player.setMuted(isMuted)
         result(nil)
       }
+    case "getScreenBrightness":
+      result(Double(UIScreen.main.brightness))
+    case "setScreenBrightness":
+      guard
+        let arguments = call.arguments as? [String: Any],
+        let brightness = arguments["brightness"] as? NSNumber,
+        brightness.doubleValue.isFinite,
+        brightness.doubleValue >= 0,
+        brightness.doubleValue <= 1
+      else {
+        result(
+          FlutterError(
+            code: "invalid_brightness",
+            message: "brightness must be finite and between 0.0 and 1.0.",
+            details: nil
+          )
+        )
+        return
+      }
+      UIScreen.main.brightness = CGFloat(brightness.doubleValue)
+      result(nil)
     case "setSubtitle":
       withPlayer(call: call, result: result) { player in
         let arguments = call.arguments as? [String: Any]

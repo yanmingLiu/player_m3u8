@@ -95,8 +95,8 @@ class _ExampleVideoScaffoldState extends State<ExampleVideoScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final content = GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    final content = M3u8PlayerGestureControls(
+      controller: widget.controller,
       onTap: _toggleControls,
       child: Stack(
         fit: StackFit.expand,

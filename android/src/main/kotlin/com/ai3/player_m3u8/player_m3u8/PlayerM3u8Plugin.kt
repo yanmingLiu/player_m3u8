@@ -1,6 +1,9 @@
 package com.ai3.player_m3u8.player_m3u8
 
 import android.content.Context
+import android.app.Activity
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.embedding.engine.plugins.FlutterPlugin
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -10,12 +13,13 @@ import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.view.TextureRegistry
 import java.util.UUID
 
-class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.StreamHandler {
+class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, EventChannel.StreamHandler {
     private lateinit var context: Context
     private lateinit var textures: TextureRegistry
     private lateinit var methodChannel: MethodChannel
     private lateinit var eventChannel: EventChannel
     private lateinit var cacheEventChannel: EventChannel
+    private var activity: Activity? = null
     private val players = mutableMapOf<Long, M3u8AndroidPlayer>()
     private val cacheTasks = mutableMapOf<String, M3u8CacheTaskHandle>()
     private var eventSink: EventChannel.EventSink? = null
@@ -112,6 +116,8 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
                 player.setMuted(isMuted)
                 result.success(null)
             }
+            "getScreenBrightness" -> getScreenBrightness(result)
+            "setScreenBrightness" -> setScreenBrightness(call, result)
             "setSubtitle" -> withPlayer(call, result) { player ->
                 val subtitleId = call.argument<String>("subtitleId")
                 player.setSubtitle(subtitleId)
@@ -163,6 +169,22 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
         cacheTasks.clear()
         eventSink = null
         cacheEventSink = null
+    }
+
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        activity = binding.activity
+    }
+
+    override fun onDetachedFromActivityForConfigChanges() {
+        activity = null
+    }
+
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        activity = binding.activity
+    }
+
+    override fun onDetachedFromActivity() {
+        activity = null
     }
 
     private fun create(call: MethodCall, result: Result) {
@@ -237,6 +259,50 @@ class PlayerM3u8Plugin() : FlutterPlugin, MethodCallHandler, EventChannel.Stream
         )
         players[surfaceProducer.id()] = player
         result.success(surfaceProducer.id())
+    }
+
+    private fun getScreenBrightness(result: Result) {
+        val currentActivity = activity
+        if (currentActivity == null) {
+            result.error("activity_unavailable", "Activity is unavailable.", null)
+            return
+        }
+        currentActivity.runOnUiThread {
+            val windowBrightness = currentActivity.window.attributes.screenBrightness
+            val brightness = if (windowBrightness >= 0f) {
+                windowBrightness
+            } else {
+                android.provider.Settings.System.getInt(
+                    currentActivity.contentResolver,
+                    android.provider.Settings.System.SCREEN_BRIGHTNESS,
+                    125,
+                ) / 255f
+            }
+            result.success(brightness.coerceIn(0f, 1f).toDouble())
+        }
+    }
+
+    private fun setScreenBrightness(call: MethodCall, result: Result) {
+        val brightness = call.argument<Number>("brightness")?.toFloat()
+        if (brightness == null || brightness.isNaN() || brightness.isInfinite() || brightness < 0f || brightness > 1f) {
+            result.error(
+                "invalid_brightness",
+                "brightness must be finite and between 0.0 and 1.0.",
+                null,
+            )
+            return
+        }
+        val currentActivity = activity
+        if (currentActivity == null) {
+            result.error("activity_unavailable", "Activity is unavailable.", null)
+            return
+        }
+        currentActivity.runOnUiThread {
+            val attributes = currentActivity.window.attributes
+            attributes.screenBrightness = brightness
+            currentActivity.window.attributes = attributes
+            result.success(null)
+        }
     }
 
     private fun configureCache(call: MethodCall, result: Result) {

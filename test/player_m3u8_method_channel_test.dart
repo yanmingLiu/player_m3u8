@@ -50,6 +50,9 @@ void main() {
           if (methodCall.method == 'precache') {
             return 'cache-task-1';
           }
+          if (methodCall.method == 'getScreenBrightness') {
+            return 0.65;
+          }
           return null;
         });
   });
@@ -299,6 +302,26 @@ void main() {
   test('setVolume rejects invalid volume', () {
     expect(platform.setVolume(3, -0.1), throwsArgumentError);
     expect(platform.setVolume(3, 1.1), throwsArgumentError);
+  });
+
+  test('getScreenBrightness returns platform brightness', () async {
+    final brightness = await platform.getScreenBrightness();
+
+    expect(brightness, 0.65);
+    expect(log.single.method, 'getScreenBrightness');
+    expect(log.single.arguments, isNull);
+  });
+
+  test('setScreenBrightness sends brightness', () async {
+    await platform.setScreenBrightness(0.4);
+
+    expect(log.single.method, 'setScreenBrightness');
+    expect(log.single.arguments, {'brightness': 0.4});
+  });
+
+  test('setScreenBrightness rejects invalid brightness', () {
+    expect(platform.setScreenBrightness(-0.1), throwsArgumentError);
+    expect(platform.setScreenBrightness(1.1), throwsArgumentError);
   });
 
   test('setMuted sends player id and muted flag', () async {

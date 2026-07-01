@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:player_m3u8/player_m3u8.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'src/example_panels.dart';
@@ -35,16 +36,29 @@ class PlayerM3u8ExampleApp extends StatelessWidget {
 }
 
 typedef M3u8ControllerFactory = M3u8PlayerController Function();
+typedef OrientationSetter =
+    Future<void> Function(List<DeviceOrientation> orientations);
+typedef SystemUiModeSetter = Future<void> Function(SystemUiMode mode);
+typedef PhysicalOrientationStreamFactory =
+    Stream<PhysicalDeviceOrientation> Function();
+
+enum PhysicalDeviceOrientation { portrait, landscape }
 
 class PlayerExamplePage extends StatefulWidget {
   const PlayerExamplePage({
     super.key,
     this.controllerFactory,
     this.autoInitialize = true,
+    this.orientationSetter,
+    this.systemUiModeSetter,
+    this.physicalOrientationStreamFactory,
   });
 
   final M3u8ControllerFactory? controllerFactory;
   final bool autoInitialize;
+  final OrientationSetter? orientationSetter;
+  final SystemUiModeSetter? systemUiModeSetter;
+  final PhysicalOrientationStreamFactory? physicalOrientationStreamFactory;
 
   @override
   State<PlayerExamplePage> createState() => _PlayerExamplePageState();
@@ -54,13 +68,23 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   late final M3u8PlayerController _controller;
   StreamSubscription<M3u8QoeSnapshot>? _qoeSubscription;
   StreamSubscription<M3u8CacheEvent>? _cacheSubscription;
+  StreamSubscription<PhysicalDeviceOrientation>?
+  _physicalOrientationSubscription;
   final List<M3u8QoeSnapshot> _qoeSnapshots = <M3u8QoeSnapshot>[];
   ExampleLanguage _language = ExampleLanguage.zh;
   bool _initializing = true;
   bool _switching = false;
   bool _isFullscreen = false;
+  bool _fullscreenPinnedLandscape = false;
+  bool _fullscreenEnteredManually = false;
+  bool _fullscreenAwaitingLandscape = false;
+  bool _fullscreenReachedLandscape = false;
+  bool _fullscreenRotationGuardActive = false;
+  bool _landscapeControlsLocked = false;
   bool _autoPlayNext = true;
   ExampleLoopMode _loopMode = ExampleLoopMode.none;
+  Orientation? _lastLayoutOrientation;
+  PhysicalDeviceOrientation? _lastPhysicalOrientation;
   bool _handledCompletion = false;
   int _currentVideoIndex = 0;
   String? _precacheTaskId;
@@ -70,6 +94,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   final ValueNotifier<List<M3u8CacheTask>> _cacheTasksNotifier =
       ValueNotifier<List<M3u8CacheTask>>(const <M3u8CacheTask>[]);
   Timer? _downloadListRefreshTimer;
+  Timer? _fullscreenRotationGuardTimer;
   M3u8CacheEvent? _latestDownloadEvent;
   bool? _lastConfiguredPlaybackActive;
   String? _lastReportedPlaybackErrorKey;
@@ -83,6 +108,9 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     _controller = widget.controllerFactory?.call() ?? M3u8PlayerController();
     _qoeSubscription = _controller.qoeSnapshots.listen(_handleQoeSnapshot);
     _cacheSubscription = M3u8PlayerCache.events().listen(_handleCacheEvent);
+    _physicalOrientationSubscription = _physicalOrientationStream().listen(
+      _handlePhysicalOrientation,
+    );
     if (widget.autoInitialize) {
       _initialize();
     } else {
@@ -94,7 +122,9 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
   void dispose() {
     _qoeSubscription?.cancel();
     _cacheSubscription?.cancel();
+    _physicalOrientationSubscription?.cancel();
     _downloadListRefreshTimer?.cancel();
+    _fullscreenRotationGuardTimer?.cancel();
     _cacheTasksNotifier.dispose();
     _cancelPrecacheTaskSilently();
     unawaited(_restorePortraitChrome());
@@ -770,7 +800,65 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     });
   }
 
-  Future<void> _enterFullscreen() async {
+  Stream<PhysicalDeviceOrientation> _physicalOrientationStream() {
+    final factory = widget.physicalOrientationStreamFactory;
+    if (factory != null) {
+      return factory().distinct();
+    }
+    return accelerometerEventStream(
+          samplingPeriod: SensorInterval.normalInterval,
+        )
+        .map(_physicalOrientationFromAccelerometer)
+        .where((orientation) => orientation != null)
+        .cast<PhysicalDeviceOrientation>()
+        .distinct();
+  }
+
+  PhysicalDeviceOrientation? _physicalOrientationFromAccelerometer(
+    AccelerometerEvent event,
+  ) {
+    final horizontalGravity = event.x.abs();
+    final verticalGravity = event.y.abs();
+    const gravityThreshold = 6.5;
+    const dominanceRatio = 1.25;
+    if (horizontalGravity >= gravityThreshold &&
+        horizontalGravity >= verticalGravity * dominanceRatio) {
+      return PhysicalDeviceOrientation.landscape;
+    }
+    if (verticalGravity >= gravityThreshold &&
+        verticalGravity >= horizontalGravity * dominanceRatio) {
+      return PhysicalDeviceOrientation.portrait;
+    }
+    return null;
+  }
+
+  void _handlePhysicalOrientation(PhysicalDeviceOrientation orientation) {
+    _lastPhysicalOrientation = orientation;
+    if (!_isFullscreen || !mounted) {
+      return;
+    }
+    if (orientation == PhysicalDeviceOrientation.landscape) {
+      if (_fullscreenEnteredManually) {
+        setState(() {
+          _fullscreenEnteredManually = false;
+          _fullscreenAwaitingLandscape = false;
+          _fullscreenReachedLandscape = true;
+          _fullscreenRotationGuardActive = false;
+        });
+        _fullscreenRotationGuardTimer?.cancel();
+      }
+      return;
+    }
+    if (orientation == PhysicalDeviceOrientation.portrait &&
+        !_fullscreenEnteredManually &&
+        !_fullscreenAwaitingLandscape &&
+        !_fullscreenRotationGuardActive &&
+        !_landscapeControlsLocked) {
+      unawaited(_exitFullscreen());
+    }
+  }
+
+  Future<void> _enterFullscreen({bool enteredByRotation = false}) async {
     if (_isFullscreen) {
       return;
     }
@@ -785,12 +873,25 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     );
     setState(() {
       _isFullscreen = true;
+      _fullscreenPinnedLandscape = !enteredByRotation;
+      _fullscreenEnteredManually = !enteredByRotation;
+      _fullscreenAwaitingLandscape = !enteredByRotation;
+      _fullscreenReachedLandscape = enteredByRotation;
+      _fullscreenRotationGuardActive = !enteredByRotation;
     });
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    await SystemChrome.setPreferredOrientations(const [
+    await _setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    if (enteredByRotation) {
+      await _applyOrientationPolicy();
+      return;
+    }
+    await _setPreferredOrientations(const [
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
+    _startFullscreenRotationGuard();
+    if (_lastPhysicalOrientation == PhysicalDeviceOrientation.landscape) {
+      _handlePhysicalOrientation(PhysicalDeviceOrientation.landscape);
+    }
   }
 
   Future<void> _exitFullscreen() async {
@@ -799,8 +900,51 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
     }
     setState(() {
       _isFullscreen = false;
+      _fullscreenPinnedLandscape = false;
+      _fullscreenEnteredManually = false;
+      _fullscreenAwaitingLandscape = false;
+      _fullscreenReachedLandscape = false;
+      _fullscreenRotationGuardActive = false;
+      _landscapeControlsLocked = false;
     });
     await _restorePortraitChrome();
+  }
+
+  Future<void> _setLandscapeControlsLocked(bool locked) async {
+    if (_landscapeControlsLocked == locked) {
+      return;
+    }
+    setState(() {
+      _landscapeControlsLocked = locked;
+    });
+    await _applyOrientationPolicy();
+  }
+
+  Future<void> _applyOrientationPolicy() async {
+    if (_isFullscreen &&
+        (_fullscreenPinnedLandscape || _landscapeControlsLocked)) {
+      await _setPreferredOrientations(const [
+        DeviceOrientation.landscapeLeft,
+        DeviceOrientation.landscapeRight,
+      ]);
+      return;
+    }
+    await _setPreferredOrientations(const <DeviceOrientation>[]);
+  }
+
+  void _startFullscreenRotationGuard() {
+    _fullscreenRotationGuardTimer?.cancel();
+    _fullscreenRotationGuardTimer = Timer(
+      const Duration(milliseconds: 1200),
+      () {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _fullscreenRotationGuardActive = false;
+        });
+      },
+    );
   }
 
   Future<void> _restorePortraitChrome() async {
@@ -813,15 +957,68 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
         systemNavigationBarIconBrightness: Brightness.light,
       ),
     );
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    await SystemChrome.setPreferredOrientations(const [
-      DeviceOrientation.portraitUp,
-    ]);
+    await _setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    await _applyOrientationPolicy();
+  }
+
+  Future<void> _setPreferredOrientations(List<DeviceOrientation> orientations) {
+    final setter = widget.orientationSetter;
+    if (setter != null) {
+      return setter(orientations);
+    }
+    return SystemChrome.setPreferredOrientations(orientations);
+  }
+
+  Future<void> _setEnabledSystemUIMode(SystemUiMode mode) {
+    final setter = widget.systemUiModeSetter;
+    if (setter != null) {
+      return setter(mode);
+    }
+    return SystemChrome.setEnabledSystemUIMode(mode);
+  }
+
+  void _syncFullscreenWithOrientation(Orientation orientation) {
+    final previousOrientation = _lastLayoutOrientation;
+    _lastLayoutOrientation = orientation;
+    if (previousOrientation == null || previousOrientation == orientation) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      if (_isFullscreen && orientation == Orientation.landscape) {
+        _fullscreenRotationGuardTimer?.cancel();
+        setState(() {
+          _fullscreenAwaitingLandscape = false;
+          _fullscreenReachedLandscape = true;
+          _fullscreenRotationGuardActive = false;
+        });
+        unawaited(_applyOrientationPolicy());
+        return;
+      }
+      if (orientation == Orientation.landscape && !_isFullscreen) {
+        unawaited(_enterFullscreen(enteredByRotation: true));
+        return;
+      }
+      if (orientation == Orientation.portrait &&
+          _isFullscreen &&
+          !_fullscreenEnteredManually &&
+          _fullscreenReachedLandscape &&
+          !_fullscreenAwaitingLandscape &&
+          !_fullscreenRotationGuardActive &&
+          _lastPhysicalOrientation != PhysicalDeviceOrientation.landscape &&
+          !_landscapeControlsLocked) {
+        unawaited(_exitFullscreen());
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final strings = _strings;
+    final orientation = MediaQuery.orientationOf(context);
+    _syncFullscreenWithOrientation(orientation);
     return Scaffold(
       backgroundColor: _isFullscreen ? Colors.black : null,
       appBar: _isFullscreen
@@ -871,6 +1068,7 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                   sourceType: sampleVideos[_currentVideoIndex].sourceType,
                   strings: strings,
                   isFullscreen: _isFullscreen,
+                  controlsLocked: _landscapeControlsLocked,
                   isBusy: _initializing || _switching,
                   isPrecacheRunning: _precacheTaskId != null,
                   precacheSupported:
@@ -880,6 +1078,8 @@ class _PlayerExamplePageState extends State<PlayerExamplePage> {
                   onBack: _isFullscreen ? _exitFullscreen : null,
                   onEnterFullscreen: _enterFullscreen,
                   onExitFullscreen: _exitFullscreen,
+                  onControlsLockedChanged: (locked) =>
+                      unawaited(_setLandscapeControlsLocked(locked)),
                   onEpisodeSelected: _selectVideo,
                   onPrecache: () => _runExampleAction(_precacheCurrentSource),
                   onShowDownloads: () => _runExampleAction(_showDownloadList),

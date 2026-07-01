@@ -84,6 +84,8 @@ class ExampleStrings {
   String get unknown => _isZh ? '未知' : 'unknown';
   String get moreTooltip => _isZh ? '更多' : 'More';
   String get fullscreenTooltip => _isZh ? '全屏' : 'Fullscreen';
+  String get lockControlsTooltip => _isZh ? '锁定控制' : 'Lock controls';
+  String get unlockControlsTooltip => _isZh ? '解锁控制' : 'Unlock controls';
   String get episodesLabel => _isZh ? '选集' : 'Episodes';
   String episodeCount(int count) => _isZh ? '（共$count集）' : ' ($count episodes)';
   String episodeNumber(int index) => _isZh ? '$index 集' : 'Episode $index';

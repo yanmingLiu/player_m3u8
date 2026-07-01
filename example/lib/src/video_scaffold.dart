@@ -20,6 +20,7 @@ class ExampleVideoScaffold extends StatefulWidget {
     required this.sourceType,
     required this.strings,
     required this.isFullscreen,
+    required this.controlsLocked,
     required this.isBusy,
     required this.isPrecacheRunning,
     required this.precacheSupported,
@@ -28,6 +29,7 @@ class ExampleVideoScaffold extends StatefulWidget {
     required this.onBack,
     required this.onEnterFullscreen,
     required this.onExitFullscreen,
+    required this.onControlsLockedChanged,
     required this.onEpisodeSelected,
     required this.onPrecache,
     required this.onShowDownloads,
@@ -44,6 +46,7 @@ class ExampleVideoScaffold extends StatefulWidget {
   final M3u8SourceType sourceType;
   final ExampleStrings strings;
   final bool isFullscreen;
+  final bool controlsLocked;
   final bool isBusy;
   final bool isPrecacheRunning;
   final bool precacheSupported;
@@ -52,6 +55,7 @@ class ExampleVideoScaffold extends StatefulWidget {
   final VoidCallback? onBack;
   final VoidCallback onEnterFullscreen;
   final VoidCallback onExitFullscreen;
+  final ValueChanged<bool> onControlsLockedChanged;
   final ValueChanged<int> onEpisodeSelected;
   final VoidCallback onPrecache;
   final VoidCallback onShowDownloads;
@@ -80,6 +84,7 @@ class _ExampleVideoScaffoldState extends State<ExampleVideoScaffold> {
   void didUpdateWidget(covariant ExampleVideoScaffold oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isFullscreen != oldWidget.isFullscreen ||
+        widget.controlsLocked != oldWidget.controlsLocked ||
         widget.value.isPlaying != oldWidget.value.isPlaying ||
         widget.value.isBuffering != oldWidget.value.isBuffering ||
         widget.value.hasError != oldWidget.value.hasError) {
@@ -95,17 +100,33 @@ class _ExampleVideoScaffoldState extends State<ExampleVideoScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    final gestureConfig = widget.controlsLocked
+        ? const M3u8GestureControlsConfig(enabled: false)
+        : const M3u8GestureControlsConfig();
     final content = M3u8PlayerGestureControls(
       controller: widget.controller,
+      config: gestureConfig,
       onTap: _toggleControls,
       child: Stack(
         fit: StackFit.expand,
         children: [
           M3u8Player(controller: widget.controller, fit: BoxFit.contain),
+          if (widget.controlsLocked && !_controlsVisible)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: _showControls,
+              ),
+            ),
           if (widget.isBusy || widget.value.isBuffering)
             const Center(child: CircularProgressIndicator(color: Colors.white)),
           if (_controlsVisible && !widget.value.hasError)
-            if (widget.isFullscreen && _sidePanel != null)
+            if (widget.controlsLocked)
+              LockedLandscapeControls(
+                strings: widget.strings,
+                onUnlock: _unlockControls,
+              )
+            else if (widget.isFullscreen && _sidePanel != null)
               _buildLandscapeSidePanel()
             else
               PlayerOverlayChrome(
@@ -121,6 +142,7 @@ class _ExampleVideoScaffoldState extends State<ExampleVideoScaffold> {
                         onBack: widget.onExitFullscreen,
                         onPanelRequested: _showSidePanel,
                         onMore: _showLandscapeMorePanel,
+                        onLock: _lockControls,
                         onInteraction: _showControls,
                       )
                     : PortraitPlayerControls(
@@ -153,6 +175,13 @@ class _ExampleVideoScaffoldState extends State<ExampleVideoScaffold> {
     if (widget.value.hasError) {
       return;
     }
+    if (widget.controlsLocked) {
+      setState(() {
+        _controlsVisible = true;
+      });
+      _scheduleAutoHide();
+      return;
+    }
     if (_sidePanel != null) {
       setState(() {
         _sidePanel = null;
@@ -166,6 +195,13 @@ class _ExampleVideoScaffoldState extends State<ExampleVideoScaffold> {
   }
 
   void _showControls() {
+    if (widget.controlsLocked) {
+      setState(() {
+        _controlsVisible = true;
+      });
+      _scheduleAutoHide();
+      return;
+    }
     if (!_controlsVisible) {
       setState(() {
         _controlsVisible = true;
@@ -227,6 +263,24 @@ class _ExampleVideoScaffoldState extends State<ExampleVideoScaffold> {
       _optionSheetOpen = true;
     });
     _overlayTimer?.cancel();
+  }
+
+  void _lockControls() {
+    setState(() {
+      _controlsVisible = true;
+      _sidePanel = null;
+      _optionSheetOpen = false;
+    });
+    widget.onControlsLockedChanged(true);
+    _scheduleAutoHide();
+  }
+
+  void _unlockControls() {
+    setState(() {
+      _controlsVisible = true;
+    });
+    widget.onControlsLockedChanged(false);
+    _scheduleAutoHide();
   }
 
   void _closeSidePanel() {
@@ -430,6 +484,7 @@ class LandscapePlayerControls extends StatelessWidget {
     required this.onBack,
     required this.onPanelRequested,
     required this.onMore,
+    required this.onLock,
     required this.onInteraction,
   });
 
@@ -443,6 +498,7 @@ class LandscapePlayerControls extends StatelessWidget {
   final VoidCallback onBack;
   final ValueChanged<LandscapeSidePanelType> onPanelRequested;
   final VoidCallback onMore;
+  final VoidCallback onLock;
   final VoidCallback onInteraction;
 
   @override
@@ -461,6 +517,12 @@ class LandscapePlayerControls extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(child: MarqueeTitle(title: title)),
               const SizedBox(width: 8),
+              _OverlayIconButton(
+                tooltip: strings.lockControlsTooltip,
+                icon: Icons.lock_open,
+                onPressed: onLock,
+              ),
+              const SizedBox(width: 4),
               _OverlayIconButton(
                 tooltip: strings.moreTooltip,
                 icon: Icons.more_vert,
@@ -492,37 +554,48 @@ class LandscapePlayerControls extends StatelessWidget {
                     onInteraction: onInteraction,
                     size: 54,
                   ),
-                  const SizedBox(width: 28),
-                  _TextControlButton(
-                    label: strings.subtitlesLabel,
-                    onPressed: value.isInitialized
-                        ? () =>
-                              onPanelRequested(LandscapeSidePanelType.subtitles)
-                        : null,
+                  const SizedBox(width: 16),
+                  Flexible(
+                    child: _TextControlButton(
+                      label: strings.subtitlesLabel,
+                      onPressed: value.isInitialized
+                          ? () => onPanelRequested(
+                              LandscapeSidePanelType.subtitles,
+                            )
+                          : null,
+                    ),
                   ),
-                  const SizedBox(width: 24),
-                  _TextControlButton(
-                    label: speedLabel(value.playbackSpeed),
-                    onPressed: value.isInitialized
-                        ? () => onPanelRequested(LandscapeSidePanelType.speed)
-                        : null,
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: _TextControlButton(
+                      label: speedLabel(value.playbackSpeed),
+                      onPressed: value.isInitialized
+                          ? () => onPanelRequested(LandscapeSidePanelType.speed)
+                          : null,
+                    ),
                   ),
                   const Spacer(),
-                  _TextControlButton(
-                    label: qualityLabel(value.selectedQuality, strings),
-                    onPressed:
-                        value.isInitialized &&
-                            sourceType != M3u8SourceType.progressive
-                        ? () => onPanelRequested(LandscapeSidePanelType.quality)
-                        : null,
+                  Flexible(
+                    child: _TextControlButton(
+                      label: qualityLabel(value.selectedQuality, strings),
+                      onPressed:
+                          value.isInitialized &&
+                              sourceType != M3u8SourceType.progressive
+                          ? () =>
+                                onPanelRequested(LandscapeSidePanelType.quality)
+                          : null,
+                    ),
                   ),
-                  const SizedBox(width: 24),
-                  _TextControlButton(
-                    label: strings.episodesLabel,
-                    onPressed: episodes.isEmpty
-                        ? null
-                        : () =>
-                              onPanelRequested(LandscapeSidePanelType.episodes),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: _TextControlButton(
+                      label: strings.episodesLabel,
+                      onPressed: episodes.isEmpty
+                          ? null
+                          : () => onPanelRequested(
+                              LandscapeSidePanelType.episodes,
+                            ),
+                    ),
                   ),
                 ],
               ),
@@ -530,6 +603,37 @@ class LandscapePlayerControls extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class LockedLandscapeControls extends StatelessWidget {
+  const LockedLandscapeControls({
+    super.key,
+    required this.strings,
+    required this.onUnlock,
+  });
+
+  final ExampleStrings strings;
+  final VoidCallback onUnlock;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Align(
+        alignment: const Alignment(-0.86, 0.24),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.46),
+            shape: BoxShape.circle,
+          ),
+          child: _OverlayIconButton(
+            tooltip: strings.unlockControlsTooltip,
+            icon: Icons.lock,
+            onPressed: onUnlock,
+          ),
+        ),
+      ),
     );
   }
 }

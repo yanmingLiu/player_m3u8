@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:player_m3u8/player_m3u8.dart';
 import 'package:player_m3u8_example/main.dart';
@@ -98,6 +101,208 @@ void main() {
     expect(find.textContaining('Cache size:'), findsOneWidget);
     expect(find.text('QoE snapshots'), findsOneWidget);
     expect(find.text('QoE waiting for first sample'), findsOneWidget);
+  });
+
+  testWidgets('landscape controls can be locked and unlocked', (
+    WidgetTester tester,
+  ) async {
+    final controller = M3u8PlayerController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(
+      _buildLandscapeScaffold(
+        controller: controller,
+        value: const M3u8PlayerValue(
+          isInitialized: true,
+          duration: Duration(minutes: 10),
+          position: Duration(seconds: 10),
+        ),
+      ),
+    );
+
+    expect(find.byIcon(Icons.lock_open), findsOneWidget);
+    expect(find.byIcon(Icons.lock), findsNothing);
+    expect(find.byIcon(Icons.arrow_back_ios_new), findsOneWidget);
+    expect(find.text('Mux Big Buck Bunny'), findsOneWidget);
+    expect(find.text('字幕'), findsOneWidget);
+    expect(find.text('选集'), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.lock_open));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.lock_open), findsNothing);
+    expect(find.byIcon(Icons.lock), findsOneWidget);
+    expect(find.byIcon(Icons.arrow_back_ios_new), findsNothing);
+    expect(find.text('Mux Big Buck Bunny'), findsNothing);
+    expect(find.text('字幕'), findsNothing);
+    expect(find.text('选集'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.lock));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.lock_open), findsOneWidget);
+    expect(find.byIcon(Icons.lock), findsNothing);
+    expect(find.byIcon(Icons.arrow_back_ios_new), findsOneWidget);
+    expect(find.text('Mux Big Buck Bunny'), findsOneWidget);
+    expect(find.text('字幕'), findsOneWidget);
+    expect(find.text('选集'), findsOneWidget);
+  });
+
+  testWidgets('device rotation enters and exits fullscreen unless locked', (
+    WidgetTester tester,
+  ) async {
+    final orientationCalls = <List<DeviceOrientation>>[];
+    final uiModeCalls = <SystemUiMode>[];
+
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerExamplePage(
+          autoInitialize: false,
+          orientationSetter: (orientations) async {
+            orientationCalls.add(List<DeviceOrientation>.of(orientations));
+          },
+          systemUiModeSetter: (mode) async {
+            uiModeCalls.add(mode);
+          },
+        ),
+      ),
+    );
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+    expect(find.byIcon(Icons.lock_open), findsNothing);
+
+    await _rotateTestView(tester, const Size(844, 390));
+
+    expect(find.byIcon(Icons.lock_open), findsOneWidget);
+    expect(find.byIcon(Icons.fullscreen), findsNothing);
+    expect(uiModeCalls, contains(SystemUiMode.immersiveSticky));
+    expect(orientationCalls.last, isEmpty);
+
+    await _rotateTestView(tester, const Size(390, 844));
+
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+    expect(find.byIcon(Icons.lock_open), findsNothing);
+    expect(uiModeCalls, contains(SystemUiMode.edgeToEdge));
+    expect(orientationCalls.last, isEmpty);
+
+    await _rotateTestView(tester, const Size(844, 390));
+    await tester.tap(find.byIcon(Icons.lock_open));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.lock), findsOneWidget);
+    expect(orientationCalls.last, [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
+    await _rotateTestView(tester, const Size(390, 844));
+
+    expect(find.byIcon(Icons.lock), findsOneWidget);
+    expect(find.byIcon(Icons.fullscreen), findsNothing);
+  });
+
+  testWidgets('manual fullscreen requests landscape orientation', (
+    WidgetTester tester,
+  ) async {
+    final orientationCalls = <List<DeviceOrientation>>[];
+    final uiModeCalls = <SystemUiMode>[];
+    final physicalOrientationController =
+        StreamController<PhysicalDeviceOrientation>();
+    addTearDown(physicalOrientationController.close);
+
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(390, 844);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    addTearDown(tester.view.resetPhysicalSize);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: PlayerExamplePage(
+          autoInitialize: false,
+          orientationSetter: (orientations) async {
+            orientationCalls.add(List<DeviceOrientation>.of(orientations));
+          },
+          systemUiModeSetter: (mode) async {
+            uiModeCalls.add(mode);
+          },
+          physicalOrientationStreamFactory: () =>
+              physicalOrientationController.stream,
+        ),
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.byIcon(Icons.fullscreen));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen), findsNothing);
+    expect(find.byIcon(Icons.lock_open), findsOneWidget);
+    expect(orientationCalls.single, [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    expect(uiModeCalls, contains(SystemUiMode.immersiveSticky));
+
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(orientationCalls, hasLength(1));
+    expect(orientationCalls.last, [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
+    await _rotateTestView(tester, const Size(390, 844));
+    expect(find.byIcon(Icons.fullscreen), findsNothing);
+    expect(find.byIcon(Icons.lock_open), findsOneWidget);
+    expect(uiModeCalls, isNot(contains(SystemUiMode.edgeToEdge)));
+
+    await tester.pump(const Duration(milliseconds: 850));
+    await _rotateTestView(tester, const Size(390, 844));
+    expect(find.byIcon(Icons.fullscreen), findsNothing);
+    expect(find.byIcon(Icons.lock_open), findsOneWidget);
+    expect(orientationCalls, hasLength(1));
+
+    await _rotateTestView(tester, const Size(844, 390));
+    expect(orientationCalls, hasLength(2));
+    expect(orientationCalls.last, [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
+    await _rotateTestView(tester, const Size(390, 844));
+
+    expect(find.byIcon(Icons.fullscreen), findsNothing);
+    expect(find.byIcon(Icons.lock_open), findsOneWidget);
+    expect(uiModeCalls, isNot(contains(SystemUiMode.edgeToEdge)));
+    expect(orientationCalls.last, [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
+    physicalOrientationController.add(PhysicalDeviceOrientation.landscape);
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen), findsNothing);
+    expect(find.byIcon(Icons.lock_open), findsOneWidget);
+    expect(orientationCalls, hasLength(2));
+    expect(orientationCalls.last, [
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+
+    physicalOrientationController.add(PhysicalDeviceOrientation.portrait);
+    await tester.pump();
+
+    expect(find.byIcon(Icons.fullscreen), findsOneWidget);
+    expect(find.byIcon(Icons.lock_open), findsNothing);
+    expect(uiModeCalls, contains(SystemUiMode.edgeToEdge));
+    expect(orientationCalls.last, isEmpty);
   });
 
   testWidgets('more sheet opens download list', (WidgetTester tester) async {
@@ -250,6 +455,55 @@ void main() {
   });
 }
 
+Widget _buildLandscapeScaffold({
+  required M3u8PlayerController controller,
+  required M3u8PlayerValue value,
+}) {
+  var controlsLocked = false;
+  return MaterialApp(
+    home: Scaffold(
+      body: SizedBox(
+        width: 844,
+        height: 390,
+        child: StatefulBuilder(
+          builder: (context, setState) {
+            return ExampleVideoScaffold(
+              controller: controller,
+              value: value,
+              title: 'Mux Big Buck Bunny',
+              episodes: const ['Mux Big Buck Bunny', 'Episode 2'],
+              currentEpisodeIndex: 0,
+              sourceType: M3u8SourceType.hls,
+              strings: const ExampleStrings(ExampleLanguage.zh),
+              isFullscreen: true,
+              controlsLocked: controlsLocked,
+              isBusy: false,
+              isPrecacheRunning: false,
+              precacheSupported: true,
+              autoPlayNext: true,
+              loopMode: ExampleLoopMode.none,
+              onBack: () {},
+              onEnterFullscreen: () {},
+              onExitFullscreen: () {},
+              onControlsLockedChanged: (locked) {
+                setState(() {
+                  controlsLocked = locked;
+                });
+              },
+              onEpisodeSelected: (_) {},
+              onPrecache: () {},
+              onShowDownloads: () {},
+              onSpeedSelected: (_) {},
+              onAutoPlayNextChanged: (_) {},
+              onLoopModeChanged: (_) {},
+            );
+          },
+        ),
+      ),
+    ),
+  );
+}
+
 Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
   await tester.scrollUntilVisible(
     finder,
@@ -257,4 +511,10 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
     scrollable: find.byType(Scrollable),
   );
   await tester.pumpAndSettle();
+}
+
+Future<void> _rotateTestView(WidgetTester tester, Size size) async {
+  tester.view.physicalSize = size;
+  await tester.pump();
+  await tester.pump();
 }

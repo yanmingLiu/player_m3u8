@@ -34,3 +34,4 @@ migrate_working_dir/
 
 # Local verification artifacts
 /player_m3u8_*.png
+.playwright-cli/

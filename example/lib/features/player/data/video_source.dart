@@ -1,6 +1,6 @@
 import 'package:player_m3u8/player_m3u8.dart';
 
-import 'example_strings.dart';
+import '../../../shared/localization/example_strings.dart';
 
 const String sampleM3u8Url =
     'https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8';

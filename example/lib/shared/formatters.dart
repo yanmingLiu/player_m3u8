@@ -1,7 +1,3 @@
-import 'package:player_m3u8/player_m3u8.dart';
-
-import 'example_strings.dart';
-
 String formatDuration(Duration duration) {
   final hours = duration.inHours;
   final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
@@ -25,13 +21,6 @@ double nearestSpeed(double speed, List<double> speeds) {
     final nextDelta = (next - speed).abs();
     return nextDelta < previousDelta ? next : previous;
   });
-}
-
-String qualityLabel(M3u8Quality quality, ExampleStrings strings) {
-  if (quality.id == M3u8Quality.auto.id) {
-    return strings.autoQualityLabel;
-  }
-  return quality.label;
 }
 
 String formatBytes(int bytes) {

@@ -4,12 +4,45 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:player_m3u8/player_m3u8.dart';
+import 'package:player_m3u8/player_m3u8_platform_interface.dart';
+import 'package:player_m3u8/src/m3u8_player_event.dart';
 import 'package:player_m3u8_example/main.dart';
-import 'package:player_m3u8_example/src/example_panels.dart';
-import 'package:player_m3u8_example/src/example_strings.dart';
-import 'package:player_m3u8_example/src/video_scaffold.dart';
+import 'package:player_m3u8_example/features/drama/data/drama_models.dart';
+import 'package:player_m3u8_example/features/drama/presentation/drama_playback_page.dart';
+import 'package:player_m3u8_example/features/drama/presentation/drama_playback_widgets.dart';
+import 'package:player_m3u8_example/features/player/presentation/player_panels.dart';
+import 'package:player_m3u8_example/features/player/presentation/player_video_scaffold.dart';
+import 'package:player_m3u8_example/shared/localization/example_strings.dart';
+import 'package:player_m3u8_example/shared/widgets/buffered_seek_bar.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets('home opens features as independent routes', (
+    WidgetTester tester,
+  ) async {
+    final observer = _RecordingNavigatorObserver();
+    await tester.pumpWidget(
+      MaterialApp(home: const DemoShell(), navigatorObservers: [observer]),
+    );
+
+    expect(find.text('功能列表'), findsOneWidget);
+    expect(find.byType(NavigationBar), findsNothing);
+    expect(find.text('M3U8 播放器'), findsOneWidget);
+    expect(find.text('Drama Feed'), findsOneWidget);
+    expect(observer.pushCount, 1);
+
+    await tester.tap(find.byType(ListTile).at(1));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(observer.pushCount, 2);
+    expect(find.text('Drama Feed', skipOffstage: true), findsOneWidget);
+
+    await tester.binding.handlePopRoute();
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(observer.popCount, 1);
+    expect(find.text('功能列表'), findsOneWidget);
+  });
+
   testWidgets('shows player example chrome in Chinese by default', (
     WidgetTester tester,
   ) async {
@@ -148,6 +181,85 @@ void main() {
     expect(find.text('选集'), findsOneWidget);
   });
 
+  testWidgets('scrolling landscape side panels does not change volume', (
+    WidgetTester tester,
+  ) async {
+    final platform = _DramaPlaybackTestPlatform();
+    final controller = M3u8PlayerController(platform: platform);
+    addTearDown(controller.dispose);
+    await controller.initialize(
+      source: const M3u8Source(
+        videoUrl: 'https://example.com/video.m3u8',
+        sourceType: M3u8SourceType.hls,
+      ),
+    );
+    controller.value = const M3u8PlayerValue(
+      isInitialized: true,
+      duration: Duration(minutes: 10),
+      position: Duration(seconds: 10),
+      availableQualities: [
+        M3u8Quality(id: 'q1', label: '360p'),
+        M3u8Quality(id: 'q2', label: '480p'),
+        M3u8Quality(id: 'q3', label: '720p'),
+        M3u8Quality(id: 'q4', label: '1080p'),
+        M3u8Quality(id: 'q5', label: '1440p'),
+        M3u8Quality(id: 'q6', label: '2160p'),
+      ],
+    );
+
+    await tester.pumpWidget(
+      _buildLandscapeScaffold(
+        controller: controller,
+        value: controller.value,
+        episodes: [for (var i = 0; i < 20; i++) 'Episode ${i + 1}'],
+      ),
+    );
+    await tester.pump();
+
+    await tester.tap(find.text('选集').first);
+    await tester.pump();
+
+    final gestureControls = tester.widget<M3u8PlayerGestureControls>(
+      find.byType(M3u8PlayerGestureControls),
+    );
+    expect(gestureControls.config.enabled, isFalse);
+
+    await tester.drag(find.byType(ListView).last, const Offset(0, -240));
+    await tester.pump();
+
+    expect(platform.volumeValues, isEmpty);
+
+    await tester.tapAt(const Offset(12, 200));
+    await tester.pump();
+    expect(find.byType(ListView), findsNothing);
+    expect(
+      tester
+          .widget<M3u8PlayerGestureControls>(
+            find.byType(M3u8PlayerGestureControls),
+          )
+          .config
+          .enabled,
+      isTrue,
+    );
+
+    await tester.tap(find.text('自动').first);
+    await tester.pump();
+    expect(
+      tester
+          .widget<M3u8PlayerGestureControls>(
+            find.byType(M3u8PlayerGestureControls),
+          )
+          .config
+          .enabled,
+      isFalse,
+    );
+
+    await tester.drag(find.byType(ListView).last, const Offset(0, -240));
+    await tester.pump();
+
+    expect(platform.volumeValues, isEmpty);
+  });
+
   testWidgets('device rotation enters and exits fullscreen unless locked', (
     WidgetTester tester,
   ) async {
@@ -205,6 +317,52 @@ void main() {
 
     expect(find.byIcon(Icons.lock), findsOneWidget);
     expect(find.byIcon(Icons.fullscreen), findsNothing);
+  });
+
+  testWidgets('hiding an uninitialized player does not call native pause', (
+    WidgetTester tester,
+  ) async {
+    final previousPlatform = PlayerM3u8Platform.instance;
+    final platform = _DramaPlaybackTestPlatform();
+    PlayerM3u8Platform.instance = platform;
+    addTearDown(() {
+      PlayerM3u8Platform.instance = previousPlatform;
+      unawaited(platform.eventsController.close());
+    });
+
+    var visible = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: StatefulBuilder(
+          builder: (context, setState) => Scaffold(
+            body: Stack(
+              children: [
+                Positioned.fill(
+                  child: PlayerExamplePage(
+                    autoInitialize: false,
+                    visible: visible,
+                  ),
+                ),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: TextButton(
+                    onPressed: () => setState(() => visible = false),
+                    child: const Text('hide'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('hide'));
+    await tester.pump();
+
+    expect(platform.pauseCalls, 0);
   });
 
   testWidgets('manual fullscreen requests landscape orientation', (
@@ -453,11 +611,236 @@ void main() {
     expect(find.textContaining('paused'), findsOneWidget);
     expect(find.byIcon(Icons.play_arrow), findsOneWidget);
   });
+
+  testWidgets('hides drama chrome while scrubbing the progress bar', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final previousPlatform = PlayerM3u8Platform.instance;
+    final platform = _DramaPlaybackTestPlatform();
+    PlayerM3u8Platform.instance = platform;
+    addTearDown(() {
+      PlayerM3u8Platform.instance = previousPlatform;
+      unawaited(platform.eventsController.close());
+    });
+
+    const episode = DramaEpisode(
+      number: 1,
+      video: 'https://example.com/episode.mp4',
+      cover: '',
+      duration: 100,
+      seriesTitle: '测试剧集',
+      seriesId: 'test-series',
+    );
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: DramaPlaybackPage(episodes: <DramaEpisode>[episode]),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    platform.eventsController.add(
+      M3u8PlayerEvent(
+        playerId: platform.createdPlayerId!,
+        type: M3u8PlayerEventType.initialized,
+        duration: const Duration(minutes: 5),
+        bufferedPosition: const Duration(minutes: 2),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('测试剧集'), findsOneWidget);
+    expect(find.text('Drama · Ep. 1'), findsOneWidget);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.byType(BufferedSeekBar)),
+    );
+    await gesture.moveBy(const Offset(80, 0));
+    await tester.pump();
+
+    expect(find.textContaining(' / 05:00'), findsOneWidget);
+    expect(find.text('00:00 / 05:00'), findsNothing);
+    expect(find.text('测试剧集'), findsNothing);
+    expect(find.text('Drama · Ep. 1'), findsNothing);
+
+    await gesture.up();
+    await tester.pump();
+    expect(find.text('测试剧集'), findsOneWidget);
+    expect(find.text('Drama · Ep. 1'), findsOneWidget);
+    expect(platform.seekPositions, isNotEmpty);
+  });
+
+  testWidgets('full-screen playback gesture toggles the initialized player', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final previousPlatform = PlayerM3u8Platform.instance;
+    final platform = _DramaPlaybackTestPlatform();
+    PlayerM3u8Platform.instance = platform;
+    addTearDown(() {
+      PlayerM3u8Platform.instance = previousPlatform;
+      unawaited(platform.eventsController.close());
+    });
+
+    const episode = DramaEpisode(
+      number: 1,
+      video: 'https://example.com/episode.mp4',
+      cover: '',
+      duration: 100,
+      seriesTitle: '测试剧集',
+      seriesId: 'test-series',
+    );
+    await tester.pumpWidget(
+      const MaterialApp(
+        home: DramaPlaybackPage(episodes: <DramaEpisode>[episode]),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    platform.eventsController.add(
+      M3u8PlayerEvent(
+        playerId: platform.createdPlayerId!,
+        type: M3u8PlayerEventType.initialized,
+        duration: const Duration(minutes: 5),
+      ),
+    );
+    platform.eventsController.add(
+      M3u8PlayerEvent(
+        playerId: platform.createdPlayerId!,
+        type: M3u8PlayerEventType.playing,
+        duration: const Duration(minutes: 5),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byType(M3u8PlayerGestureControls), findsNothing);
+    platform.pauseCalls = 0;
+    final playbackItem = tester.widget<DramaPlaybackItem>(
+      find.byType(DramaPlaybackItem),
+    );
+    playbackItem.uiState.speedMenuVisible.value = true;
+    await tester.pump();
+    await tester.tapAt(const Offset(200, 200));
+    await tester.pump();
+
+    expect(playbackItem.uiState.speedMenuVisible.value, isFalse);
+    expect(platform.pauseCalls, 0);
+
+    await tester.tapAt(const Offset(200, 200));
+    await tester.pump();
+
+    expect(platform.pauseCalls, 1);
+
+    final pauseButton = tester.widget<DramaPauseButton>(
+      find.byType(DramaPauseButton),
+    );
+    pauseButton.controller.value = pauseButton.controller.value.copyWith(
+      isPlaying: false,
+    );
+    await tester.pump();
+    platform.playCalls = 0;
+    await tester.tap(find.byIcon(Icons.play_arrow));
+    await tester.pump();
+
+    expect(platform.playCalls, 1);
+  });
+
+  testWidgets('handles an empty drama episode list', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: DramaPlaybackPage(episodes: <DramaEpisode>[])),
+    );
+
+    expect(find.text('暂无剧集'), findsOneWidget);
+  });
+}
+
+class _DramaPlaybackTestPlatform extends PlayerM3u8Platform {
+  final StreamController<M3u8PlayerEvent> eventsController =
+      StreamController<M3u8PlayerEvent>.broadcast();
+  final List<Duration> seekPositions = <Duration>[];
+  final List<double> volumeValues = <double>[];
+  int? createdPlayerId;
+  int playCalls = 0;
+  int pauseCalls = 0;
+
+  @override
+  Stream<M3u8PlayerEvent> get events => eventsController.stream;
+
+  @override
+  Stream<M3u8CacheEvent> get cacheEvents =>
+      const Stream<M3u8CacheEvent>.empty();
+
+  @override
+  Future<int> create({
+    required M3u8Source source,
+    M3u8RecoveryPolicy recoveryPolicy = M3u8RecoveryPolicy.defaults,
+    Duration initialPosition = Duration.zero,
+    double playbackSpeed = 1.0,
+    double volume = 1.0,
+    bool isMuted = false,
+    List<M3u8SubtitleTrack> subtitles = const <M3u8SubtitleTrack>[],
+    String? selectedSubtitleId,
+    String? selectedAudioTrackId,
+  }) async {
+    createdPlayerId = 1;
+    return createdPlayerId!;
+  }
+
+  @override
+  Future<void> play(int playerId) async {
+    playCalls++;
+  }
+
+  @override
+  Future<void> pause(int playerId) async {
+    pauseCalls++;
+  }
+
+  @override
+  Future<void> seekTo(int playerId, Duration position) async {
+    seekPositions.add(position);
+  }
+
+  @override
+  Future<void> setPlaybackSpeed(int playerId, double speed) async {}
+
+  @override
+  Future<void> setVolume(int playerId, double volume) async {
+    volumeValues.add(volume);
+  }
+
+  @override
+  Future<void> disposePlayer(int playerId) async {}
+}
+
+class _RecordingNavigatorObserver extends NavigatorObserver {
+  int pushCount = 0;
+  int popCount = 0;
+
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    pushCount++;
+    super.didPush(route, previousRoute);
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    popCount++;
+    super.didPop(route, previousRoute);
+  }
 }
 
 Widget _buildLandscapeScaffold({
   required M3u8PlayerController controller,
   required M3u8PlayerValue value,
+  List<String> episodes = const ['Mux Big Buck Bunny', 'Episode 2'],
 }) {
   var controlsLocked = false;
   return MaterialApp(
@@ -471,7 +854,7 @@ Widget _buildLandscapeScaffold({
               controller: controller,
               value: value,
               title: 'Mux Big Buck Bunny',
-              episodes: const ['Mux Big Buck Bunny', 'Episode 2'],
+              episodes: episodes,
               currentEpisodeIndex: 0,
               sourceType: M3u8SourceType.hls,
               strings: const ExampleStrings(ExampleLanguage.zh),

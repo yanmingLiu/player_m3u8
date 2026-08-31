@@ -40,14 +40,14 @@ Android 仍使用 Media3 ExoPlayer，iOS 仍使用 AVFoundation；本功能不�
 
 ## 接入点
 
-实现位于 `example/lib/src/video_scaffold.dart`：
+实现位于 `example/lib/features/player/presentation/player_video_scaffold.dart`：
 
 - `LandscapePlayerControls` 显示锁定入口。
 - `LockedLandscapeControls` 显示锁定后的解锁入口。
 - `_ExampleVideoScaffoldState` 根据页面传入的锁定状态切换 `M3u8GestureControlsConfig`。
 - `PlayerExamplePage` 监听 `MediaQuery.orientationOf(context)`，未锁定时自动进出全屏，锁定时保持横屏方向策略。
 
-文案位于 `example/lib/src/example_strings.dart`：
+文案位于 `example/lib/shared/localization/example_strings.dart`：
 
 - `lockControlsTooltip`
 - `unlockControlsTooltip`

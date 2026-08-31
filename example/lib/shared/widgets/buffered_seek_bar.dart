@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:player_m3u8/player_m3u8.dart';
 
-import 'example_strings.dart';
+import '../localization/example_strings.dart';
 
 class BufferedSeekBar extends StatefulWidget {
   const BufferedSeekBar({
@@ -10,12 +10,38 @@ class BufferedSeekBar extends StatefulWidget {
     required this.value,
     required this.strings,
     this.isOverlay = false,
+    this.onScrubbingChanged,
+    this.onScrubPositionChanged,
+    this.baseColor,
+    this.bufferedColor,
+    this.playedColor,
+    this.thumbColor = const Color(0xFFFFFFFF),
+    this.thumbBorderColor,
+    this.thumbRadius = 6,
+    this.progressHeight = 4,
+    this.verticalPadding = 15,
   });
 
   final M3u8PlayerController controller;
   final M3u8PlayerValue value;
   final ExampleStrings strings;
   final bool isOverlay;
+
+  /// Called with `true` while the user is dragging and `false` afterwards.
+  final ValueChanged<bool>? onScrubbingChanged;
+
+  /// Reports the current drag target, or `null` when dragging ends/cancels.
+  final ValueChanged<Duration?>? onScrubPositionChanged;
+  final Color? baseColor;
+  final Color? bufferedColor;
+  final Color? playedColor;
+  final Color thumbColor;
+  final Color? thumbBorderColor;
+  final double thumbRadius;
+
+  /// Visual track height. The vertical padding supplies the touch area.
+  final double progressHeight;
+  final double verticalPadding;
 
   @override
   State<BufferedSeekBar> createState() => BufferedSeekBarState();
@@ -49,7 +75,7 @@ class BufferedSeekBarState extends State<BufferedSeekBar> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 160),
       curve: Curves.easeOutCubic,
-      height: _isScrubbing ? 48 : 36,
+      height: widget.progressHeight + widget.verticalPadding * 2,
       child: LayoutBuilder(
         builder: (BuildContext context, BoxConstraints constraints) {
           return GestureDetector(
@@ -91,6 +117,13 @@ class BufferedSeekBarState extends State<BufferedSeekBar> {
                       : bufferedMs / durationMs,
                   isScrubbing: _isScrubbing,
                   isOverlay: widget.isOverlay,
+                  baseColor: widget.baseColor,
+                  bufferedColor: widget.bufferedColor,
+                  playedColor: widget.playedColor,
+                  thumbColor: widget.thumbColor,
+                  thumbBorderColor: widget.thumbBorderColor,
+                  thumbRadius: widget.thumbRadius,
+                  progressHeight: widget.progressHeight,
                 ),
                 child: const SizedBox.expand(),
               ),
@@ -102,10 +135,13 @@ class BufferedSeekBarState extends State<BufferedSeekBar> {
   }
 
   void _beginScrub(double dx, double width) {
+    final fraction = _fractionForDx(dx, width);
     setState(() {
       _isScrubbing = true;
-      _scrubFraction = _fractionForDx(dx, width);
+      _scrubFraction = fraction;
     });
+    widget.onScrubPositionChanged?.call(_positionForFraction(fraction));
+    widget.onScrubbingChanged?.call(true);
   }
 
   void _updateScrub(double dx, double width) {
@@ -113,6 +149,7 @@ class BufferedSeekBarState extends State<BufferedSeekBar> {
     setState(() {
       _scrubFraction = fraction;
     });
+    widget.onScrubPositionChanged?.call(_positionForFraction(fraction));
   }
 
   void _endScrub() {
@@ -124,6 +161,8 @@ class BufferedSeekBarState extends State<BufferedSeekBar> {
       _isScrubbing = false;
       _scrubFraction = null;
     });
+    widget.onScrubbingChanged?.call(false);
+    widget.onScrubPositionChanged?.call(null);
     _seekToFraction(fraction);
   }
 
@@ -135,6 +174,8 @@ class BufferedSeekBarState extends State<BufferedSeekBar> {
       _isScrubbing = false;
       _scrubFraction = null;
     });
+    widget.onScrubbingChanged?.call(false);
+    widget.onScrubPositionChanged?.call(null);
   }
 
   void _seekFromDx(double dx, double width) {
@@ -150,13 +191,19 @@ class BufferedSeekBarState extends State<BufferedSeekBar> {
   }
 
   void _seekToFraction(double? fraction) {
-    final durationMs = widget.value.duration.inMilliseconds;
-    if (fraction == null || durationMs <= 0) {
+    final position = fraction == null ? null : _positionForFraction(fraction);
+    if (position == null) {
       return;
     }
-    widget.controller.seekTo(
-      Duration(milliseconds: (durationMs * fraction).round()),
-    );
+    widget.controller.seekTo(position);
+  }
+
+  Duration? _positionForFraction(double fraction) {
+    final durationMs = widget.value.duration.inMilliseconds;
+    if (durationMs <= 0) {
+      return null;
+    }
+    return Duration(milliseconds: (durationMs * fraction).round());
   }
 }
 
@@ -167,6 +214,13 @@ class _BufferedTrackPainter extends CustomPainter {
     required this.bufferedFraction,
     required this.isScrubbing,
     required this.isOverlay,
+    required this.baseColor,
+    required this.bufferedColor,
+    required this.playedColor,
+    required this.thumbColor,
+    required this.thumbBorderColor,
+    required this.thumbRadius,
+    required this.progressHeight,
   });
 
   final double playedFraction;
@@ -174,12 +228,19 @@ class _BufferedTrackPainter extends CustomPainter {
   final double bufferedFraction;
   final bool isScrubbing;
   final bool isOverlay;
+  final Color? baseColor;
+  final Color? bufferedColor;
+  final Color? playedColor;
+  final Color thumbColor;
+  final Color? thumbBorderColor;
+  final double thumbRadius;
+  final double progressHeight;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final baseHeight = isScrubbing ? 7.0 : 4.0;
-    final bufferedHeight = isScrubbing ? 9.0 : 6.0;
-    final playedHeight = isScrubbing ? 12.0 : 7.0;
+    final baseHeight = progressHeight;
+    final bufferedHeight = progressHeight;
+    final playedHeight = progressHeight;
     final centerY = size.height / 2;
     final baseRect = Rect.fromLTWH(
       0,
@@ -225,18 +286,24 @@ class _BufferedTrackPainter extends CustomPainter {
     canvas.drawRRect(
       RRect.fromRectAndRadius(baseRect, Radius.circular(baseRect.height / 2)),
       Paint()
-        ..color = isOverlay ? const Color(0x66FFFFFF) : const Color(0xFFD6DDD9),
+        ..color =
+            baseColor ??
+            (isOverlay ? const Color(0x66FFFFFF) : const Color(0xFFD6DDD9)),
     );
     drawSegment(
       rect: bufferedRect,
       startFraction: bufferedStartFraction,
       fraction: bufferedFraction,
-      color: isOverlay ? const Color(0x80FFFFFF) : const Color(0xFFFFB74D),
+      color:
+          bufferedColor ??
+          (isOverlay ? const Color(0x80FFFFFF) : const Color(0xFFFFB74D)),
     );
     drawSegment(
       rect: playedRect,
       fraction: playedFraction,
-      color: isOverlay ? const Color(0xFFFF5C93) : const Color(0xFF006B5F),
+      color:
+          playedColor ??
+          (isOverlay ? const Color(0xFFFF5C93) : const Color(0xFF006B5F)),
     );
 
     final markerX = size.width * playedFraction.clamp(0.0, 1.0);
@@ -245,16 +312,21 @@ class _BufferedTrackPainter extends CustomPainter {
     }
     canvas.drawCircle(
       Offset(markerX, centerY),
-      10,
-      Paint()..color = const Color(0xFFFFFFFF),
+      thumbRadius,
+      Paint()..color = thumbColor,
     );
     canvas.drawCircle(
       Offset(markerX, centerY),
-      10,
+      thumbRadius,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 2
-        ..color = isOverlay ? const Color(0xFFFF5C93) : const Color(0xFF006B5F),
+        ..color =
+            thumbBorderColor ??
+            (playedColor ??
+                (isOverlay
+                    ? const Color(0xFFFF5C93)
+                    : const Color(0xFF006B5F))),
     );
   }
 
@@ -264,6 +336,13 @@ class _BufferedTrackPainter extends CustomPainter {
         oldDelegate.bufferedStartFraction != bufferedStartFraction ||
         oldDelegate.bufferedFraction != bufferedFraction ||
         oldDelegate.isScrubbing != isScrubbing ||
-        oldDelegate.isOverlay != isOverlay;
+        oldDelegate.isOverlay != isOverlay ||
+        oldDelegate.baseColor != baseColor ||
+        oldDelegate.bufferedColor != bufferedColor ||
+        oldDelegate.playedColor != playedColor ||
+        oldDelegate.thumbColor != thumbColor ||
+        oldDelegate.thumbBorderColor != thumbBorderColor ||
+        oldDelegate.thumbRadius != thumbRadius ||
+        oldDelegate.progressHeight != progressHeight;
   }
 }

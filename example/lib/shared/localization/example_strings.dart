@@ -1,4 +1,5 @@
-import 'player_formatters.dart';
+import '../formatters.dart';
+import 'package:player_m3u8/player_m3u8.dart';
 
 enum ExampleLanguage { zh, en }
 
@@ -152,4 +153,11 @@ class ExampleStrings {
         ? 'QoE 码率：$videoBitrate / $observedBitrate'
         : 'QoE bitrate: $videoBitrate / $observedBitrate';
   }
+}
+
+String qualityLabel(M3u8Quality quality, ExampleStrings strings) {
+  if (quality.id == M3u8Quality.auto.id) {
+    return strings.autoQualityLabel;
+  }
+  return quality.label;
 }

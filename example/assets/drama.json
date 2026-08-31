@@ -1,0 +1,2986 @@
+{
+  "generatedAt": "2026-08-27T16:01:28+0800",
+  "prefix": "short-drama",
+  "series": [
+    {
+      "playletId": "9279",
+      "title": "Her Wolf, Her Wrath",
+      "description": "In her previous life, Verity was deceived by a villainous family and brutally murdered by them. Only in her final moments did she finally realize that Kyle—the so-called savage wolf king she had believed to be her cruel, monstrous captor—was in fact the one who truly loved and protected her. After being reborn, Verity resolutely chose Kyle and used his sharp claws to exact revenge for herself and her deceased parents. In the end, the two found their happily ever after.",
+      "tags": [
+        "Avenge",
+        "Sweet Revenge",
+        "Different Species",
+        "Rebirth",
+        "Vampire",
+        "Werewolf",
+        "AI",
+        "Romance",
+        "Supernatural Beings"
+      ],
+      "episodeCount": 32,
+      "episodes": [
+        {
+          "number": 1,
+          "chapterId": "619573",
+          "duration": 182,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/001.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/001.webp",
+          "videoBytes": 23381202,
+          "coverBytes": 37006
+        },
+        {
+          "number": 2,
+          "chapterId": "619574",
+          "duration": 131,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/002.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/002.webp",
+          "videoBytes": 14973642,
+          "coverBytes": 39780
+        },
+        {
+          "number": 3,
+          "chapterId": "619575",
+          "duration": 132,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/003.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/003.webp",
+          "videoBytes": 18708549,
+          "coverBytes": 57266
+        },
+        {
+          "number": 4,
+          "chapterId": "619576",
+          "duration": 169,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/004.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/004.webp",
+          "videoBytes": 18329885,
+          "coverBytes": 56018
+        },
+        {
+          "number": 5,
+          "chapterId": "619577",
+          "duration": 122,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/005.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/005.webp",
+          "videoBytes": 12719704,
+          "coverBytes": 67756
+        },
+        {
+          "number": 6,
+          "chapterId": "619578",
+          "duration": 111,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/006.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/006.webp",
+          "videoBytes": 9954969,
+          "coverBytes": 69988
+        },
+        {
+          "number": 7,
+          "chapterId": "619579",
+          "duration": 100,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/007.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/007.webp",
+          "videoBytes": 9650473,
+          "coverBytes": 57344
+        },
+        {
+          "number": 8,
+          "chapterId": "619580",
+          "duration": 150,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/008.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/008.webp",
+          "videoBytes": 16144153,
+          "coverBytes": 82510
+        },
+        {
+          "number": 9,
+          "chapterId": "619581",
+          "duration": 207,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/009.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/009.webp",
+          "videoBytes": 28460813,
+          "coverBytes": 59802
+        },
+        {
+          "number": 10,
+          "chapterId": "619582",
+          "duration": 93,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/010.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/010.webp",
+          "videoBytes": 11477164,
+          "coverBytes": 40164
+        },
+        {
+          "number": 11,
+          "chapterId": "619583",
+          "duration": 76,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/011.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/011.webp",
+          "videoBytes": 9546959,
+          "coverBytes": 79422
+        },
+        {
+          "number": 12,
+          "chapterId": "619584",
+          "duration": 52,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/012.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/012.webp",
+          "videoBytes": 6214624,
+          "coverBytes": 61688
+        },
+        {
+          "number": 13,
+          "chapterId": "619585",
+          "duration": 108,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/013.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/013.webp",
+          "videoBytes": 11832290,
+          "coverBytes": 79170
+        },
+        {
+          "number": 14,
+          "chapterId": "619586",
+          "duration": 103,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/014.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/014.webp",
+          "videoBytes": 11150502,
+          "coverBytes": 3954
+        },
+        {
+          "number": 15,
+          "chapterId": "619587",
+          "duration": 118,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/015.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/015.webp",
+          "videoBytes": 12812833,
+          "coverBytes": 53774
+        },
+        {
+          "number": 16,
+          "chapterId": "619588",
+          "duration": 119,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/016.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/016.webp",
+          "videoBytes": 12348607,
+          "coverBytes": 53042
+        },
+        {
+          "number": 17,
+          "chapterId": "619589",
+          "duration": 120,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/017.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/017.webp",
+          "videoBytes": 12754835,
+          "coverBytes": 54558
+        },
+        {
+          "number": 18,
+          "chapterId": "619590",
+          "duration": 91,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/018.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/018.webp",
+          "videoBytes": 11528185,
+          "coverBytes": 79374
+        },
+        {
+          "number": 19,
+          "chapterId": "619591",
+          "duration": 100,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/019.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/019.webp",
+          "videoBytes": 12374148,
+          "coverBytes": 50752
+        },
+        {
+          "number": 20,
+          "chapterId": "619592",
+          "duration": 96,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/020.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/020.webp",
+          "videoBytes": 12015206,
+          "coverBytes": 72996
+        },
+        {
+          "number": 21,
+          "chapterId": "619593",
+          "duration": 172,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/021.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/021.webp",
+          "videoBytes": 22865463,
+          "coverBytes": 72052
+        },
+        {
+          "number": 22,
+          "chapterId": "619594",
+          "duration": 87,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/022.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/022.webp",
+          "videoBytes": 11144841,
+          "coverBytes": 46228
+        },
+        {
+          "number": 23,
+          "chapterId": "619595",
+          "duration": 133,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/023.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/023.webp",
+          "videoBytes": 16509556,
+          "coverBytes": 61686
+        },
+        {
+          "number": 24,
+          "chapterId": "619596",
+          "duration": 144,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/024.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/024.webp",
+          "videoBytes": 15064453,
+          "coverBytes": 72606
+        },
+        {
+          "number": 25,
+          "chapterId": "619597",
+          "duration": 137,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/025.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/025.webp",
+          "videoBytes": 14061283,
+          "coverBytes": 69490
+        },
+        {
+          "number": 26,
+          "chapterId": "619598",
+          "duration": 73,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/026.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/026.webp",
+          "videoBytes": 7285518,
+          "coverBytes": 48130
+        },
+        {
+          "number": 27,
+          "chapterId": "619599",
+          "duration": 116,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/027.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/027.webp",
+          "videoBytes": 11417046,
+          "coverBytes": 32584
+        },
+        {
+          "number": 28,
+          "chapterId": "619600",
+          "duration": 126,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/028.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/028.webp",
+          "videoBytes": 13786803,
+          "coverBytes": 77574
+        },
+        {
+          "number": 29,
+          "chapterId": "619601",
+          "duration": 112,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/029.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/029.webp",
+          "videoBytes": 12729645,
+          "coverBytes": 56580
+        },
+        {
+          "number": 30,
+          "chapterId": "619602",
+          "duration": 112,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/030.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/030.webp",
+          "videoBytes": 11737562,
+          "coverBytes": 39714
+        },
+        {
+          "number": 31,
+          "chapterId": "619603",
+          "duration": 228,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/031.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/031.webp",
+          "videoBytes": 33530678,
+          "coverBytes": 58212
+        },
+        {
+          "number": 32,
+          "chapterId": "619604",
+          "duration": 75,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9279/episodes/032.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9279/covers/032.webp",
+          "videoBytes": 8054216,
+          "coverBytes": 89938
+        }
+      ]
+    },
+    {
+      "playletId": "9291",
+      "title": "My Student Knows My Sin",
+      "description": "Clara, a 28-year-old math teacher, is trapped in a seven-year sham marriage to a hypocritical politician who represses her desires through coldness and abuse. When she accidentally swaps bags with Damian, a ruthless heir to a school conglomerate, he discovers her hidden toy and blackmails her into becoming his private plaything. Desperate, Clara seeks help from her husband, only to be blamed and beaten. In a defiant act, she self-harms to resist Damian, exposing her marital suffering. When leaked photos spark a campus scandal, her husband plots to institutionalize her. But Damian, wielding real power, steps in—igniting a fierce struggle over her fate, caught between repression, desire, and revenge.\t\t\t\n",
+      "tags": [
+        "Compulsory love",
+        "Taboo",
+        "High Society",
+        "Elite",
+        "Romance",
+        "AI",
+        "Urban"
+      ],
+      "episodeCount": 55,
+      "episodes": [
+        {
+          "number": 1,
+          "chapterId": "619951",
+          "duration": 79,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/001.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/001.webp",
+          "videoBytes": 6827584,
+          "coverBytes": 26966
+        },
+        {
+          "number": 2,
+          "chapterId": "619952",
+          "duration": 71,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/002.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/002.webp",
+          "videoBytes": 5529697,
+          "coverBytes": 36766
+        },
+        {
+          "number": 3,
+          "chapterId": "619953",
+          "duration": 51,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/003.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/003.webp",
+          "videoBytes": 4210356,
+          "coverBytes": 57308
+        },
+        {
+          "number": 4,
+          "chapterId": "619954",
+          "duration": 90,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/004.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/004.webp",
+          "videoBytes": 7693309,
+          "coverBytes": 39580
+        },
+        {
+          "number": 5,
+          "chapterId": "619955",
+          "duration": 72,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/005.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/005.webp",
+          "videoBytes": 7508093,
+          "coverBytes": 45036
+        },
+        {
+          "number": 6,
+          "chapterId": "619956",
+          "duration": 108,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/006.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/006.webp",
+          "videoBytes": 9293220,
+          "coverBytes": 34690
+        },
+        {
+          "number": 7,
+          "chapterId": "619957",
+          "duration": 79,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/007.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/007.webp",
+          "videoBytes": 8007708,
+          "coverBytes": 34950
+        },
+        {
+          "number": 8,
+          "chapterId": "619958",
+          "duration": 83,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/008.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/008.webp",
+          "videoBytes": 7791164,
+          "coverBytes": 27782
+        },
+        {
+          "number": 9,
+          "chapterId": "619959",
+          "duration": 90,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/009.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/009.webp",
+          "videoBytes": 8806117,
+          "coverBytes": 42764
+        },
+        {
+          "number": 10,
+          "chapterId": "619960",
+          "duration": 116,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/010.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/010.webp",
+          "videoBytes": 9365426,
+          "coverBytes": 23530
+        },
+        {
+          "number": 11,
+          "chapterId": "619961",
+          "duration": 77,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/011.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/011.webp",
+          "videoBytes": 6935270,
+          "coverBytes": 30438
+        },
+        {
+          "number": 12,
+          "chapterId": "619962",
+          "duration": 51,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/012.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/012.webp",
+          "videoBytes": 4805001,
+          "coverBytes": 38178
+        },
+        {
+          "number": 13,
+          "chapterId": "619963",
+          "duration": 68,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/013.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/013.webp",
+          "videoBytes": 7354031,
+          "coverBytes": 42824
+        },
+        {
+          "number": 14,
+          "chapterId": "619964",
+          "duration": 83,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/014.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/014.webp",
+          "videoBytes": 7649625,
+          "coverBytes": 65406
+        },
+        {
+          "number": 15,
+          "chapterId": "619965",
+          "duration": 87,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/015.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/015.webp",
+          "videoBytes": 8118025,
+          "coverBytes": 40182
+        },
+        {
+          "number": 16,
+          "chapterId": "619966",
+          "duration": 113,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/016.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/016.webp",
+          "videoBytes": 10320428,
+          "coverBytes": 45948
+        },
+        {
+          "number": 17,
+          "chapterId": "619967",
+          "duration": 87,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/017.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/017.webp",
+          "videoBytes": 9381842,
+          "coverBytes": 41606
+        },
+        {
+          "number": 18,
+          "chapterId": "619968",
+          "duration": 85,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/018.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/018.webp",
+          "videoBytes": 8732237,
+          "coverBytes": 35736
+        },
+        {
+          "number": 19,
+          "chapterId": "619969",
+          "duration": 78,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/019.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/019.webp",
+          "videoBytes": 7593158,
+          "coverBytes": 48736
+        },
+        {
+          "number": 20,
+          "chapterId": "619970",
+          "duration": 81,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/020.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/020.webp",
+          "videoBytes": 9130401,
+          "coverBytes": 27762
+        },
+        {
+          "number": 21,
+          "chapterId": "619971",
+          "duration": 57,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/021.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/021.webp",
+          "videoBytes": 7100994,
+          "coverBytes": 38076
+        },
+        {
+          "number": 22,
+          "chapterId": "619972",
+          "duration": 83,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/022.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/022.webp",
+          "videoBytes": 7878471,
+          "coverBytes": 56154
+        },
+        {
+          "number": 23,
+          "chapterId": "619973",
+          "duration": 65,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/023.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/023.webp",
+          "videoBytes": 6946791,
+          "coverBytes": 46946
+        },
+        {
+          "number": 24,
+          "chapterId": "619974",
+          "duration": 79,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/024.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/024.webp",
+          "videoBytes": 8641994,
+          "coverBytes": 38734
+        },
+        {
+          "number": 25,
+          "chapterId": "619975",
+          "duration": 78,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/025.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/025.webp",
+          "videoBytes": 7753300,
+          "coverBytes": 38108
+        },
+        {
+          "number": 26,
+          "chapterId": "619976",
+          "duration": 73,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/026.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/026.webp",
+          "videoBytes": 7776859,
+          "coverBytes": 40946
+        },
+        {
+          "number": 27,
+          "chapterId": "619977",
+          "duration": 92,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/027.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/027.webp",
+          "videoBytes": 9310874,
+          "coverBytes": 85172
+        },
+        {
+          "number": 28,
+          "chapterId": "619978",
+          "duration": 78,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/028.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/028.webp",
+          "videoBytes": 7649018,
+          "coverBytes": 44360
+        },
+        {
+          "number": 29,
+          "chapterId": "619979",
+          "duration": 101,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/029.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/029.webp",
+          "videoBytes": 10934267,
+          "coverBytes": 57458
+        },
+        {
+          "number": 30,
+          "chapterId": "619980",
+          "duration": 98,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/030.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/030.webp",
+          "videoBytes": 10979316,
+          "coverBytes": 47946
+        },
+        {
+          "number": 31,
+          "chapterId": "619981",
+          "duration": 65,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/031.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/031.webp",
+          "videoBytes": 6520558,
+          "coverBytes": 37530
+        },
+        {
+          "number": 32,
+          "chapterId": "619982",
+          "duration": 68,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/032.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/032.webp",
+          "videoBytes": 7638970,
+          "coverBytes": 38208
+        },
+        {
+          "number": 33,
+          "chapterId": "619983",
+          "duration": 101,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/033.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/033.webp",
+          "videoBytes": 8838367,
+          "coverBytes": 55004
+        },
+        {
+          "number": 34,
+          "chapterId": "619984",
+          "duration": 88,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/034.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/034.webp",
+          "videoBytes": 8012232,
+          "coverBytes": 52326
+        },
+        {
+          "number": 35,
+          "chapterId": "619985",
+          "duration": 87,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/035.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/035.webp",
+          "videoBytes": 7928835,
+          "coverBytes": 50298
+        },
+        {
+          "number": 36,
+          "chapterId": "619986",
+          "duration": 81,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/036.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/036.webp",
+          "videoBytes": 8233588,
+          "coverBytes": 66110
+        },
+        {
+          "number": 37,
+          "chapterId": "619987",
+          "duration": 124,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/037.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/037.webp",
+          "videoBytes": 10969920,
+          "coverBytes": 43166
+        },
+        {
+          "number": 38,
+          "chapterId": "619988",
+          "duration": 74,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/038.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/038.webp",
+          "videoBytes": 6374016,
+          "coverBytes": 32290
+        },
+        {
+          "number": 39,
+          "chapterId": "619989",
+          "duration": 74,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/039.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/039.webp",
+          "videoBytes": 7916363,
+          "coverBytes": 38146
+        },
+        {
+          "number": 40,
+          "chapterId": "619990",
+          "duration": 107,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/040.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/040.webp",
+          "videoBytes": 8847367,
+          "coverBytes": 40972
+        },
+        {
+          "number": 41,
+          "chapterId": "619991",
+          "duration": 106,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/041.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/041.webp",
+          "videoBytes": 8202297,
+          "coverBytes": 35628
+        },
+        {
+          "number": 42,
+          "chapterId": "619992",
+          "duration": 81,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/042.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/042.webp",
+          "videoBytes": 5982397,
+          "coverBytes": 23700
+        },
+        {
+          "number": 43,
+          "chapterId": "619993",
+          "duration": 87,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/043.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/043.webp",
+          "videoBytes": 7639961,
+          "coverBytes": 47018
+        },
+        {
+          "number": 44,
+          "chapterId": "619994",
+          "duration": 80,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/044.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/044.webp",
+          "videoBytes": 7952406,
+          "coverBytes": 44872
+        },
+        {
+          "number": 45,
+          "chapterId": "619995",
+          "duration": 115,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/045.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/045.webp",
+          "videoBytes": 11137230,
+          "coverBytes": 44988
+        },
+        {
+          "number": 46,
+          "chapterId": "619996",
+          "duration": 121,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/046.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/046.webp",
+          "videoBytes": 10655058,
+          "coverBytes": 54208
+        },
+        {
+          "number": 47,
+          "chapterId": "619997",
+          "duration": 106,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/047.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/047.webp",
+          "videoBytes": 9893448,
+          "coverBytes": 14554
+        },
+        {
+          "number": 48,
+          "chapterId": "619998",
+          "duration": 90,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/048.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/048.webp",
+          "videoBytes": 9030725,
+          "coverBytes": 39390
+        },
+        {
+          "number": 49,
+          "chapterId": "619999",
+          "duration": 71,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/049.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/049.webp",
+          "videoBytes": 6952738,
+          "coverBytes": 33854
+        },
+        {
+          "number": 50,
+          "chapterId": "620000",
+          "duration": 104,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/050.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/050.webp",
+          "videoBytes": 10389874,
+          "coverBytes": 48410
+        },
+        {
+          "number": 51,
+          "chapterId": "620001",
+          "duration": 102,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/051.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/051.webp",
+          "videoBytes": 9881300,
+          "coverBytes": 34224
+        },
+        {
+          "number": 52,
+          "chapterId": "620002",
+          "duration": 97,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/052.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/052.webp",
+          "videoBytes": 8789125,
+          "coverBytes": 39472
+        },
+        {
+          "number": 53,
+          "chapterId": "620003",
+          "duration": 109,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/053.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/053.webp",
+          "videoBytes": 10013406,
+          "coverBytes": 62950
+        },
+        {
+          "number": 54,
+          "chapterId": "620004",
+          "duration": 84,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/054.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/054.webp",
+          "videoBytes": 8352657,
+          "coverBytes": 39014
+        },
+        {
+          "number": 55,
+          "chapterId": "620005",
+          "duration": 122,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9291/episodes/055.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9291/covers/055.webp",
+          "videoBytes": 10454887,
+          "coverBytes": 44022
+        }
+      ]
+    },
+    {
+      "playletId": "9038",
+      "title": "The Dragon Lord's Forbidden Captive Bride",
+      "description": "Sophie, a girl with hidden Phoenix blood, has long been ostracized and exploited by her Avian kin, forced as a sacrifice for tribal peace. Meek in appearance yet tough-willed, she endures family betrayal, her lover’s suspicion and repeated tortures. Trapped in captivity, she never surrenders. Through life-or-death separation and bloodline awakening, she breaks free of dual tribal shackles, seeks justice for her loved ones and herself, and finally achieves mutual affection with the Dragon Lord, gaining redemption for both her family and herself.",
+      "tags": [
+        "Dragons",
+        "One-night stand",
+        "Compulsory love",
+        "Redemption",
+        "Spicy",
+        "Royalty",
+        "Romance",
+        "Animated",
+        "Western Fantasy"
+      ],
+      "episodeCount": 55,
+      "episodes": [
+        {
+          "number": 1,
+          "chapterId": "608087",
+          "duration": 81,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/001.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/001.webp",
+          "videoBytes": 9132768,
+          "coverBytes": 35204
+        },
+        {
+          "number": 2,
+          "chapterId": "608088",
+          "duration": 249,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/002.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/002.webp",
+          "videoBytes": 27764333,
+          "coverBytes": 55350
+        },
+        {
+          "number": 3,
+          "chapterId": "608089",
+          "duration": 218,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/003.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/003.webp",
+          "videoBytes": 24307248,
+          "coverBytes": 46056
+        },
+        {
+          "number": 4,
+          "chapterId": "608090",
+          "duration": 104,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/004.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/004.webp",
+          "videoBytes": 13917217,
+          "coverBytes": 52612
+        },
+        {
+          "number": 5,
+          "chapterId": "608091",
+          "duration": 69,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/005.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/005.webp",
+          "videoBytes": 7643646,
+          "coverBytes": 100548
+        },
+        {
+          "number": 6,
+          "chapterId": "608092",
+          "duration": 123,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/006.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/006.webp",
+          "videoBytes": 13329838,
+          "coverBytes": 29276
+        },
+        {
+          "number": 7,
+          "chapterId": "608093",
+          "duration": 129,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/007.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/007.webp",
+          "videoBytes": 14368787,
+          "coverBytes": 51208
+        },
+        {
+          "number": 8,
+          "chapterId": "608094",
+          "duration": 169,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/008.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/008.webp",
+          "videoBytes": 12728099,
+          "coverBytes": 43330
+        },
+        {
+          "number": 9,
+          "chapterId": "608095",
+          "duration": 156,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/009.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/009.webp",
+          "videoBytes": 11660703,
+          "coverBytes": 15608
+        },
+        {
+          "number": 10,
+          "chapterId": "608096",
+          "duration": 136,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/010.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/010.webp",
+          "videoBytes": 9652871,
+          "coverBytes": 31424
+        },
+        {
+          "number": 11,
+          "chapterId": "608097",
+          "duration": 184,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/011.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/011.webp",
+          "videoBytes": 13701260,
+          "coverBytes": 93656
+        },
+        {
+          "number": 12,
+          "chapterId": "608098",
+          "duration": 131,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/012.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/012.webp",
+          "videoBytes": 9085024,
+          "coverBytes": 38370
+        },
+        {
+          "number": 13,
+          "chapterId": "608099",
+          "duration": 107,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/013.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/013.webp",
+          "videoBytes": 6788127,
+          "coverBytes": 40356
+        },
+        {
+          "number": 14,
+          "chapterId": "608100",
+          "duration": 141,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/014.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/014.webp",
+          "videoBytes": 9363476,
+          "coverBytes": 63086
+        },
+        {
+          "number": 15,
+          "chapterId": "608101",
+          "duration": 141,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/015.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/015.webp",
+          "videoBytes": 9784996,
+          "coverBytes": 41992
+        },
+        {
+          "number": 16,
+          "chapterId": "608102",
+          "duration": 109,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/016.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/016.webp",
+          "videoBytes": 7811319,
+          "coverBytes": 48324
+        },
+        {
+          "number": 17,
+          "chapterId": "608103",
+          "duration": 83,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/017.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/017.webp",
+          "videoBytes": 6649569,
+          "coverBytes": 79290
+        },
+        {
+          "number": 18,
+          "chapterId": "608104",
+          "duration": 103,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/018.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/018.webp",
+          "videoBytes": 7563047,
+          "coverBytes": 78696
+        },
+        {
+          "number": 19,
+          "chapterId": "608105",
+          "duration": 54,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/019.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/019.webp",
+          "videoBytes": 4192162,
+          "coverBytes": 102496
+        },
+        {
+          "number": 20,
+          "chapterId": "608106",
+          "duration": 48,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/020.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/020.webp",
+          "videoBytes": 3508571,
+          "coverBytes": 43734
+        },
+        {
+          "number": 21,
+          "chapterId": "608107",
+          "duration": 65,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/021.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/021.webp",
+          "videoBytes": 4104626,
+          "coverBytes": 63232
+        },
+        {
+          "number": 22,
+          "chapterId": "608108",
+          "duration": 61,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/022.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/022.webp",
+          "videoBytes": 4159383,
+          "coverBytes": 45170
+        },
+        {
+          "number": 23,
+          "chapterId": "608109",
+          "duration": 57,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/023.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/023.webp",
+          "videoBytes": 4122652,
+          "coverBytes": 41378
+        },
+        {
+          "number": 24,
+          "chapterId": "608110",
+          "duration": 106,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/024.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/024.webp",
+          "videoBytes": 8169101,
+          "coverBytes": 64210
+        },
+        {
+          "number": 25,
+          "chapterId": "608111",
+          "duration": 64,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/025.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/025.webp",
+          "videoBytes": 4404174,
+          "coverBytes": 33994
+        },
+        {
+          "number": 26,
+          "chapterId": "608112",
+          "duration": 47,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/026.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/026.webp",
+          "videoBytes": 3899796,
+          "coverBytes": 4386
+        },
+        {
+          "number": 27,
+          "chapterId": "608113",
+          "duration": 110,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/027.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/027.webp",
+          "videoBytes": 8138462,
+          "coverBytes": 47704
+        },
+        {
+          "number": 28,
+          "chapterId": "608114",
+          "duration": 61,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/028.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/028.webp",
+          "videoBytes": 4174725,
+          "coverBytes": 60316
+        },
+        {
+          "number": 29,
+          "chapterId": "608115",
+          "duration": 43,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/029.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/029.webp",
+          "videoBytes": 2942153,
+          "coverBytes": 68698
+        },
+        {
+          "number": 30,
+          "chapterId": "608116",
+          "duration": 51,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/030.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/030.webp",
+          "videoBytes": 3593127,
+          "coverBytes": 42270
+        },
+        {
+          "number": 31,
+          "chapterId": "608117",
+          "duration": 92,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/031.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/031.webp",
+          "videoBytes": 7857606,
+          "coverBytes": 38836
+        },
+        {
+          "number": 32,
+          "chapterId": "608118",
+          "duration": 53,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/032.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/032.webp",
+          "videoBytes": 3911850,
+          "coverBytes": 62992
+        },
+        {
+          "number": 33,
+          "chapterId": "608119",
+          "duration": 40,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/033.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/033.webp",
+          "videoBytes": 3388077,
+          "coverBytes": 41670
+        },
+        {
+          "number": 34,
+          "chapterId": "608120",
+          "duration": 54,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/034.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/034.webp",
+          "videoBytes": 4564945,
+          "coverBytes": 33396
+        },
+        {
+          "number": 35,
+          "chapterId": "608121",
+          "duration": 56,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/035.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/035.webp",
+          "videoBytes": 4621213,
+          "coverBytes": 55648
+        },
+        {
+          "number": 36,
+          "chapterId": "608122",
+          "duration": 83,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/036.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/036.webp",
+          "videoBytes": 6060956,
+          "coverBytes": 93868
+        },
+        {
+          "number": 37,
+          "chapterId": "608123",
+          "duration": 63,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/037.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/037.webp",
+          "videoBytes": 4907280,
+          "coverBytes": 51648
+        },
+        {
+          "number": 38,
+          "chapterId": "608124",
+          "duration": 54,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/038.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/038.webp",
+          "videoBytes": 4059111,
+          "coverBytes": 84050
+        },
+        {
+          "number": 39,
+          "chapterId": "608125",
+          "duration": 65,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/039.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/039.webp",
+          "videoBytes": 4174605,
+          "coverBytes": 41264
+        },
+        {
+          "number": 40,
+          "chapterId": "608126",
+          "duration": 49,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/040.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/040.webp",
+          "videoBytes": 2888980,
+          "coverBytes": 57194
+        },
+        {
+          "number": 41,
+          "chapterId": "608127",
+          "duration": 88,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/041.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/041.webp",
+          "videoBytes": 5056698,
+          "coverBytes": 75032
+        },
+        {
+          "number": 42,
+          "chapterId": "608128",
+          "duration": 66,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/042.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/042.webp",
+          "videoBytes": 4809253,
+          "coverBytes": 71628
+        },
+        {
+          "number": 43,
+          "chapterId": "608129",
+          "duration": 54,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/043.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/043.webp",
+          "videoBytes": 3803897,
+          "coverBytes": 73386
+        },
+        {
+          "number": 44,
+          "chapterId": "608130",
+          "duration": 53,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/044.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/044.webp",
+          "videoBytes": 3702699,
+          "coverBytes": 50186
+        },
+        {
+          "number": 45,
+          "chapterId": "608131",
+          "duration": 45,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/045.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/045.webp",
+          "videoBytes": 3166977,
+          "coverBytes": 85612
+        },
+        {
+          "number": 46,
+          "chapterId": "608132",
+          "duration": 73,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/046.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/046.webp",
+          "videoBytes": 5031227,
+          "coverBytes": 52962
+        },
+        {
+          "number": 47,
+          "chapterId": "608133",
+          "duration": 50,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/047.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/047.webp",
+          "videoBytes": 3221383,
+          "coverBytes": 33526
+        },
+        {
+          "number": 48,
+          "chapterId": "608134",
+          "duration": 52,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/048.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/048.webp",
+          "videoBytes": 3016906,
+          "coverBytes": 42130
+        },
+        {
+          "number": 49,
+          "chapterId": "608135",
+          "duration": 47,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/049.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/049.webp",
+          "videoBytes": 4183307,
+          "coverBytes": 76406
+        },
+        {
+          "number": 50,
+          "chapterId": "608136",
+          "duration": 131,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/050.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/050.webp",
+          "videoBytes": 10505802,
+          "coverBytes": 65198
+        },
+        {
+          "number": 51,
+          "chapterId": "608137",
+          "duration": 128,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/051.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/051.webp",
+          "videoBytes": 10339603,
+          "coverBytes": 68434
+        },
+        {
+          "number": 52,
+          "chapterId": "608138",
+          "duration": 79,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/052.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/052.webp",
+          "videoBytes": 5649740,
+          "coverBytes": 70230
+        },
+        {
+          "number": 53,
+          "chapterId": "608139",
+          "duration": 109,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/053.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/053.webp",
+          "videoBytes": 6743578,
+          "coverBytes": 55696
+        },
+        {
+          "number": 54,
+          "chapterId": "608140",
+          "duration": 90,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/054.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/054.webp",
+          "videoBytes": 6550573,
+          "coverBytes": 77972
+        },
+        {
+          "number": 55,
+          "chapterId": "608141",
+          "duration": 52,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9038/episodes/055.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9038/covers/055.webp",
+          "videoBytes": 3881715,
+          "coverBytes": 72168
+        }
+      ]
+    },
+    {
+      "playletId": "9737",
+      "title": "The Next Mate: My Ex's Father-In-Law",
+      "description": "Judy, adopted and loving her fated mate Ethan, is cruelly dumped when he courts Erin, daughter of Alpha Gavin, to secure the pack leadership. Heartbroken, she nearly falls into Gavin's arms, but the aloof Alpha keeps his distance. Her adoptive father is jailed; Ethan demands she become his mistress; she refuses. Gavin reluctantly hires her as his son's tutor, and despite his cold reserve, an undeniable bond forms. Ethan schemes relentlessly, spreading rumors, sabotaging her scholarship, but Gavin dismantles every move. Driven mad with envy, Ethan kidnaps and drugs Judy on the full moon eve. Gavin tears through the pack to save her. That night, barriers shatter and love explodes. At the inauguration, Gavin exposes Ethan's crimes, strips his spirit wolf, and defies centuries of pack law to declare Judy his one and only Luna, chosen, not fated. Together, they stand against prejudice and walk into the future side by side.",
+      "tags": [
+        "Taboo",
+        "Age Gap",
+        "Love Tension",
+        "Werewolf",
+        "Romance",
+        "AI",
+        "Urban"
+      ],
+      "episodeCount": 49,
+      "episodes": [
+        {
+          "number": 1,
+          "chapterId": "640873",
+          "duration": 140,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/001.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/001.webp",
+          "videoBytes": 16789108,
+          "coverBytes": 26256
+        },
+        {
+          "number": 2,
+          "chapterId": "640874",
+          "duration": 99,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/002.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/002.webp",
+          "videoBytes": 9907964,
+          "coverBytes": 42390
+        },
+        {
+          "number": 3,
+          "chapterId": "640875",
+          "duration": 126,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/003.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/003.webp",
+          "videoBytes": 12261928,
+          "coverBytes": 35770
+        },
+        {
+          "number": 4,
+          "chapterId": "640876",
+          "duration": 122,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/004.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/004.webp",
+          "videoBytes": 13481236,
+          "coverBytes": 83692
+        },
+        {
+          "number": 5,
+          "chapterId": "640877",
+          "duration": 89,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/005.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/005.webp",
+          "videoBytes": 9551060,
+          "coverBytes": 62942
+        },
+        {
+          "number": 6,
+          "chapterId": "640878",
+          "duration": 112,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/006.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/006.webp",
+          "videoBytes": 12928810,
+          "coverBytes": 63182
+        },
+        {
+          "number": 7,
+          "chapterId": "640879",
+          "duration": 110,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/007.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/007.webp",
+          "videoBytes": 13458789,
+          "coverBytes": 73360
+        },
+        {
+          "number": 8,
+          "chapterId": "640880",
+          "duration": 52,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/008.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/008.webp",
+          "videoBytes": 6685781,
+          "coverBytes": 62422
+        },
+        {
+          "number": 9,
+          "chapterId": "640881",
+          "duration": 111,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/009.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/009.webp",
+          "videoBytes": 22723351,
+          "coverBytes": 58428
+        },
+        {
+          "number": 10,
+          "chapterId": "640882",
+          "duration": 71,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/010.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/010.webp",
+          "videoBytes": 15917197,
+          "coverBytes": 70216
+        },
+        {
+          "number": 11,
+          "chapterId": "640883",
+          "duration": 97,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/011.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/011.webp",
+          "videoBytes": 22489699,
+          "coverBytes": 93284
+        },
+        {
+          "number": 12,
+          "chapterId": "640884",
+          "duration": 89,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/012.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/012.webp",
+          "videoBytes": 18809961,
+          "coverBytes": 57014
+        },
+        {
+          "number": 13,
+          "chapterId": "640885",
+          "duration": 91,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/013.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/013.webp",
+          "videoBytes": 21720636,
+          "coverBytes": 99294
+        },
+        {
+          "number": 14,
+          "chapterId": "640886",
+          "duration": 70,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/014.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/014.webp",
+          "videoBytes": 15370183,
+          "coverBytes": 109794
+        },
+        {
+          "number": 15,
+          "chapterId": "640887",
+          "duration": 87,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/015.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/015.webp",
+          "videoBytes": 20326329,
+          "coverBytes": 84316
+        },
+        {
+          "number": 16,
+          "chapterId": "640888",
+          "duration": 91,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/016.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/016.webp",
+          "videoBytes": 20116174,
+          "coverBytes": 72832
+        },
+        {
+          "number": 17,
+          "chapterId": "640889",
+          "duration": 89,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/017.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/017.webp",
+          "videoBytes": 20004815,
+          "coverBytes": 88932
+        },
+        {
+          "number": 18,
+          "chapterId": "640890",
+          "duration": 74,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/018.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/018.webp",
+          "videoBytes": 18122897,
+          "coverBytes": 75826
+        },
+        {
+          "number": 19,
+          "chapterId": "640891",
+          "duration": 99,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/019.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/019.webp",
+          "videoBytes": 22108713,
+          "coverBytes": 39622
+        },
+        {
+          "number": 20,
+          "chapterId": "640892",
+          "duration": 134,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/020.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/020.webp",
+          "videoBytes": 29584152,
+          "coverBytes": 66126
+        },
+        {
+          "number": 21,
+          "chapterId": "640893",
+          "duration": 80,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/021.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/021.webp",
+          "videoBytes": 18538304,
+          "coverBytes": 53500
+        },
+        {
+          "number": 22,
+          "chapterId": "640894",
+          "duration": 130,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/022.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/022.webp",
+          "videoBytes": 30152007,
+          "coverBytes": 67208
+        },
+        {
+          "number": 23,
+          "chapterId": "640895",
+          "duration": 103,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/023.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/023.webp",
+          "videoBytes": 24722475,
+          "coverBytes": 52324
+        },
+        {
+          "number": 24,
+          "chapterId": "640896",
+          "duration": 70,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/024.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/024.webp",
+          "videoBytes": 17244903,
+          "coverBytes": 66196
+        },
+        {
+          "number": 25,
+          "chapterId": "640897",
+          "duration": 73,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/025.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/025.webp",
+          "videoBytes": 17029450,
+          "coverBytes": 60826
+        },
+        {
+          "number": 26,
+          "chapterId": "640898",
+          "duration": 43,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/026.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/026.webp",
+          "videoBytes": 11433485,
+          "coverBytes": 78942
+        },
+        {
+          "number": 27,
+          "chapterId": "640899",
+          "duration": 68,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/027.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/027.webp",
+          "videoBytes": 15110837,
+          "coverBytes": 76094
+        },
+        {
+          "number": 28,
+          "chapterId": "640900",
+          "duration": 65,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/028.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/028.webp",
+          "videoBytes": 15759843,
+          "coverBytes": 65506
+        },
+        {
+          "number": 29,
+          "chapterId": "640901",
+          "duration": 69,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/029.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/029.webp",
+          "videoBytes": 16068691,
+          "coverBytes": 58446
+        },
+        {
+          "number": 30,
+          "chapterId": "640902",
+          "duration": 75,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/030.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/030.webp",
+          "videoBytes": 17305649,
+          "coverBytes": 38892
+        },
+        {
+          "number": 31,
+          "chapterId": "640903",
+          "duration": 80,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/031.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/031.webp",
+          "videoBytes": 19569166,
+          "coverBytes": 65534
+        },
+        {
+          "number": 32,
+          "chapterId": "640904",
+          "duration": 80,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/032.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/032.webp",
+          "videoBytes": 17508799,
+          "coverBytes": 108814
+        },
+        {
+          "number": 33,
+          "chapterId": "640905",
+          "duration": 70,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/033.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/033.webp",
+          "videoBytes": 15711152,
+          "coverBytes": 83386
+        },
+        {
+          "number": 34,
+          "chapterId": "640906",
+          "duration": 64,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/034.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/034.webp",
+          "videoBytes": 14606210,
+          "coverBytes": 55420
+        },
+        {
+          "number": 35,
+          "chapterId": "640907",
+          "duration": 90,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/035.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/035.webp",
+          "videoBytes": 20724740,
+          "coverBytes": 69452
+        },
+        {
+          "number": 36,
+          "chapterId": "640908",
+          "duration": 65,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/036.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/036.webp",
+          "videoBytes": 13370708,
+          "coverBytes": 71656
+        },
+        {
+          "number": 37,
+          "chapterId": "640909",
+          "duration": 94,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/037.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/037.webp",
+          "videoBytes": 24423525,
+          "coverBytes": 44774
+        },
+        {
+          "number": 38,
+          "chapterId": "640910",
+          "duration": 56,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/038.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/038.webp",
+          "videoBytes": 13834079,
+          "coverBytes": 71794
+        },
+        {
+          "number": 39,
+          "chapterId": "640911",
+          "duration": 83,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/039.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/039.webp",
+          "videoBytes": 17804135,
+          "coverBytes": 49616
+        },
+        {
+          "number": 40,
+          "chapterId": "640912",
+          "duration": 109,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/040.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/040.webp",
+          "videoBytes": 24756918,
+          "coverBytes": 49362
+        },
+        {
+          "number": 41,
+          "chapterId": "640913",
+          "duration": 80,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/041.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/041.webp",
+          "videoBytes": 22527484,
+          "coverBytes": 39532
+        },
+        {
+          "number": 42,
+          "chapterId": "640914",
+          "duration": 73,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/042.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/042.webp",
+          "videoBytes": 19590605,
+          "coverBytes": 74098
+        },
+        {
+          "number": 43,
+          "chapterId": "640915",
+          "duration": 69,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/043.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/043.webp",
+          "videoBytes": 11866347,
+          "coverBytes": 60874
+        },
+        {
+          "number": 44,
+          "chapterId": "640916",
+          "duration": 79,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/044.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/044.webp",
+          "videoBytes": 13591294,
+          "coverBytes": 50574
+        },
+        {
+          "number": 45,
+          "chapterId": "640917",
+          "duration": 88,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/045.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/045.webp",
+          "videoBytes": 18448536,
+          "coverBytes": 32526
+        },
+        {
+          "number": 46,
+          "chapterId": "640918",
+          "duration": 79,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/046.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/046.webp",
+          "videoBytes": 14740804,
+          "coverBytes": 73288
+        },
+        {
+          "number": 47,
+          "chapterId": "640919",
+          "duration": 60,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/047.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/047.webp",
+          "videoBytes": 14560744,
+          "coverBytes": 93710
+        },
+        {
+          "number": 48,
+          "chapterId": "640920",
+          "duration": 82,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/048.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/048.webp",
+          "videoBytes": 21889570,
+          "coverBytes": 118792
+        },
+        {
+          "number": 49,
+          "chapterId": "640921",
+          "duration": 50,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9737/episodes/049.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9737/covers/049.webp",
+          "videoBytes": 11016417,
+          "coverBytes": 79872
+        }
+      ]
+    },
+    {
+      "playletId": "9326",
+      "title": "They Called Me the Other Woman",
+      "description": "On her seventh wedding anniversary, heiress Evelyn Carter is ambushed by Sophie, a viral TikTok influencer with millions of followers, who livestreams her way into Evelyn’s estate, humiliating and attacking her on camera while branding her a homewrecker. What no one realizes is Andrew is her lawful husband, and Sophie is the real other woman. As the truth unravels, an even deeper conspiracy surfaces: Evelyn’s most trusted best friend Mia has been secretly working with Andrew to seize control of the Carter Group empire. But Evelyn has known everything from the very first day.",
+      "tags": [
+        "Female Awakening",
+        "Sweet Revenge",
+        "Plot Twists",
+        "Heroine",
+        "Elite",
+        "RealisticFiction",
+        "AI",
+        "Urban"
+      ],
+      "episodeCount": 46,
+      "episodes": [
+        {
+          "number": 1,
+          "chapterId": "621733",
+          "duration": 143,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/001.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/001.webp",
+          "videoBytes": 13905600,
+          "coverBytes": 93302
+        },
+        {
+          "number": 2,
+          "chapterId": "621734",
+          "duration": 53,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/002.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/002.webp",
+          "videoBytes": 6608304,
+          "coverBytes": 42906
+        },
+        {
+          "number": 3,
+          "chapterId": "621735",
+          "duration": 108,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/003.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/003.webp",
+          "videoBytes": 15275360,
+          "coverBytes": 60300
+        },
+        {
+          "number": 4,
+          "chapterId": "621736",
+          "duration": 92,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/004.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/004.webp",
+          "videoBytes": 11038756,
+          "coverBytes": 43498
+        },
+        {
+          "number": 5,
+          "chapterId": "621737",
+          "duration": 102,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/005.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/005.webp",
+          "videoBytes": 15768275,
+          "coverBytes": 105916
+        },
+        {
+          "number": 6,
+          "chapterId": "621738",
+          "duration": 128,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/006.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/006.webp",
+          "videoBytes": 18659708,
+          "coverBytes": 132396
+        },
+        {
+          "number": 7,
+          "chapterId": "621739",
+          "duration": 100,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/007.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/007.webp",
+          "videoBytes": 12503209,
+          "coverBytes": 53876
+        },
+        {
+          "number": 8,
+          "chapterId": "621740",
+          "duration": 89,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/008.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/008.webp",
+          "videoBytes": 11237534,
+          "coverBytes": 72582
+        },
+        {
+          "number": 9,
+          "chapterId": "621741",
+          "duration": 88,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/009.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/009.webp",
+          "videoBytes": 10751606,
+          "coverBytes": 117158
+        },
+        {
+          "number": 10,
+          "chapterId": "621742",
+          "duration": 58,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/010.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/010.webp",
+          "videoBytes": 7712487,
+          "coverBytes": 62176
+        },
+        {
+          "number": 11,
+          "chapterId": "621743",
+          "duration": 41,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/011.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/011.webp",
+          "videoBytes": 3259506,
+          "coverBytes": 21008
+        },
+        {
+          "number": 12,
+          "chapterId": "621744",
+          "duration": 84,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/012.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/012.webp",
+          "videoBytes": 6723399,
+          "coverBytes": 89504
+        },
+        {
+          "number": 13,
+          "chapterId": "621745",
+          "duration": 86,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/013.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/013.webp",
+          "videoBytes": 7718047,
+          "coverBytes": 81496
+        },
+        {
+          "number": 14,
+          "chapterId": "621746",
+          "duration": 95,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/014.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/014.webp",
+          "videoBytes": 7824856,
+          "coverBytes": 84668
+        },
+        {
+          "number": 15,
+          "chapterId": "621747",
+          "duration": 71,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/015.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/015.webp",
+          "videoBytes": 6131044,
+          "coverBytes": 96002
+        },
+        {
+          "number": 16,
+          "chapterId": "621748",
+          "duration": 46,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/016.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/016.webp",
+          "videoBytes": 3490510,
+          "coverBytes": 60712
+        },
+        {
+          "number": 17,
+          "chapterId": "621749",
+          "duration": 65,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/017.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/017.webp",
+          "videoBytes": 5456165,
+          "coverBytes": 105494
+        },
+        {
+          "number": 18,
+          "chapterId": "621750",
+          "duration": 91,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/018.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/018.webp",
+          "videoBytes": 8723082,
+          "coverBytes": 76984
+        },
+        {
+          "number": 19,
+          "chapterId": "621751",
+          "duration": 39,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/019.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/019.webp",
+          "videoBytes": 3326193,
+          "coverBytes": 68330
+        },
+        {
+          "number": 20,
+          "chapterId": "621752",
+          "duration": 60,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/020.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/020.webp",
+          "videoBytes": 4877684,
+          "coverBytes": 64058
+        },
+        {
+          "number": 21,
+          "chapterId": "621753",
+          "duration": 129,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/021.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/021.webp",
+          "videoBytes": 9218451,
+          "coverBytes": 112886
+        },
+        {
+          "number": 22,
+          "chapterId": "621754",
+          "duration": 87,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/022.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/022.webp",
+          "videoBytes": 7601143,
+          "coverBytes": 66444
+        },
+        {
+          "number": 23,
+          "chapterId": "621755",
+          "duration": 83,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/023.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/023.webp",
+          "videoBytes": 7095073,
+          "coverBytes": 78982
+        },
+        {
+          "number": 24,
+          "chapterId": "621756",
+          "duration": 75,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/024.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/024.webp",
+          "videoBytes": 5758898,
+          "coverBytes": 59092
+        },
+        {
+          "number": 25,
+          "chapterId": "621757",
+          "duration": 73,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/025.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/025.webp",
+          "videoBytes": 5538547,
+          "coverBytes": 78684
+        },
+        {
+          "number": 26,
+          "chapterId": "621758",
+          "duration": 56,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/026.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/026.webp",
+          "videoBytes": 4371128,
+          "coverBytes": 79086
+        },
+        {
+          "number": 27,
+          "chapterId": "621759",
+          "duration": 52,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/027.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/027.webp",
+          "videoBytes": 4294090,
+          "coverBytes": 68350
+        },
+        {
+          "number": 28,
+          "chapterId": "621760",
+          "duration": 73,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/028.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/028.webp",
+          "videoBytes": 6084605,
+          "coverBytes": 59784
+        },
+        {
+          "number": 29,
+          "chapterId": "621761",
+          "duration": 70,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/029.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/029.webp",
+          "videoBytes": 5783913,
+          "coverBytes": 50620
+        },
+        {
+          "number": 30,
+          "chapterId": "621762",
+          "duration": 76,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/030.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/030.webp",
+          "videoBytes": 5425594,
+          "coverBytes": 49616
+        },
+        {
+          "number": 31,
+          "chapterId": "621763",
+          "duration": 48,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/031.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/031.webp",
+          "videoBytes": 3613593,
+          "coverBytes": 51912
+        },
+        {
+          "number": 32,
+          "chapterId": "621764",
+          "duration": 42,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/032.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/032.webp",
+          "videoBytes": 3031771,
+          "coverBytes": 73524
+        },
+        {
+          "number": 33,
+          "chapterId": "621765",
+          "duration": 50,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/033.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/033.webp",
+          "videoBytes": 3914434,
+          "coverBytes": 48644
+        },
+        {
+          "number": 34,
+          "chapterId": "621766",
+          "duration": 59,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/034.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/034.webp",
+          "videoBytes": 3963362,
+          "coverBytes": 43892
+        },
+        {
+          "number": 35,
+          "chapterId": "621767",
+          "duration": 107,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/035.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/035.webp",
+          "videoBytes": 9843868,
+          "coverBytes": 45900
+        },
+        {
+          "number": 36,
+          "chapterId": "621768",
+          "duration": 69,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/036.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/036.webp",
+          "videoBytes": 4212224,
+          "coverBytes": 59326
+        },
+        {
+          "number": 37,
+          "chapterId": "621769",
+          "duration": 82,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/037.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/037.webp",
+          "videoBytes": 5448261,
+          "coverBytes": 17888
+        },
+        {
+          "number": 38,
+          "chapterId": "621770",
+          "duration": 81,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/038.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/038.webp",
+          "videoBytes": 5906407,
+          "coverBytes": 62618
+        },
+        {
+          "number": 39,
+          "chapterId": "621771",
+          "duration": 63,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/039.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/039.webp",
+          "videoBytes": 5077321,
+          "coverBytes": 52252
+        },
+        {
+          "number": 40,
+          "chapterId": "621772",
+          "duration": 68,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/040.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/040.webp",
+          "videoBytes": 5036436,
+          "coverBytes": 45024
+        },
+        {
+          "number": 41,
+          "chapterId": "621773",
+          "duration": 59,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/041.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/041.webp",
+          "videoBytes": 5723386,
+          "coverBytes": 72976
+        },
+        {
+          "number": 42,
+          "chapterId": "621774",
+          "duration": 67,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/042.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/042.webp",
+          "videoBytes": 4944758,
+          "coverBytes": 70164
+        },
+        {
+          "number": 43,
+          "chapterId": "621775",
+          "duration": 80,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/043.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/043.webp",
+          "videoBytes": 6727232,
+          "coverBytes": 73362
+        },
+        {
+          "number": 44,
+          "chapterId": "621776",
+          "duration": 69,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/044.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/044.webp",
+          "videoBytes": 5687798,
+          "coverBytes": 67500
+        },
+        {
+          "number": 45,
+          "chapterId": "621777",
+          "duration": 66,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/045.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/045.webp",
+          "videoBytes": 5418886,
+          "coverBytes": 63698
+        },
+        {
+          "number": 46,
+          "chapterId": "621778",
+          "duration": 97,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/9326/episodes/046.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/9326/covers/046.webp",
+          "videoBytes": 10691806,
+          "coverBytes": 106466
+        }
+      ]
+    },
+    {
+      "playletId": "6573",
+      "title": "Trapped in His Grip, She Can Never Escape",
+      "description": "Song Cha fell in love with Wan Ni at first sight after she saved him. He boldly interrupted her wedding to Hu En and married her. Song Cha's protective nature won Wan Ni's heart, but Hu En, consumed by jealousy over Wan Ni's change of heart, killed her father and framed Song Cha. Confronted in an abandoned factory, Hu En tried to kill them both but was overpowered by Song Cha. The police arrived, arresting Hu En, and Song Cha, though achieving his desire to be with Wan Ni, faced punishment for his crimes.",
+      "tags": [
+        "Love at First Sight",
+        "Compulsory love",
+        "Multiple Loves",
+        "Mafia",
+        "AI",
+        "Romance",
+        "Urban"
+      ],
+      "episodeCount": 50,
+      "episodes": [
+        {
+          "number": 1,
+          "chapterId": "466853",
+          "duration": 123,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/001.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/001.webp",
+          "videoBytes": 12576369,
+          "coverBytes": 37546
+        },
+        {
+          "number": 2,
+          "chapterId": "466854",
+          "duration": 64,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/002.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/002.webp",
+          "videoBytes": 6293127,
+          "coverBytes": 47064
+        },
+        {
+          "number": 3,
+          "chapterId": "466855",
+          "duration": 86,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/003.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/003.webp",
+          "videoBytes": 9989859,
+          "coverBytes": 49028
+        },
+        {
+          "number": 4,
+          "chapterId": "466856",
+          "duration": 56,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/004.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/004.webp",
+          "videoBytes": 6555534,
+          "coverBytes": 56540
+        },
+        {
+          "number": 5,
+          "chapterId": "466857",
+          "duration": 63,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/005.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/005.webp",
+          "videoBytes": 5631187,
+          "coverBytes": 95548
+        },
+        {
+          "number": 6,
+          "chapterId": "466858",
+          "duration": 75,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/006.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/006.webp",
+          "videoBytes": 8084196,
+          "coverBytes": 53236
+        },
+        {
+          "number": 7,
+          "chapterId": "466859",
+          "duration": 95,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/007.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/007.webp",
+          "videoBytes": 9121236,
+          "coverBytes": 69516
+        },
+        {
+          "number": 8,
+          "chapterId": "466860",
+          "duration": 109,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/008.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/008.webp",
+          "videoBytes": 10262545,
+          "coverBytes": 48474
+        },
+        {
+          "number": 9,
+          "chapterId": "466861",
+          "duration": 101,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/009.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/009.webp",
+          "videoBytes": 10208575,
+          "coverBytes": 16502
+        },
+        {
+          "number": 10,
+          "chapterId": "466862",
+          "duration": 64,
+          "source": "FlickReels",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/010.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/010.webp",
+          "videoBytes": 6501322,
+          "coverBytes": 64118
+        },
+        {
+          "number": 11,
+          "chapterId": "466863",
+          "duration": 99,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/011.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/011.webp",
+          "videoBytes": 13261141,
+          "coverBytes": 65098
+        },
+        {
+          "number": 12,
+          "chapterId": "466864",
+          "duration": 93,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/012.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/012.webp",
+          "videoBytes": 10617039,
+          "coverBytes": 62442
+        },
+        {
+          "number": 13,
+          "chapterId": "466865",
+          "duration": 73,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/013.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/013.webp",
+          "videoBytes": 8645084,
+          "coverBytes": 75708
+        },
+        {
+          "number": 14,
+          "chapterId": "466866",
+          "duration": 105,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/014.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/014.webp",
+          "videoBytes": 12011058,
+          "coverBytes": 40214
+        },
+        {
+          "number": 15,
+          "chapterId": "466867",
+          "duration": 65,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/015.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/015.webp",
+          "videoBytes": 7667449,
+          "coverBytes": 53502
+        },
+        {
+          "number": 16,
+          "chapterId": "466868",
+          "duration": 57,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/016.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/016.webp",
+          "videoBytes": 6768311,
+          "coverBytes": 40050
+        },
+        {
+          "number": 17,
+          "chapterId": "466869",
+          "duration": 129,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/017.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/017.webp",
+          "videoBytes": 14653988,
+          "coverBytes": 222234
+        },
+        {
+          "number": 18,
+          "chapterId": "466870",
+          "duration": 82,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/018.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/018.webp",
+          "videoBytes": 9175399,
+          "coverBytes": 70540
+        },
+        {
+          "number": 19,
+          "chapterId": "466871",
+          "duration": 106,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/019.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/019.webp",
+          "videoBytes": 11917982,
+          "coverBytes": 53608
+        },
+        {
+          "number": 20,
+          "chapterId": "466872",
+          "duration": 94,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/020.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/020.webp",
+          "videoBytes": 10637469,
+          "coverBytes": 51926
+        },
+        {
+          "number": 21,
+          "chapterId": "466873",
+          "duration": 104,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/021.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/021.webp",
+          "videoBytes": 13127171,
+          "coverBytes": 69590
+        },
+        {
+          "number": 22,
+          "chapterId": "466874",
+          "duration": 96,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/022.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/022.webp",
+          "videoBytes": 12498196,
+          "coverBytes": 61802
+        },
+        {
+          "number": 23,
+          "chapterId": "466875",
+          "duration": 64,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/023.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/023.webp",
+          "videoBytes": 6800059,
+          "coverBytes": 48558
+        },
+        {
+          "number": 24,
+          "chapterId": "466876",
+          "duration": 119,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/024.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/024.webp",
+          "videoBytes": 13750625,
+          "coverBytes": 50420
+        },
+        {
+          "number": 25,
+          "chapterId": "466877",
+          "duration": 74,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/025.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/025.webp",
+          "videoBytes": 10014517,
+          "coverBytes": 56408
+        },
+        {
+          "number": 26,
+          "chapterId": "466878",
+          "duration": 63,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/026.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/026.webp",
+          "videoBytes": 5968828,
+          "coverBytes": 44860
+        },
+        {
+          "number": 27,
+          "chapterId": "466879",
+          "duration": 64,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/027.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/027.webp",
+          "videoBytes": 7014164,
+          "coverBytes": 101530
+        },
+        {
+          "number": 28,
+          "chapterId": "466880",
+          "duration": 67,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/028.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/028.webp",
+          "videoBytes": 7681885,
+          "coverBytes": 84268
+        },
+        {
+          "number": 29,
+          "chapterId": "466881",
+          "duration": 42,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/029.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/029.webp",
+          "videoBytes": 5038460,
+          "coverBytes": 26270
+        },
+        {
+          "number": 30,
+          "chapterId": "466882",
+          "duration": 79,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/030.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/030.webp",
+          "videoBytes": 8773067,
+          "coverBytes": 75044
+        },
+        {
+          "number": 31,
+          "chapterId": "466883",
+          "duration": 63,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/031.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/031.webp",
+          "videoBytes": 7312919,
+          "coverBytes": 101628
+        },
+        {
+          "number": 32,
+          "chapterId": "466884",
+          "duration": 76,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/032.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/032.webp",
+          "videoBytes": 9769495,
+          "coverBytes": 107538
+        },
+        {
+          "number": 33,
+          "chapterId": "466885",
+          "duration": 72,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/033.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/033.webp",
+          "videoBytes": 8448701,
+          "coverBytes": 45776
+        },
+        {
+          "number": 34,
+          "chapterId": "466886",
+          "duration": 70,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/034.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/034.webp",
+          "videoBytes": 7635057,
+          "coverBytes": 42370
+        },
+        {
+          "number": 35,
+          "chapterId": "466887",
+          "duration": 67,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/035.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/035.webp",
+          "videoBytes": 6685008,
+          "coverBytes": 53342
+        },
+        {
+          "number": 36,
+          "chapterId": "466888",
+          "duration": 53,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/036.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/036.webp",
+          "videoBytes": 5527642,
+          "coverBytes": 82754
+        },
+        {
+          "number": 37,
+          "chapterId": "466903",
+          "duration": 61,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/037.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/037.webp",
+          "videoBytes": 5911833,
+          "coverBytes": 53950
+        },
+        {
+          "number": 38,
+          "chapterId": "466890",
+          "duration": 69,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/038.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/038.webp",
+          "videoBytes": 7266615,
+          "coverBytes": 55440
+        },
+        {
+          "number": 39,
+          "chapterId": "466891",
+          "duration": 117,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/039.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/039.webp",
+          "videoBytes": 13494020,
+          "coverBytes": 93088
+        },
+        {
+          "number": 40,
+          "chapterId": "466892",
+          "duration": 65,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/040.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/040.webp",
+          "videoBytes": 6699443,
+          "coverBytes": 62576
+        },
+        {
+          "number": 41,
+          "chapterId": "466893",
+          "duration": 63,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/041.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/041.webp",
+          "videoBytes": 6541724,
+          "coverBytes": 89404
+        },
+        {
+          "number": 42,
+          "chapterId": "466894",
+          "duration": 89,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/042.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/042.webp",
+          "videoBytes": 11327516,
+          "coverBytes": 78056
+        },
+        {
+          "number": 43,
+          "chapterId": "466895",
+          "duration": 59,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/043.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/043.webp",
+          "videoBytes": 7361218,
+          "coverBytes": 71778
+        },
+        {
+          "number": 44,
+          "chapterId": "466896",
+          "duration": 63,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/044.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/044.webp",
+          "videoBytes": 6255054,
+          "coverBytes": 135036
+        },
+        {
+          "number": 45,
+          "chapterId": "466897",
+          "duration": 87,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/045.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/045.webp",
+          "videoBytes": 10321101,
+          "coverBytes": 107908
+        },
+        {
+          "number": 46,
+          "chapterId": "466898",
+          "duration": 100,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/046.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/046.webp",
+          "videoBytes": 11966116,
+          "coverBytes": 28196
+        },
+        {
+          "number": 47,
+          "chapterId": "466899",
+          "duration": 86,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/047.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/047.webp",
+          "videoBytes": 10459732,
+          "coverBytes": 66994
+        },
+        {
+          "number": 48,
+          "chapterId": "466900",
+          "duration": 115,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/048.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/048.webp",
+          "videoBytes": 12017231,
+          "coverBytes": 27320
+        },
+        {
+          "number": 49,
+          "chapterId": "466901",
+          "duration": 134,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/049.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/049.webp",
+          "videoBytes": 16398139,
+          "coverBytes": 63642
+        },
+        {
+          "number": 50,
+          "chapterId": "466902",
+          "duration": 100,
+          "source": "Dailymotion",
+          "video": "https://static.metalkaichat.com/short-drama/6573/episodes/050.mp4",
+          "cover": "https://static.metalkaichat.com/short-drama/6573/covers/050.webp",
+          "videoBytes": 12177470,
+          "coverBytes": 41904
+        }
+      ]
+    }
+  ],
+  "seriesCount": 6,
+  "episodeCount": 287,
+  "totalBytes": 2977532007
+}

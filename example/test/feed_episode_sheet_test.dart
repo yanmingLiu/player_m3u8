@@ -171,6 +171,7 @@ void main() {
             isActive: false,
             uiState: uiState,
             onBack: () {},
+            onSurfaceTap: () {},
             onPlayPause: () {},
             onEpisodeSelected: (_) {},
             onSpeedSelected: (_) {},

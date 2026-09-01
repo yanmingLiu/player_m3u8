@@ -47,6 +47,7 @@ class DramaPlaybackItem extends StatelessWidget {
     required this.isActive,
     required this.uiState,
     required this.onBack,
+    required this.onSurfaceTap,
     required this.onPlayPause,
     required this.onEpisodeSelected,
     required this.onSpeedSelected,
@@ -62,6 +63,7 @@ class DramaPlaybackItem extends StatelessWidget {
   final bool isActive;
   final DramaPlaybackUiState uiState;
   final VoidCallback onBack;
+  final VoidCallback onSurfaceTap;
   final VoidCallback onPlayPause;
   final ValueChanged<int> onEpisodeSelected;
   final ValueChanged<double> onSpeedSelected;
@@ -86,9 +88,15 @@ class DramaPlaybackItem extends StatelessWidget {
                 uiState.speedMenuVisible.value = false;
                 return;
               }
-              onPlayPause();
+              onSurfaceTap();
             },
-            child: const _DramaGradientOverlay(),
+            child: ValueListenableBuilder<bool>(
+              valueListenable: uiState.overlayVisible,
+              builder: (context, visible, child) {
+                return visible ? child! : const SizedBox.shrink();
+              },
+              child: const _DramaGradientOverlay(),
+            ),
           ),
         ),
         ValueListenableBuilder<M3u8PlayerValue>(

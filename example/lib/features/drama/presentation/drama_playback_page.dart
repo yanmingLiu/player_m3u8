@@ -26,6 +26,8 @@ class DramaPlaybackPage extends StatefulWidget {
 }
 
 class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
+  static const Duration _overlayAutoHideDelay = Duration(seconds: 3);
+
   late final PageController _pages;
   late final DramaPlaybackUiState _uiState;
   late final M3u8PlayerController _controller;
@@ -34,10 +36,15 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
   int _sourceRequest = 0;
   Future<void> _sourceSwitchQueue = Future<void>.value();
   Timer? _saveTimer;
+  Timer? _overlayTimer;
   StreamSubscription<M3u8CacheEvent>? _cacheSubscription;
   String? _precacheTaskId;
   int? _precacheIndex;
+  int _activePointerCount = 0;
   bool _sourceSwitching = false;
+  bool _autoAdvancing = false;
+  bool _handledCompletion = false;
+  bool _wasPlaying = false;
 
   @override
   void initState() {
@@ -48,6 +55,7 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
     _pages = PageController(initialPage: _index);
     _uiState = DramaPlaybackUiState();
     _controller = M3u8PlayerController();
+    _controller.addListener(_handlePlayerValueChanged);
     _progressStore = widget.progressStore;
     if (widget.episodes.isNotEmpty) {
       _listenForCacheEvents();
@@ -77,6 +85,8 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _overlayTimer?.cancel();
+    _controller.removeListener(_handlePlayerValueChanged);
     unawaited(_saveProgress());
     _pages.dispose();
     _uiState.dispose();
@@ -111,7 +121,110 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
     }
   }
 
-  void _showOverlay() => _uiState.overlayVisible.value = true;
+  void _handlePlayerValueChanged() {
+    final value = _controller.value;
+    final isPlaying = value.isPlaying;
+    if (isPlaying != _wasPlaying) {
+      _wasPlaying = isPlaying;
+      if (isPlaying) {
+        _restartOverlayTimer();
+      } else if (!_sourceSwitching) {
+        _overlayTimer?.cancel();
+        _uiState.overlayVisible.value = true;
+      }
+    }
+    _handleCompletion(value);
+  }
+
+  void _handleCompletion(M3u8PlayerValue value) {
+    if (!value.isCompleted) {
+      _handledCompletion = false;
+      return;
+    }
+    if (_handledCompletion ||
+        _sourceSwitching ||
+        !value.isInitialized ||
+        _index >= widget.episodes.length - 1) {
+      return;
+    }
+    _handledCompletion = true;
+    _autoAdvancing = true;
+    _uiState.speedMenuVisible.value = false;
+    _uiState.overlayVisible.value = false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        unawaited(_advanceAfterCompletion());
+      }
+    });
+  }
+
+  Future<void> _advanceAfterCompletion() async {
+    if (!mounted ||
+        _sourceSwitching ||
+        !_pages.hasClients ||
+        _index >= widget.episodes.length - 1) {
+      _autoAdvancing = false;
+      return;
+    }
+    try {
+      _pages.jumpToPage(_index + 1);
+    } catch (_) {
+      _autoAdvancing = false;
+      // The page may have been disposed or replaced by a manual swipe.
+    }
+  }
+
+  void _restartOverlayTimer() {
+    _overlayTimer?.cancel();
+    if (_activePointerCount > 0 ||
+        !_controller.value.isPlaying ||
+        !_uiState.overlayVisible.value) {
+      return;
+    }
+    _overlayTimer = Timer(_overlayAutoHideDelay, () {
+      if (!mounted || !_controller.value.isPlaying) {
+        return;
+      }
+      if (_uiState.isScrubbing.value) {
+        _restartOverlayTimer();
+        return;
+      }
+      _uiState.speedMenuVisible.value = false;
+      _uiState.overlayVisible.value = false;
+    });
+  }
+
+  void _handlePointerDown(PointerDownEvent _) {
+    _activePointerCount += 1;
+    _overlayTimer?.cancel();
+  }
+
+  void _handlePointerEnd(PointerEvent _) {
+    if (_activePointerCount > 0) {
+      _activePointerCount -= 1;
+    }
+    if (_activePointerCount == 0) {
+      _restartOverlayTimer();
+    }
+  }
+
+  void _handlePointerSignal(PointerEvent _) => _restartOverlayTimer();
+
+  void _showOverlay() {
+    if (_sourceSwitching || _autoAdvancing) {
+      return;
+    }
+    _uiState.overlayVisible.value = true;
+    _restartOverlayTimer();
+  }
+
+  void _handleSurfaceTap() {
+    if (!_uiState.overlayVisible.value) {
+      _showOverlay();
+      return;
+    }
+    _togglePlayback(_controller);
+  }
 
   void _togglePlayback(M3u8PlayerController controller) {
     _showOverlay();
@@ -127,6 +240,7 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
     if (!scrubbing) {
       _uiState.scrubPosition.value = null;
     }
+    _restartOverlayTimer();
   }
 
   Future<void> _setSpeed(double speed) async {
@@ -146,6 +260,7 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
   }
 
   void _handlePageChanged(int index) {
+    _autoAdvancing = false;
     final previousIndex = _index;
     if (previousIndex < widget.episodes.length) {
       unawaited(
@@ -156,6 +271,7 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
       );
     }
     _sourceSwitching = true;
+    _handledCompletion = false;
     setState(() => _index = index);
     _uiState.isScrubbing.value = false;
     _uiState.scrubPosition.value = null;
@@ -249,30 +365,38 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
     }
     return Scaffold(
       backgroundColor: Colors.black,
-      body: PageView.builder(
-        controller: _pages,
-        scrollDirection: Axis.vertical,
-        itemCount: widget.episodes.length,
-        onPageChanged: _handlePageChanged,
-        itemBuilder: (context, index) {
-          return DramaPlaybackItem(
-            episode: widget.episodes[index],
-            episodes: widget.episodes,
-            seriesDescription: widget.seriesDescription,
-            currentIndex: _index,
-            controller: _controller,
-            isActive: index == _index,
-            uiState: _uiState,
-            onBack: () => Navigator.maybePop(context),
-            onPlayPause: () => _togglePlayback(_controller),
-            onEpisodeSelected: _selectEpisode,
-            onSpeedSelected: _setSpeed,
-            onScrubbingChanged: _setScrubbing,
-            onScrubPositionChanged: (position) {
-              _uiState.scrubPosition.value = position;
-            },
-          );
-        },
+      body: Listener(
+        behavior: HitTestBehavior.translucent,
+        onPointerDown: _handlePointerDown,
+        onPointerUp: _handlePointerEnd,
+        onPointerCancel: _handlePointerEnd,
+        onPointerSignal: _handlePointerSignal,
+        child: PageView.builder(
+          controller: _pages,
+          scrollDirection: Axis.vertical,
+          itemCount: widget.episodes.length,
+          onPageChanged: _handlePageChanged,
+          itemBuilder: (context, index) {
+            return DramaPlaybackItem(
+              episode: widget.episodes[index],
+              episodes: widget.episodes,
+              seriesDescription: widget.seriesDescription,
+              currentIndex: _index,
+              controller: _controller,
+              isActive: index == _index,
+              uiState: _uiState,
+              onBack: () => Navigator.maybePop(context),
+              onSurfaceTap: _handleSurfaceTap,
+              onPlayPause: () => _togglePlayback(_controller),
+              onEpisodeSelected: _selectEpisode,
+              onSpeedSelected: _setSpeed,
+              onScrubbingChanged: _setScrubbing,
+              onScrubPositionChanged: (position) {
+                _uiState.scrubPosition.value = position;
+              },
+            );
+          },
+        ),
       ),
     );
   }

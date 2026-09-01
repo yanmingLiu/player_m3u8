@@ -731,6 +731,18 @@ void main() {
     expect(playbackItem.uiState.speedMenuVisible.value, isFalse);
     expect(platform.pauseCalls, 0);
 
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(playbackItem.uiState.overlayVisible.value, isFalse);
+    expect(find.text('测试剧集'), findsNothing);
+
+    await tester.tapAt(const Offset(200, 200));
+    await tester.pump();
+
+    expect(playbackItem.uiState.overlayVisible.value, isTrue);
+    expect(find.text('测试剧集'), findsOneWidget);
+    expect(platform.pauseCalls, 0);
+
     await tester.tapAt(const Offset(200, 200));
     await tester.pump();
 
@@ -743,11 +755,135 @@ void main() {
       isPlaying: false,
     );
     await tester.pump();
+    await tester.pump(const Duration(seconds: 3));
+
+    expect(playbackItem.uiState.overlayVisible.value, isTrue);
+
     platform.playCalls = 0;
     await tester.tap(find.byIcon(Icons.play_arrow));
     await tester.pump();
 
     expect(platform.playCalls, 1);
+  });
+
+  testWidgets('automatically plays each following drama episode', (
+    WidgetTester tester,
+  ) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final previousPlatform = PlayerM3u8Platform.instance;
+    final platform = _DramaPlaybackTestPlatform();
+    PlayerM3u8Platform.instance = platform;
+    addTearDown(() {
+      PlayerM3u8Platform.instance = previousPlatform;
+      unawaited(platform.eventsController.close());
+    });
+
+    const episodes = <DramaEpisode>[
+      DramaEpisode(
+        number: 1,
+        video: 'https://example.com/episode-1.mp4',
+        cover: '',
+        duration: 100,
+        seriesTitle: '测试剧集',
+        seriesId: 'test-series',
+      ),
+      DramaEpisode(
+        number: 2,
+        video: 'https://example.com/episode-2.mp4',
+        cover: '',
+        duration: 100,
+        seriesTitle: '测试剧集',
+        seriesId: 'test-series',
+      ),
+    ];
+    await tester.pumpWidget(
+      const MaterialApp(home: DramaPlaybackPage(episodes: episodes)),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    platform.eventsController.add(
+      M3u8PlayerEvent(
+        playerId: platform.createdPlayerId!,
+        type: M3u8PlayerEventType.initialized,
+        duration: const Duration(minutes: 5),
+      ),
+    );
+    platform.eventsController.add(
+      M3u8PlayerEvent(
+        playerId: platform.createdPlayerId!,
+        type: M3u8PlayerEventType.playing,
+        duration: const Duration(minutes: 5),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    final playbackItem = tester.widget<DramaPlaybackItem>(
+      find.byType(DramaPlaybackItem),
+    );
+    final initialPlayCalls = platform.playCalls;
+    platform.eventsController.add(
+      M3u8PlayerEvent(
+        playerId: platform.createdPlayerId!,
+        type: M3u8PlayerEventType.completed,
+        duration: const Duration(minutes: 5),
+      ),
+    );
+    await tester.pump();
+    expect(
+      tester
+          .widget<DramaPlaybackItem>(find.byType(DramaPlaybackItem).first)
+          .controller
+          .value
+          .isCompleted,
+      isTrue,
+    );
+    expect(find.byIcon(Icons.play_arrow), findsNothing);
+    expect(playbackItem.uiState.overlayVisible.value, isFalse);
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<DramaPlaybackItem>(find.byType(DramaPlaybackItem).first)
+          .currentIndex,
+      1,
+    );
+    expect(platform.playCalls, initialPlayCalls + 1);
+
+    platform.eventsController.add(
+      M3u8PlayerEvent(
+        playerId: platform.createdPlayerId!,
+        type: M3u8PlayerEventType.initialized,
+        duration: const Duration(minutes: 5),
+      ),
+    );
+    platform.eventsController.add(
+      M3u8PlayerEvent(
+        playerId: platform.createdPlayerId!,
+        type: M3u8PlayerEventType.playing,
+        duration: const Duration(minutes: 5),
+      ),
+    );
+    await tester.pump();
+    platform.eventsController.add(
+      M3u8PlayerEvent(
+        playerId: platform.createdPlayerId!,
+        type: M3u8PlayerEventType.completed,
+        duration: const Duration(minutes: 5),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<DramaPlaybackItem>(find.byType(DramaPlaybackItem).first)
+          .currentIndex,
+      1,
+    );
+    expect(platform.playCalls, initialPlayCalls + 1);
   });
 
   testWidgets('handles an empty drama episode list', (

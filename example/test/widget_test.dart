@@ -954,7 +954,10 @@ void main() {
       1,
     );
     expect(platform.playCalls, initialPlayCalls + 1);
-    expect(todoLogs, isNot(contains('[TODO]: drama_next')));
+    expect(
+      todoLogs.where((message) => message == '[TODO]: drama_next'),
+      hasLength(1),
+    );
     debugPrint = previousDebugPrint;
 
     platform.eventsController.add(
@@ -989,6 +992,10 @@ void main() {
       1,
     );
     expect(platform.playCalls, initialPlayCalls + 1);
+    expect(
+      todoLogs.where((message) => message == '[TODO]: drama_next'),
+      hasLength(1),
+    );
   });
 
   testWidgets('handles an empty drama episode list', (

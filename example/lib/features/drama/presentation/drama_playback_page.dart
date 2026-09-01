@@ -149,6 +149,7 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
       return;
     }
     _handledCompletion = true;
+    _logDramaNextTodo();
     _autoAdvancing = true;
     _uiState.speedMenuVisible.value = false;
     _uiState.overlayVisible.value = false;
@@ -314,8 +315,8 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
   }
 
   void _logDramaNextTodo() {
-    // TODO(commercialization): Show the drama_next full-screen ad for manual
-    // episode switches. Continue immediately when the ad is not ready.
+    // TODO(commercialization): Show the drama_next full-screen ad before any
+    // episode switch. Continue immediately when the ad is not ready.
     debugPrint('[TODO]: drama_next');
   }
 

@@ -11,11 +11,13 @@ class DramaPlaybackPage extends StatefulWidget {
   const DramaPlaybackPage({
     super.key,
     required this.episodes,
+    this.seriesDescription = '',
     this.initialIndex = 0,
     this.progressStore = const DramaProgressStore(),
   });
 
   final List<DramaEpisode> episodes;
+  final String seriesDescription;
   final int initialIndex;
   final DramaProgressStore progressStore;
 
@@ -256,6 +258,7 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
           return DramaPlaybackItem(
             episode: widget.episodes[index],
             episodes: widget.episodes,
+            seriesDescription: widget.seriesDescription,
             currentIndex: _index,
             controller: _controller,
             isActive: index == _index,

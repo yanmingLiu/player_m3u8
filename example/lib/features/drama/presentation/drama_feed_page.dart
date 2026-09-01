@@ -85,7 +85,10 @@ class _DramaCard extends StatelessWidget {
             ? null
             : () => Navigator.of(context).push(
                 MaterialPageRoute(
-                  builder: (_) => DramaPlaybackPage(episodes: series.episodes),
+                  builder: (_) => DramaPlaybackPage(
+                    episodes: series.episodes,
+                    seriesDescription: series.description,
+                  ),
                 ),
               ),
         child: Padding(

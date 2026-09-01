@@ -41,6 +41,7 @@ class DramaPlaybackItem extends StatelessWidget {
     super.key,
     required this.episode,
     required this.episodes,
+    this.seriesDescription = '',
     required this.currentIndex,
     required this.controller,
     required this.isActive,
@@ -55,6 +56,7 @@ class DramaPlaybackItem extends StatelessWidget {
 
   final DramaEpisode episode;
   final List<DramaEpisode> episodes;
+  final String seriesDescription;
   final int currentIndex;
   final M3u8PlayerController controller;
   final bool isActive;
@@ -121,6 +123,7 @@ class DramaPlaybackItem extends StatelessWidget {
             return DramaPlaybackOverlay(
               episode: episode,
               episodes: episodes,
+              seriesDescription: seriesDescription,
               currentIndex: currentIndex,
               controller: controller,
               uiState: uiState,
@@ -216,6 +219,7 @@ class DramaPlaybackOverlay extends StatelessWidget {
     super.key,
     required this.episode,
     required this.episodes,
+    this.seriesDescription = '',
     required this.currentIndex,
     required this.controller,
     required this.uiState,
@@ -228,6 +232,7 @@ class DramaPlaybackOverlay extends StatelessWidget {
 
   final DramaEpisode episode;
   final List<DramaEpisode> episodes;
+  final String seriesDescription;
   final int currentIndex;
   final M3u8PlayerController controller;
   final DramaPlaybackUiState uiState;
@@ -265,6 +270,7 @@ class DramaPlaybackOverlay extends StatelessWidget {
               DramaBottomControls(
                 episode: episode,
                 episodes: episodes,
+                seriesDescription: seriesDescription,
                 currentIndex: currentIndex,
                 controller: controller,
                 uiState: uiState,
@@ -285,6 +291,7 @@ class DramaBottomControls extends StatelessWidget {
     super.key,
     required this.episode,
     required this.episodes,
+    this.seriesDescription = '',
     required this.currentIndex,
     required this.controller,
     required this.uiState,
@@ -295,6 +302,7 @@ class DramaBottomControls extends StatelessWidget {
 
   final DramaEpisode episode;
   final List<DramaEpisode> episodes;
+  final String seriesDescription;
   final int currentIndex;
   final M3u8PlayerController controller;
   final DramaPlaybackUiState uiState;
@@ -327,6 +335,7 @@ class DramaBottomControls extends StatelessWidget {
               return _DramaEpisodeInfo(
                 episode: episode,
                 episodes: episodes,
+                seriesDescription: seriesDescription,
                 currentIndex: currentIndex,
                 onEpisodeSelected: onEpisodeSelected,
               );
@@ -348,12 +357,14 @@ class _DramaEpisodeInfo extends StatelessWidget {
   const _DramaEpisodeInfo({
     required this.episode,
     required this.episodes,
+    this.seriesDescription = '',
     required this.currentIndex,
     required this.onEpisodeSelected,
   });
 
   final DramaEpisode episode;
   final List<DramaEpisode> episodes;
+  final String seriesDescription;
   final int currentIndex;
   final ValueChanged<int> onEpisodeSelected;
 
@@ -378,7 +389,7 @@ class _DramaEpisodeInfo extends StatelessWidget {
             final series = DramaSeries(
               id: episode.seriesId,
               title: episode.seriesTitle,
-              description: '',
+              description: seriesDescription,
               tags: const [],
               episodes: episodes,
             );

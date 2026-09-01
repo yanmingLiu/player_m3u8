@@ -19,6 +19,7 @@
 - HLS 当前视频磁盘预取，seek 后会从新位置继续优先预取。
 - 可选播放区域手势层：左侧上下滑动调节亮度，右侧上下滑动调节播放器内音量，左右滑动调节进度。
 - 播放健康指标：首帧耗时、rebuffer 次数、rebuffer 总时长、丢帧数、当前码率、观测带宽、清晰度切换次数。
+- iOS 同时支持 Swift Package Manager 和 CocoaPods，并由 Flutter 工具根据项目配置选择集成方式。
 
 更详细的平台实现、缓存规则和架构图见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
@@ -423,6 +424,7 @@ It is designed for Flutter apps that need network HLS/m3u8 VOD or MP4/MOV playba
 - Current-source HLS disk prefetch; after seek, prefetch restarts near the new playback position.
 - Optional player-area gesture layer: vertical drags on the left adjust brightness, vertical drags on the right adjust player volume, and horizontal drags seek.
 - Playback health metrics: startup time, rebuffer count and duration, dropped frames, current bitrate, observed bandwidth, and quality switch count.
+- iOS supports both Swift Package Manager and CocoaPods; Flutter selects the integration based on the consuming project configuration.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for platform internals, cache rules, and architecture diagrams.
 

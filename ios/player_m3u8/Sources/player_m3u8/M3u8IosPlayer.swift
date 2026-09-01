@@ -1024,7 +1024,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   private static func makeVideoOutput() -> AVPlayerItemVideoOutput {
     AVPlayerItemVideoOutput(pixelBufferAttributes: [
       kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-      kCVPixelBufferIOSurfacePropertiesKey as String: [:],
+      kCVPixelBufferIOSurfacePropertiesKey as String: [String: String](),
     ])
   }
 

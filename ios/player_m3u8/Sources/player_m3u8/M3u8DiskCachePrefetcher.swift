@@ -492,7 +492,7 @@ final class M3u8DiskCachePrefetcher {
         "networkFetchCount": self.networkFetchCount,
         "segmentIndex": self.segmentIndex,
         "segmentCount": self.segmentCount,
-        "currentUrl": self.currentUrl?.absoluteString,
+        "currentUrl": self.currentUrl?.absoluteString as Any,
         "retryCount": self.retryCount,
         "updatedAt": Int64(Date().timeIntervalSince1970 * 1000),
         "metadata": self.metadata,

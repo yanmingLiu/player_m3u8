@@ -217,12 +217,12 @@ class _FeedEpisodeSheetState extends State<FeedEpisodeSheet> {
         borderRadius: BorderRadius.circular(8),
         child: SizedBox(
           height: 32,
-          width: 72,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
                 label,
+                maxLines: 1,
                 style: TextStyle(
                   color: selected
                       ? (index == 0 ? accentColor : accentSoftColor)
@@ -271,7 +271,7 @@ class _FeedEpisodeSheetState extends State<FeedEpisodeSheet> {
     if (widget.episodes.isEmpty) {
       return 0;
     }
-    final gridWidth = availableWidth < 328 ? availableWidth : 328.0;
+    final gridWidth = math.min(math.max(availableWidth - 32, 0), 328.0);
     final tileSize = (gridWidth - (5 * 8)) / 6;
     final rowCount = (widget.episodes.length + 5) ~/ 6;
     return (rowCount * tileSize) + ((rowCount - 1) * 8);
@@ -294,18 +294,24 @@ class _FeedEpisodeSheetState extends State<FeedEpisodeSheet> {
   }
 
   Widget _episodesGrid() {
-    return GridView.builder(
-      shrinkWrap: true,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: widget.episodes.length,
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 6,
-        childAspectRatio: 1,
-        mainAxisSpacing: 8,
-        crossAxisSpacing: 8,
+    return Align(
+      alignment: Alignment.topLeft,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 360),
+        child: GridView.builder(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: widget.episodes.length,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 6,
+            childAspectRatio: 1,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+          ),
+          itemBuilder: (context, index) => _episodeTile(index),
+        ),
       ),
-      itemBuilder: (context, index) => _episodeTile(index),
     );
   }
 

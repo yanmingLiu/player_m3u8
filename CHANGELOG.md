@@ -1,3 +1,15 @@
+## 0.1.4
+
+### 中文
+
+- iOS 插件新增 Swift Package Manager 支持，并继续保留 CocoaPods；两种包管理器复用同一份 Swift 源码和隐私清单。
+- 修复 Flutter 3.47 下 example 剧集标签换行溢出，以及宽屏剧集网格高度与点击区域不一致的问题。
+
+### English
+
+- Added Swift Package Manager support for iOS while retaining CocoaPods. Both package managers share the same Swift sources and privacy manifest.
+- Fixed example episode-tab overflow and wide-layout grid hit testing on Flutter 3.47.
+
 ## 0.1.3
 
 ### 中文

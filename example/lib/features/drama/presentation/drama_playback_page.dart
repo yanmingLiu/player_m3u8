@@ -44,6 +44,7 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
   bool _sourceSwitching = false;
   bool _autoAdvancing = false;
   bool _handledCompletion = false;
+  bool _userPageSwipeInProgress = false;
   bool _wasPlaying = false;
 
   @override
@@ -229,6 +230,7 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
   void _togglePlayback(M3u8PlayerController controller) {
     _showOverlay();
     if (controller.value.isPlaying) {
+      _logDramaPauseTodo();
       unawaited(controller.pause());
     } else if (controller.isInitialized) {
       unawaited(controller.play());
@@ -256,10 +258,14 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
     if (index < 0 || index >= widget.episodes.length || index == _index) {
       return;
     }
+    _logDramaNextTodo();
     _pages.jumpToPage(index);
   }
 
   void _handlePageChanged(int index) {
+    if (_userPageSwipeInProgress) {
+      _logDramaNextTodo();
+    }
     _autoAdvancing = false;
     final previousIndex = _index;
     if (previousIndex < widget.episodes.length) {
@@ -292,6 +298,31 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
       }
     });
     unawaited(_sourceSwitchQueue);
+  }
+
+  bool _handlePageScrollNotification(ScrollNotification notification) {
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      _userPageSwipeInProgress = true;
+    } else if (notification is ScrollUpdateNotification &&
+        notification.dragDetails != null) {
+      _userPageSwipeInProgress = true;
+    } else if (notification is ScrollEndNotification) {
+      _userPageSwipeInProgress = false;
+    }
+    return false;
+  }
+
+  void _logDramaNextTodo() {
+    // TODO(commercialization): Show the drama_next full-screen ad for manual
+    // episode switches. Continue immediately when the ad is not ready.
+    debugPrint('[TODO]: drama_next');
+  }
+
+  void _logDramaPauseTodo() {
+    // TODO(commercialization): Show the drama_pause native ad dialog after a
+    // user requests playback pause.
+    debugPrint('[TODO]: drama_pause');
   }
 
   void _listenForCacheEvents() {
@@ -371,31 +402,34 @@ class _DramaPlaybackPageState extends State<DramaPlaybackPage> {
         onPointerUp: _handlePointerEnd,
         onPointerCancel: _handlePointerEnd,
         onPointerSignal: _handlePointerSignal,
-        child: PageView.builder(
-          controller: _pages,
-          scrollDirection: Axis.vertical,
-          itemCount: widget.episodes.length,
-          onPageChanged: _handlePageChanged,
-          itemBuilder: (context, index) {
-            return DramaPlaybackItem(
-              episode: widget.episodes[index],
-              episodes: widget.episodes,
-              seriesDescription: widget.seriesDescription,
-              currentIndex: _index,
-              controller: _controller,
-              isActive: index == _index,
-              uiState: _uiState,
-              onBack: () => Navigator.maybePop(context),
-              onSurfaceTap: _handleSurfaceTap,
-              onPlayPause: () => _togglePlayback(_controller),
-              onEpisodeSelected: _selectEpisode,
-              onSpeedSelected: _setSpeed,
-              onScrubbingChanged: _setScrubbing,
-              onScrubPositionChanged: (position) {
-                _uiState.scrubPosition.value = position;
-              },
-            );
-          },
+        child: NotificationListener<ScrollNotification>(
+          onNotification: _handlePageScrollNotification,
+          child: PageView.builder(
+            controller: _pages,
+            scrollDirection: Axis.vertical,
+            itemCount: widget.episodes.length,
+            onPageChanged: _handlePageChanged,
+            itemBuilder: (context, index) {
+              return DramaPlaybackItem(
+                episode: widget.episodes[index],
+                episodes: widget.episodes,
+                seriesDescription: widget.seriesDescription,
+                currentIndex: _index,
+                controller: _controller,
+                isActive: index == _index,
+                uiState: _uiState,
+                onBack: () => Navigator.maybePop(context),
+                onSurfaceTap: _handleSurfaceTap,
+                onPlayPause: () => _togglePlayback(_controller),
+                onEpisodeSelected: _selectEpisode,
+                onSpeedSelected: _setSpeed,
+                onScrubbingChanged: _setScrubbing,
+                onScrubPositionChanged: (position) {
+                  _uiState.scrubPosition.value = position;
+                },
+              );
+            },
+          ),
         ),
       ),
     );

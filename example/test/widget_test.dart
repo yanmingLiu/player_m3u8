@@ -675,6 +675,14 @@ void main() {
   testWidgets('full-screen playback gesture toggles the initialized player', (
     WidgetTester tester,
   ) async {
+    final todoLogs = <String>[];
+    final previousDebugPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) {
+      if (message != null) {
+        todoLogs.add(message);
+      }
+    };
+    addTearDown(() => debugPrint = previousDebugPrint);
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final previousPlatform = PlayerM3u8Platform.instance;
     final platform = _DramaPlaybackTestPlatform();
@@ -747,6 +755,7 @@ void main() {
     await tester.pump();
 
     expect(platform.pauseCalls, 1);
+    expect(todoLogs, contains('[TODO]: drama_pause'));
 
     final pauseButton = tester.widget<DramaPauseButton>(
       find.byType(DramaPauseButton),
@@ -764,11 +773,105 @@ void main() {
     await tester.pump();
 
     expect(platform.playCalls, 1);
+    debugPrint = previousDebugPrint;
+  });
+
+  testWidgets('logs drama_next only for manual episode switches', (
+    WidgetTester tester,
+  ) async {
+    final todoLogs = <String>[];
+    final previousDebugPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) {
+      if (message != null) {
+        todoLogs.add(message);
+      }
+    };
+    addTearDown(() => debugPrint = previousDebugPrint);
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final previousPlatform = PlayerM3u8Platform.instance;
+    final platform = _DramaPlaybackTestPlatform();
+    PlayerM3u8Platform.instance = platform;
+    addTearDown(() {
+      PlayerM3u8Platform.instance = previousPlatform;
+      unawaited(platform.eventsController.close());
+    });
+
+    const episodes = <DramaEpisode>[
+      DramaEpisode(
+        number: 1,
+        video: 'https://example.com/episode-1.mp4',
+        cover: '',
+        duration: 100,
+        seriesTitle: '测试剧集',
+        seriesId: 'test-series',
+      ),
+      DramaEpisode(
+        number: 2,
+        video: 'https://example.com/episode-2.mp4',
+        cover: '',
+        duration: 100,
+        seriesTitle: '测试剧集',
+        seriesId: 'test-series',
+      ),
+      DramaEpisode(
+        number: 3,
+        video: 'https://example.com/episode-3.mp4',
+        cover: '',
+        duration: 100,
+        seriesTitle: '测试剧集',
+        seriesId: 'test-series',
+      ),
+    ];
+    await tester.pumpWidget(
+      const MaterialApp(home: DramaPlaybackPage(episodes: episodes)),
+    );
+    await tester.pump();
+    await tester.pump();
+
+    await tester.drag(find.byType(PageView), const Offset(0, -500));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<DramaPlaybackItem>(find.byType(DramaPlaybackItem).first)
+          .currentIndex,
+      1,
+    );
+    expect(
+      todoLogs.where((message) => message == '[TODO]: drama_next'),
+      hasLength(1),
+    );
+
+    todoLogs.clear();
+    tester
+        .widget<DramaPlaybackItem>(find.byType(DramaPlaybackItem).first)
+        .onEpisodeSelected(2);
+    await tester.pump();
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<DramaPlaybackItem>(find.byType(DramaPlaybackItem).first)
+          .currentIndex,
+      2,
+    );
+    expect(todoLogs, contains('[TODO]: drama_next'));
+    debugPrint = previousDebugPrint;
   });
 
   testWidgets('automatically plays each following drama episode', (
     WidgetTester tester,
   ) async {
+    final todoLogs = <String>[];
+    final previousDebugPrint = debugPrint;
+    debugPrint = (message, {wrapWidth}) {
+      if (message != null) {
+        todoLogs.add(message);
+      }
+    };
+    addTearDown(() => debugPrint = previousDebugPrint);
     SharedPreferences.setMockInitialValues(<String, Object>{});
     final previousPlatform = PlayerM3u8Platform.instance;
     final platform = _DramaPlaybackTestPlatform();
@@ -851,6 +954,8 @@ void main() {
       1,
     );
     expect(platform.playCalls, initialPlayCalls + 1);
+    expect(todoLogs, isNot(contains('[TODO]: drama_next')));
+    debugPrint = previousDebugPrint;
 
     platform.eventsController.add(
       M3u8PlayerEvent(

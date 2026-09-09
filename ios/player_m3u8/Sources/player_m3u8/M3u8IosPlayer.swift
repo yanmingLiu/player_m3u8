@@ -28,7 +28,7 @@ enum M3u8SourceType {
       case "mp4", "mov":
         return .progressive
       default:
-        return .hls
+        return .progressive
       }
     }
   }
@@ -749,7 +749,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   }
 
   private func playbackPayload(event: String) -> [String: Any] {
-    [
+    return [
       "event": event,
       "position": milliseconds(from: player.currentTime()),
       "duration": milliseconds(from: playerItem.duration),
@@ -1106,12 +1106,24 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   }
 
   private func playbackDiagnostics() -> [String: Any] {
-    [
+    let filePath = videoUrl.path
+    let fileExists = videoUrl.isFileURL && FileManager.default.fileExists(atPath: filePath)
+    let fileSize = fileExists
+      ? ((try? FileManager.default.attributesOfItem(atPath: filePath)[.size] as? NSNumber)?.int64Value ?? 0)
+      : 0
+    return [
       "platform": "ios",
       "sessionId": playbackSessionId,
       "sourceId": M3u8LogSourceId.value(for: videoUrl),
       "host": videoUrl.host as Any,
       "assetHost": asset.url.host as Any,
+      "videoUrl": videoUrl.absoluteString,
+      "isFileURL": videoUrl.isFileURL,
+      "filePath": filePath,
+      "fileExists": fileExists,
+      "fileSizeBytes": fileSize,
+      "assetIsReadable": asset.isReadable,
+      "assetIsPlayable": asset.isPlayable,
       "sourceType": sourceType.platformValue,
       "hasCacheKey": !(cacheKey?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true),
       "hasHeaders": !videoHeaders.isEmpty,

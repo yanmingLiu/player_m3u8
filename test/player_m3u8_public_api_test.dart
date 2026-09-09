@@ -48,6 +48,17 @@ void main() {
     );
   });
 
+  test('file and asset sources carry local source metadata', () {
+    const file = M3u8Source.file('/tmp/video.mp4');
+    expect(file.sourceKind, M3u8SourceKind.file);
+    expect(file.sourceType, M3u8SourceType.progressive);
+    expect(file.toMap()['sourceKind'], 'file');
+
+    const asset = M3u8Source.asset('assets/video.mp4', package: 'demo');
+    expect(asset.sourceKind, M3u8SourceKind.asset);
+    expect(asset.toMap()['package'], 'demo');
+  });
+
   test('audio and subtitle tracks map equality fallback and string output', () {
     final audio = M3u8AudioTrack.fromMap(const <Object?, Object?>{
       'id': 'en',

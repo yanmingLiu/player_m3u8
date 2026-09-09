@@ -13,5 +13,6 @@ export 'src/m3u8_recovery_policy.dart';
 export 'src/m3u8_screen_brightness.dart';
 export 'src/m3u8_audio_track.dart';
 export 'src/m3u8_source.dart';
+export 'src/m3u8_source_kind.dart';
 export 'src/m3u8_source_type.dart';
 export 'src/m3u8_subtitle_track.dart';

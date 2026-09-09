@@ -1,5 +1,6 @@
 package com.ai3.player_m3u8.player_m3u8
 
+import android.net.Uri
 import android.content.Context
 import android.app.Activity
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
@@ -237,10 +238,13 @@ class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, Even
         val selectedSubtitleId = call.argument<String>("selectedSubtitleId")
         val selectedAudioTrackId = call.argument<String>("selectedAudioTrackId")
         val sourceType = M3u8SourceType.from(call.argument<String>("sourceType"))
+        val sourceKind = call.argument<String>("sourceKind") ?: "network"
+        val packageName = call.argument<String>("package")
+        val resolvedVideoUrl = resolveSourceUrl(videoUrl, sourceKind, packageName)
         val surfaceProducer = textures.createSurfaceProducer()
         val player = M3u8AndroidPlayer(
             context = context,
-            videoUrl = videoUrl,
+            videoUrl = resolvedVideoUrl,
             audioUrl = audioUrl,
             videoHeaders = videoHeaders,
             audioHeaders = audioHeaders,
@@ -259,6 +263,14 @@ class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, Even
         )
         players[surfaceProducer.id()] = player
         result.success(surfaceProducer.id())
+    }
+
+    private fun resolveSourceUrl(url: String, kind: String, packageName: String?): String {
+        return when (kind) {
+            "file" -> if (url.startsWith("file:") || url.startsWith("content:")) url else Uri.fromFile(java.io.File(url)).toString()
+            "asset" -> "file:///android_asset/flutter_assets/${if (packageName.isNullOrBlank()) url else "packages/$packageName/$url"}"
+            else -> url
+        }
     }
 
     private fun getScreenBrightness(result: Result) {
@@ -448,6 +460,11 @@ class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, Even
         val videoHeaders = call.argument<Map<String, String>>("videoHeaders") ?: emptyMap()
         val audioHeaders = call.argument<Map<String, String>>("audioHeaders")
         val cacheKey = call.argument<String>("cacheKey")
+        val sourceKind = call.argument<String>("sourceKind") ?: "network"
+        if (sourceKind != "network") {
+            result.error("unsupported_precache", "Only network sources can be precached.", null)
+            return
+        }
         val sourceType = M3u8SourceType.from(call.argument<String>("sourceType")).resolve(videoUrl)
         val quality = call.argument<Map<String, Any?>>("quality") ?: autoQuality()
         val priority = call.argument<Number>("priority")?.toInt() ?: 0

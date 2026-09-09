@@ -13,7 +13,7 @@ enum class M3u8SourceType {
         return when {
             path.endsWith(".m3u8") -> HLS
             path.endsWith(".mp4") || path.endsWith(".mov") -> PROGRESSIVE
-            else -> HLS
+            else -> PROGRESSIVE
         }
     }
 

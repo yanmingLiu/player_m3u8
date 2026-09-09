@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import 'm3u8_source_type.dart';
+import 'm3u8_source_kind.dart';
 
 @immutable
 class M3u8Source {
@@ -11,7 +12,27 @@ class M3u8Source {
     this.audioHeaders,
     this.sourceType = M3u8SourceType.auto,
     this.cacheKey,
+    this.sourceKind = M3u8SourceKind.network,
+    this.package,
   });
+
+  const M3u8Source.file(String path, {this.cacheKey})
+    : videoUrl = path,
+      audioUrl = null,
+      videoHeaders = const {},
+      audioHeaders = null,
+      sourceType = M3u8SourceType.progressive,
+      sourceKind = M3u8SourceKind.file,
+      package = null;
+
+  const M3u8Source.asset(String asset, {this.package})
+    : videoUrl = asset,
+      audioUrl = null,
+      videoHeaders = const {},
+      audioHeaders = null,
+      sourceType = M3u8SourceType.progressive,
+      sourceKind = M3u8SourceKind.asset,
+      cacheKey = null;
 
   factory M3u8Source.fromMap(Map<Object?, Object?> map) {
     final videoHeaders = map['videoHeaders'];
@@ -31,6 +52,8 @@ class M3u8Source {
           : null,
       sourceType: M3u8SourceType.from(map['sourceType'] as String?),
       cacheKey: map['cacheKey'] as String?,
+      sourceKind: M3u8SourceKind.from(map['sourceKind'] as String?),
+      package: map['package'] as String?,
     );
   }
 
@@ -40,6 +63,8 @@ class M3u8Source {
   final Map<String, String>? audioHeaders;
   final M3u8SourceType sourceType;
   final String? cacheKey;
+  final M3u8SourceKind sourceKind;
+  final String? package;
 
   Map<String, String> get effectiveAudioHeaders => audioHeaders ?? videoHeaders;
 
@@ -51,6 +76,8 @@ class M3u8Source {
       'audioHeaders': audioHeaders,
       'sourceType': sourceType.platformValue,
       'cacheKey': cacheKey,
+      if (sourceKind != M3u8SourceKind.network) 'sourceKind': sourceKind.name,
+      if (package != null) 'package': package,
     };
   }
 
@@ -62,7 +89,9 @@ class M3u8Source {
         mapEquals(other.videoHeaders, videoHeaders) &&
         mapEquals(other.audioHeaders, audioHeaders) &&
         other.sourceType == sourceType &&
-        other.cacheKey == cacheKey;
+        other.cacheKey == cacheKey &&
+        other.sourceKind == sourceKind &&
+        other.package == package;
   }
 
   @override
@@ -73,6 +102,8 @@ class M3u8Source {
     audioHeaders,
     sourceType,
     cacheKey,
+    sourceKind,
+    package,
   );
 
   @override

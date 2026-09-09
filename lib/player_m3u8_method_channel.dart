@@ -12,6 +12,7 @@ import 'src/m3u8_player_event.dart';
 import 'src/m3u8_player_value.dart';
 import 'src/m3u8_recovery_policy.dart';
 import 'src/m3u8_source.dart';
+import 'src/m3u8_source_kind.dart';
 import 'src/m3u8_subtitle_track.dart';
 
 class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
@@ -94,7 +95,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
     _debugAssertValidPlaybackSpeed(playbackSpeed);
     _debugAssertValidVolume(volume);
     try {
-      final playerId = await methodChannel.invokeMethod<int>('create', {
+      final arguments = <String, Object?>{
         'videoUrl': source.videoUrl,
         'audioUrl': source.audioUrl,
         'videoHeaders': source.videoHeaders,
@@ -109,7 +110,15 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'subtitles': subtitles.map((track) => track.toMap()).toList(),
         'selectedSubtitleId': selectedSubtitleId,
         'selectedAudioTrackId': selectedAudioTrackId,
-      });
+      };
+      if (source.sourceKind != M3u8SourceKind.network) {
+        arguments['sourceKind'] = source.sourceKind.name;
+        arguments['package'] = source.package;
+      }
+      final playerId = await methodChannel.invokeMethod<int>(
+        'create',
+        arguments,
+      );
       if (playerId == null) {
         throw PlayerM3u8PlatformException(
           'invalid_player_id',
@@ -324,7 +333,7 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
       );
     }
     try {
-      final taskId = await methodChannel.invokeMethod<String>('precache', {
+      final arguments = <String, Object?>{
         'videoUrl': source.videoUrl,
         'audioUrl': source.audioUrl,
         'videoHeaders': source.videoHeaders,
@@ -336,7 +345,15 @@ class MethodChannelPlayerM3u8 extends PlayerM3u8Platform {
         'priority': priority,
         'maxRetries': maxRetries,
         'metadata': metadata,
-      });
+      };
+      if (source.sourceKind != M3u8SourceKind.network) {
+        arguments['sourceKind'] = source.sourceKind.name;
+        arguments['package'] = source.package;
+      }
+      final taskId = await methodChannel.invokeMethod<String>(
+        'precache',
+        arguments,
+      );
       if (taskId == null || taskId.isEmpty) {
         throw PlayerM3u8PlatformException(
           'invalid_cache_task',

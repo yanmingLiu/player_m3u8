@@ -246,12 +246,20 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   }
 
   private func create(call: FlutterMethodCall, result: @escaping FlutterResult) {
-    guard
-      let arguments = call.arguments as? [String: Any],
-      let videoUrlString = arguments["videoUrl"] as? String,
-      let videoUrl = URL(string: videoUrlString)
+    guard let arguments = call.arguments as? [String: Any],
+      let videoUrlString = arguments["videoUrl"] as? String
     else {
       result(FlutterError(code: "invalid_url", message: "videoUrl is required.", details: nil))
+      return
+    }
+    let sourceKind = arguments["sourceKind"] as? String ?? "network"
+    let videoUrl: URL
+    if sourceKind == "file" {
+      videoUrl = URL(fileURLWithPath: videoUrlString)
+    } else if let url = URL(string: videoUrlString) {
+      videoUrl = url
+    } else {
+      result(FlutterError(code: "invalid_url", message: "videoUrl is invalid.", details: nil))
       return
     }
     var audioUrl: URL? = nil
@@ -296,8 +304,10 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       )
       return
     }
+    let packageName = arguments["package"] as? String
+    let resolvedVideoUrl = resolveSourceUrl(videoUrl, kind: sourceKind, packageName: packageName)
     let player = M3u8IosPlayer(
-      videoUrl: videoUrl,
+      videoUrl: resolvedVideoUrl,
       audioUrl: audioUrl,
       videoHeaders: videoHeaders,
       audioHeaders: audioHeaders,
@@ -318,6 +328,19 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     player.textureId = textureId
     players[textureId] = player
     result(textureId)
+  }
+
+  private func resolveSourceUrl(_ url: URL, kind: String, packageName: String?) -> URL {
+    if kind == "file" && !url.isFileURL {
+      return URL(fileURLWithPath: url.absoluteString)
+    }
+    guard kind == "asset" else { return url }
+    let assetKey = packageName.map { "packages/\($0)/\(url.absoluteString)" } ?? url.absoluteString
+    let lookupKey = FlutterDartProject.lookupKey(forAsset: assetKey)
+    if let path = Bundle.main.path(forResource: lookupKey, ofType: nil) {
+      return URL(fileURLWithPath: path)
+    }
+    return url
   }
 
   private func playbackSpeed(from value: Any?) -> Double? {
@@ -557,6 +580,11 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     let videoHeaders = arguments["videoHeaders"] as? [String: String] ?? [:]
     let audioHeaders = arguments["audioHeaders"] as? [String: String]
     let cacheKey = arguments["cacheKey"] as? String
+    let sourceKind = arguments["sourceKind"] as? String ?? "network"
+    if sourceKind != "network" {
+      result(FlutterError(code: "unsupported_precache", message: "Only network sources can be precached.", details: nil))
+      return
+    }
     let sourceType = M3u8SourceType.from(arguments["sourceType"]).resolve(url: videoUrl)
     let priority = (arguments["priority"] as? NSNumber)?.intValue ?? 0
     let maxRetries = (arguments["maxRetries"] as? NSNumber)?.intValue ?? 2

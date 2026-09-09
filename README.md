@@ -11,6 +11,7 @@
 ### 功能
 
 - 播放网络 HLS/m3u8，以及 progressive MP4/MOV。
+- 支持本地文件和 Flutter Asset 播放（`M3u8Source.file(...)`、`M3u8Source.asset(...)`）。
 - 播放、暂停、seek、快进/快退、倍速、音量、静音、错误重试。
 - 通过 `M3u8PlayerController.setSource(...)` 切换播放源。
 - 监听播放状态、播放进度、时长、缓冲、磁盘缓存、错误。
@@ -243,6 +244,28 @@ await controller.initialize(
 );
 ```
 
+### 播放本地文件和 Flutter Asset
+
+本地文件和 Flutter Asset 会直接交给 Android Media3 或 iOS AVPlayer 播放，不会进入网络预取任务：
+
+```dart
+await controller.initialize(
+  source: M3u8Source.file('/absolute/path/video.mp4'),
+  autoPlay: true,
+);
+
+await controller.setSource(
+  const M3u8Source.asset('assets/video.mp4'),
+  autoPlay: true,
+);
+```
+
+Asset 来自其他 Flutter package 时传入 `package`：
+
+```dart
+const M3u8Source.asset('assets/video.mp4', package: 'media_package');
+```
+
 ### 请求头和缓存 key
 
 如果视频接口需要请求头：
@@ -375,7 +398,8 @@ final subscription = controller.qoeSnapshots.listen((snapshot) {
 ### 当前限制
 
 - 只支持 iOS 和 Android。
-- 支持网络 HLS/m3u8 VOD 和 progressive MP4/MOV；不支持 DASH、SmoothStreaming、RTSP、FLV 或本地文件。
+- 支持网络 HLS/m3u8 VOD、progressive MP4/MOV、本地文件和 Flutter Asset；不支持 DASH、SmoothStreaming、RTSP、FLV。
+- 本地文件和 Flutter Asset 只提供播放，不参与网络预加载；HLS 分片预取和 progressive 完整文件预取保持不变。
 - MP4/MOV 支持独立完整下载和完成后缓存复用，但不支持清晰度选择。
 - Android progressive 可以挂外部字幕，iOS progressive 暂不暴露外部字幕。
 - iOS HLS 播放由 AVFoundation direct `AVPlayer` 负责；HLS 手动清晰度是 best-effort。

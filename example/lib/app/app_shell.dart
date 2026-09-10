@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../features/drama/presentation/drama_feed_page.dart';
 import '../features/player/presentation/player_example_page.dart';
-import '../features/player/presentation/local_video_page.dart';
 
 /// Entry page for the example features.
 ///
@@ -26,24 +24,6 @@ class DemoShell extends StatelessWidget {
               MaterialPageRoute<void>(
                 builder: (_) => const PlayerExamplePage(),
               ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _FeatureTile(
-            icon: Icons.video_library_outlined,
-            title: '本地视频播放',
-            subtitle: '从手机相册导入视频并使用 Texture 播放',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const LocalVideoPage()),
-            ),
-          ),
-          const SizedBox(height: 12),
-          _FeatureTile(
-            icon: Icons.dynamic_feed_outlined,
-            title: 'Drama Feed',
-            subtitle: '短剧列表、选集播放和下一集预加载',
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute<void>(builder: (_) => const DramaFeedPage()),
             ),
           ),
         ],

@@ -1,16 +1,13 @@
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
+import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:player_m3u8/player_m3u8.dart';
 import 'package:video_thumbnail/video_thumbnail.dart';
 
-import '../../../shared/localization/example_strings.dart';
-import 'player_video_scaffold.dart';
+import 'standalone_video_player.dart';
 
 class LocalVideoPage extends StatefulWidget {
   const LocalVideoPage({super.key});
@@ -62,14 +59,31 @@ class _LocalVideoPageState extends State<LocalVideoPage> {
       _errorMessage = null;
     });
     try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.video,
-        allowMultiple: false,
-        withData: false,
+      final source = await showModalBottomSheet<_ImportSource>(
+        context: context,
+        builder: (context) => SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.video_library_outlined),
+                title: const Text('video'),
+                onTap: () => Navigator.pop(context, _ImportSource.video),
+              ),
+              ListTile(
+                leading: const Icon(Icons.folder_open_outlined),
+                title: const Text('file'),
+                onTap: () => Navigator.pop(context, _ImportSource.file),
+              ),
+            ],
+          ),
+        ),
       );
-      final path = result?.files.single.path;
-      if (path == null || path.isEmpty || !mounted) return;
-      final pickedName = result!.files.single.name;
+      if (source == null || !mounted) return;
+      final (path, pickedName) = switch (source) {
+        _ImportSource.video => await _pickFromGallery(),
+        _ImportSource.file => await _pickFromFiles(),
+      };
+      if (path == null || pickedName == null) return;
       final file = File(path);
       if (!await file.exists()) {
         throw StateError('选择的视频文件不存在或无法读取。');
@@ -114,6 +128,27 @@ class _LocalVideoPageState extends State<LocalVideoPage> {
     } finally {
       if (mounted) setState(() => _importing = false);
     }
+  }
+
+  Future<(String?, String?)> _pickFromGallery() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.video,
+      allowMultiple: false,
+      withData: false,
+    );
+    final file = result?.files.single;
+    return (file?.path, file?.name);
+  }
+
+  Future<(String?, String?)> _pickFromFiles() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['mp4', 'mov', 'm4v', 'avi', 'mkv'],
+      allowMultiple: false,
+      withData: false,
+    );
+    final file = result?.files.single;
+    return (file?.path, file?.name);
   }
 
   @override
@@ -214,7 +249,12 @@ class _LocalVideoPageState extends State<LocalVideoPage> {
 
   Future<void> _openPlayer(File file) async {
     await Navigator.of(context).push<void>(
-      MaterialPageRoute<void>(builder: (_) => LocalVideoPlayerPage(file: file)),
+      MaterialPageRoute<void>(
+        builder: (_) => StandaloneVideoPlayerPage(
+          url: file.path,
+          title: file.uri.pathSegments.last,
+        ),
+      ),
     );
   }
 
@@ -235,100 +275,7 @@ class _LocalVideoPageState extends State<LocalVideoPage> {
   }
 }
 
-class LocalVideoPlayerPage extends StatefulWidget {
-  const LocalVideoPlayerPage({required this.file, super.key});
-
-  final File file;
-
-  @override
-  State<LocalVideoPlayerPage> createState() => _LocalVideoPlayerPageState();
-}
-
-class _LocalVideoPlayerPageState extends State<LocalVideoPlayerPage> {
-  late final M3u8PlayerController _controller = M3u8PlayerController();
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _enterImmersiveMode();
-    _initialize();
-  }
-
-  Future<void> _enterImmersiveMode() async {
-    await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    await SystemChrome.setPreferredOrientations(const <DeviceOrientation>[
-      DeviceOrientation.portraitUp,
-      DeviceOrientation.landscapeLeft,
-      DeviceOrientation.landscapeRight,
-    ]);
-  }
-
-  Future<void> _initialize() async {
-    try {
-      await _controller.initialize(
-        source: M3u8Source.file(widget.file.path),
-        autoPlay: false,
-      );
-    } catch (_) {
-      if (mounted) setState(() => _error = '该文件不符合播放格式');
-    }
-  }
-
-  @override
-  void dispose() {
-    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-    SystemChrome.setPreferredOrientations(const <DeviceOrientation>[]);
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: ValueListenableBuilder<M3u8PlayerValue>(
-        valueListenable: _controller,
-        builder: (context, value, _) {
-          if (_error != null) {
-            return Center(
-              child: Text(_error!, style: const TextStyle(color: Colors.white)),
-            );
-          }
-          if (!value.isInitialized) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          return ExampleVideoScaffold(
-            controller: _controller,
-            value: value,
-            title: widget.file.uri.pathSegments.last,
-            episodes: const <String>[],
-            currentEpisodeIndex: 0,
-            sourceType: M3u8SourceType.progressive,
-            strings: const ExampleStrings(ExampleLanguage.zh),
-            isFullscreen: true,
-            controlsLocked: false,
-            isBusy: false,
-            isPrecacheRunning: false,
-            precacheSupported: false,
-            autoPlayNext: false,
-            loopMode: ExampleLoopMode.none,
-            onBack: () => Navigator.of(context).pop(),
-            onEnterFullscreen: () {},
-            onExitFullscreen: () => Navigator.of(context).pop(),
-            onControlsLockedChanged: (_) {},
-            onEpisodeSelected: (_) {},
-            onPrecache: () {},
-            onShowDownloads: () {},
-            onSpeedSelected: _controller.setPlaybackSpeed,
-            onAutoPlayNextChanged: (_) {},
-            onLoopModeChanged: (_) {},
-          );
-        },
-      ),
-    );
-  }
-}
+enum _ImportSource { video, file }
 
 class _VideoThumbnail extends StatelessWidget {
   const _VideoThumbnail({required this.file});

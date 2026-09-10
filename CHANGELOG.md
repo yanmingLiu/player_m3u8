@@ -1,3 +1,21 @@
+## 0.1.5
+
+### 中文
+
+- 新增本地文件和 Flutter Asset 播放，分别通过 `M3u8Source.file(...)` 和 `M3u8Source.asset(...)` 接入；支持 package Asset。
+- 调整 `auto` 格式判断：`.m3u8` 仍启用 HLS 专项能力，其他来源由 Android Media3 或 iOS AVPlayer 按普通媒体处理。
+- 保留网络 HLS 分片预取和 progressive MP4/MOV 完整文件预取；本地文件和 Asset 不进入网络预取流程，并对相关调用返回明确错误。
+- 保持 Flutter `Texture` 渲染、播放状态、QoE、播放器控制和 source 切换生命周期不变。
+- example 新增本地视频库入口和独立视频播放器界面，用于选择并播放设备中的本地视频。
+
+### English
+
+- Added local-file and Flutter Asset playback through `M3u8Source.file(...)` and `M3u8Source.asset(...)`, including package assets.
+- Updated `auto` format handling: `.m3u8` still enables HLS-specific features, while other sources are handled as regular media by Android Media3 or iOS AVPlayer.
+- Preserved segmented HLS prefetch and full-file progressive MP4/MOV prefetch. Local files and assets do not enter the network prefetch path and unsupported calls return an explicit error.
+- Kept Flutter `Texture` rendering, playback state, QoE, player controls, and source-switch lifecycle unchanged.
+- Added a local video library entry and standalone video player UI to the example app for selecting and playing videos from the device.
+
 ## 0.1.4
 
 ### 中文

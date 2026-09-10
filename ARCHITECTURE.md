@@ -130,7 +130,8 @@ iOS:
 
 ### 当前限制
 
-- 支持网络 HLS/m3u8 VOD 和 progressive MP4/MOV；不支持 DASH、SmoothStreaming、RTSP、FLV 或本地文件。
+- 支持网络 HLS/m3u8 VOD、progressive MP4/MOV、本地文件和 Flutter Asset；不支持 DASH、SmoothStreaming、RTSP 或 FLV。
+- 本地文件和 Flutter Asset 直接交给平台播放器，不进入网络预取流程。
 - MP4/MOV 支持独立完整下载和完成后缓存复用，但不支持清晰度选择。
 - iOS progressive 暂不暴露外部字幕。
 - iOS HLS 磁盘预取只承诺常见 VOD playlist。live/event playlist、`#EXT-X-BYTERANGE`、I-frame-only playlist、复杂加密或 DRM playlist 会返回 `unsupported_hls_playlist` 缓存错误，播放链路不因此失败。
@@ -282,7 +283,8 @@ Diagnostics are intended for production error aggregation and QoE attribution. D
 
 ### Current Limitations
 
-- Network HLS/m3u8 VOD and progressive MP4/MOV are supported. DASH, SmoothStreaming, RTSP, FLV, and local files are not supported.
+- Network HLS/m3u8 VOD, progressive MP4/MOV, local files, and Flutter assets are supported. DASH, SmoothStreaming, RTSP, and FLV are not supported.
+- Local files and Flutter assets are passed directly to the platform player and do not enter the network prefetch path.
 - MP4/MOV supports standalone full-file download and cache reuse after completion, but not quality selection.
 - iOS progressive does not expose external subtitles yet.
 - iOS HLS disk prefetch only commits to common VOD playlists. Live/event playlists, `#EXT-X-BYTERANGE`, I-frame-only playlists, complex encryption, and DRM playlists report an `unsupported_hls_playlist` cache error without failing playback.

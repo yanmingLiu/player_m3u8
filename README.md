@@ -672,6 +672,28 @@ await controller.initialize(
 );
 ```
 
+### Play Local Files And Flutter Assets
+
+Local files and Flutter assets are passed directly to Android Media3 or iOS AVPlayer and do not enter network prefetch tasks:
+
+```dart
+await controller.initialize(
+  source: M3u8Source.file('/absolute/path/video.mp4'),
+  autoPlay: true,
+);
+
+await controller.setSource(
+  const M3u8Source.asset('assets/video.mp4'),
+  autoPlay: true,
+);
+```
+
+Pass `package` for an asset provided by another Flutter package:
+
+```dart
+const M3u8Source.asset('assets/video.mp4', package: 'media_package');
+```
+
 ### Headers And Cache Keys
 
 If your video endpoint needs headers:
@@ -804,7 +826,8 @@ final subscription = controller.qoeSnapshots.listen((snapshot) {
 ### Current Limitations
 
 - iOS and Android only.
-- Network HLS/m3u8 VOD and progressive MP4/MOV are supported. DASH, SmoothStreaming, RTSP, FLV, and local files are not supported.
+- Network HLS/m3u8 VOD, progressive MP4/MOV, local files, and Flutter assets are supported. DASH, SmoothStreaming, RTSP, and FLV are not supported.
+- Local files and Flutter assets are playback-only and do not participate in network prefetch. Segmented HLS prefetch and progressive full-file prefetch are unchanged.
 - MP4/MOV supports standalone full-file downloads and cache reuse after completion, but not quality selection.
 - Android progressive can attach external subtitles. iOS progressive does not expose external subtitles yet.
 - iOS HLS playback is handled by AVFoundation direct `AVPlayer`; manual HLS quality is best-effort.

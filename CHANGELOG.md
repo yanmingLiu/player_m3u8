@@ -1,3 +1,13 @@
+## 0.1.7
+
+### 中文
+
+- 音量控制改为同步系统媒体音量，并将物理音量键或控制中心的变化回传到播放器状态；Android 亮度继续保持 Activity window 级，iOS 继续同步系统屏幕亮度。
+
+### English
+
+- Changed volume control to synchronize system media volume and reflect hardware-button or Control Center changes in player state. Android brightness remains Activity-window scoped, while iOS continues to synchronize system screen brightness.
+
 ## 0.1.6
 
 ### 中文

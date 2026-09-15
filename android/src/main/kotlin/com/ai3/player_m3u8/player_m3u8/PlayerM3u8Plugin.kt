@@ -3,6 +3,11 @@ package com.ai3.player_m3u8.player_m3u8
 import android.net.Uri
 import android.content.Context
 import android.app.Activity
+import android.database.ContentObserver
+import android.media.AudioManager
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import io.flutter.embedding.engine.plugins.activity.ActivityAware
 import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.embedding.engine.plugins.FlutterPlugin
@@ -13,6 +18,7 @@ import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.flutter.view.TextureRegistry
 import java.util.UUID
+import kotlin.math.roundToInt
 
 class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, EventChannel.StreamHandler {
     private lateinit var context: Context
@@ -25,6 +31,11 @@ class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, Even
     private val cacheTasks = mutableMapOf<String, M3u8CacheTaskHandle>()
     private var eventSink: EventChannel.EventSink? = null
     private var cacheEventSink: EventChannel.EventSink? = null
+    private val audioManager: AudioManager by lazy {
+        context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
+    private var lastSystemVolume = -1f
+    private var volumeObserver: ContentObserver? = null
 
     internal constructor(context: Context) : this() {
         this.context = context
@@ -39,6 +50,17 @@ class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, Even
         methodChannel.setMethodCallHandler(this)
         eventChannel.setStreamHandler(this)
         cacheEventChannel.setStreamHandler(CacheEventStreamHandler())
+        volumeObserver = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                syncSystemVolume()
+            }
+        }
+        binding.applicationContext.contentResolver.registerContentObserver(
+            Settings.System.CONTENT_URI,
+            true,
+            volumeObserver!!,
+        )
+        lastSystemVolume = systemVolume()
     }
 
     override fun onMethodCall(call: MethodCall, result: Result) {
@@ -105,7 +127,7 @@ class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, Even
                     )
                     return@withPlayer
                 }
-                player.setVolume(volume)
+                setSystemVolume(volume)
                 result.success(null)
             }
             "setMuted" -> withPlayer(call, result) { player ->
@@ -164,6 +186,8 @@ class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, Even
         methodChannel.setMethodCallHandler(null)
         eventChannel.setStreamHandler(null)
         cacheEventChannel.setStreamHandler(null)
+        volumeObserver?.let { context.contentResolver.unregisterContentObserver(it) }
+        volumeObserver = null
         players.values.forEach { it.dispose() }
         players.clear()
         cacheTasks.values.forEach { it.cancel() }
@@ -252,7 +276,7 @@ class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, Even
             sourceType = sourceType,
             initialPositionMs = initialPositionMs,
             playbackSpeed = playbackSpeed,
-            volume = volume,
+            volume = systemVolume(),
             isMuted = isMuted,
             externalSubtitles = subtitles,
             selectedSubtitleId = selectedSubtitleId,
@@ -263,6 +287,26 @@ class PlayerM3u8Plugin() : FlutterPlugin, ActivityAware, MethodCallHandler, Even
         )
         players[surfaceProducer.id()] = player
         result.success(surfaceProducer.id())
+    }
+
+    private fun systemVolume(): Float {
+        val maximum = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (maximum <= 0) return 0f
+        return audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / maximum
+    }
+
+    private fun setSystemVolume(volume: Float) {
+        val maximum = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        val level = (volume.coerceIn(0f, 1f) * maximum).roundToInt().coerceIn(0, maximum)
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, level, 0)
+        syncSystemVolume(force = true)
+    }
+
+    private fun syncSystemVolume(force: Boolean = false) {
+        val volume = systemVolume()
+        if (!force && kotlin.math.abs(volume - lastSystemVolume) < 0.0001f) return
+        lastSystemVolume = volume
+        players.values.forEach { it.setSystemVolumeState(volume) }
     }
 
     private fun resolveSourceUrl(url: String, kind: String, packageName: String?): String {

@@ -1,5 +1,6 @@
 import AVFoundation
 import Flutter
+import MediaPlayer
 import UIKit
 
 public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
@@ -9,6 +10,9 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   private var players: [Int64: M3u8IosPlayer] = [:]
   private var cacheTasks: [String: CacheTaskBox] = [:]
   private var maxConcurrentPrecacheTasks = 2
+  private let volumeView = MPVolumeView(frame: .zero)
+  private var volumeSlider: UISlider?
+  private var volumeObservation: NSKeyValueObservation?
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let methodChannel = FlutterMethodChannel(
@@ -32,6 +36,15 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
   init(textureRegistry: FlutterTextureRegistry) {
     self.textureRegistry = textureRegistry
     super.init()
+    volumeSlider = volumeView.subviews.compactMap { $0 as? UISlider }.first
+    volumeObservation = AVAudioSession.sharedInstance().observe(
+      \.outputVolume,
+      options: [.initial, .new]
+    ) { [weak self] session, _ in
+      DispatchQueue.main.async {
+        self?.syncSystemVolume(Double(session.outputVolume))
+      }
+    }
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -140,7 +153,7 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
           )
           return
         }
-        player.setVolume(volume.doubleValue)
+        setSystemVolume(volume.doubleValue)
         result(nil)
       }
     case "setMuted":
@@ -315,7 +328,7 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
       sourceType: M3u8SourceType.from(arguments["sourceType"]),
       initialPositionMs: initialPositionMs,
       playbackSpeed: playbackSpeed,
-      volume: volume,
+      volume: Double(AVAudioSession.sharedInstance().outputVolume),
       isMuted: arguments["isMuted"] as? Bool ?? false,
       externalSubtitles: arguments["subtitles"] as? [[String: Any]] ?? [],
       selectedSubtitleId: arguments["selectedSubtitleId"] as? String,
@@ -328,6 +341,19 @@ public class PlayerM3u8Plugin: NSObject, FlutterPlugin, FlutterStreamHandler {
     player.textureId = textureId
     players[textureId] = player
     result(textureId)
+  }
+
+  private func setSystemVolume(_ volume: Double) {
+    let normalized = Float(min(max(volume, 0), 1))
+    DispatchQueue.main.async { [weak self] in
+      self?.volumeSlider?.setValue(normalized, animated: false)
+      self?.volumeSlider?.sendActions(for: .touchUpInside)
+      self?.syncSystemVolume(Double(normalized))
+    }
+  }
+
+  private func syncSystemVolume(_ volume: Double) {
+    players.values.forEach { $0.setSystemVolumeState(volume) }
   }
 
   private func resolveSourceUrl(_ url: URL, kind: String, packageName: String?) -> URL {

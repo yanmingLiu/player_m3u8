@@ -229,7 +229,7 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
     self.videoOutput = Self.makeVideoOutput()
     self.legibleOutput = AVPlayerItemLegibleOutput()
     self.player = AVPlayer(playerItem: playerItem)
-    self.player.volume = Float(self.volume)
+    self.player.volume = 1
     self.player.isMuted = isMuted
     super.init()
     resourceLoader.qualityProvider = { [weak self] in
@@ -320,9 +320,12 @@ final class M3u8IosPlayer: NSObject, FlutterTexture, AVPlayerItemLegibleOutputPu
   }
 
   func setVolume(_ volume: Double) {
+    setSystemVolumeState(volume)
+  }
+
+  func setSystemVolumeState(_ volume: Double) {
     guard !disposed else { return }
     self.volume = min(max(volume, 0), 1)
-    player.volume = Float(self.volume)
     sendProgress()
   }
 

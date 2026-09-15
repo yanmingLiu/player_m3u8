@@ -197,7 +197,7 @@ AspectRatio(
 内置手势：
 
 - 左侧上下滑动：调节屏幕亮度。Android 调节当前 Activity window 亮度，iOS 调节 `UIScreen.main.brightness`。
-- 右侧上下滑动：调节当前播放器内音量，等同于调用 `controller.setVolume(...)`。
+- 右侧上下滑动：调节系统媒体音量，等同于调用 `controller.setVolume(...)`。物理音量键或控制中心修改音量后，`controller.value.volume` 会同步更新。
 - 左右滑动：预览目标进度，并在松手后调用 `controller.seekTo(...)`。
 
 如果业务已经有自己的手势层，可以不使用这个组件。也可以通过配置关闭整体或单项能力：
@@ -216,6 +216,8 @@ M3u8PlayerGestureControls(
 ```
 
 `brightnessOverlayEnabled` 是亮度遮罩兜底；在模拟器或系统亮度 API 不明显时，播放区域仍会有可见的明暗反馈。
+
+`setVolume(...)` 在 Android 使用 `AudioManager.STREAM_MUSIC`，在 iOS 使用系统音量控件。播放器原生音量保持为 `1.0`（静音时除外），避免与系统音量叠乘。Android 亮度仅作用于当前 Activity window，并在首次手势时读取窗口值或系统亮度作为起点；iOS 直接同步 `UIScreen.main.brightness`。
 
 ### 切换播放源
 
@@ -625,7 +627,7 @@ AspectRatio(
 Built-in gestures:
 
 - Vertical drags on the left adjust screen brightness. Android adjusts the current Activity window brightness, and iOS adjusts `UIScreen.main.brightness`.
-- Vertical drags on the right adjust the current player volume, equivalent to `controller.setVolume(...)`.
+- Vertical drags on the right adjust system media volume, equivalent to `controller.setVolume(...)`. Changes made with hardware volume buttons or Control Center are reflected by `controller.value.volume`.
 - Horizontal drags preview the target position and call `controller.seekTo(...)` on release.
 
 If your app already owns playback gestures, skip this wrapper. You can also disable all or individual behaviors through config:
@@ -644,6 +646,8 @@ M3u8PlayerGestureControls(
 ```
 
 `brightnessOverlayEnabled` is a dimming fallback. It keeps visible brightness feedback in simulators or environments where the system brightness API is not visually obvious.
+
+`setVolume(...)` uses `AudioManager.STREAM_MUSIC` on Android and the system volume control on iOS. Native player volume stays at `1.0` (except while muted) to avoid multiplying player and system volume. Android brightness remains scoped to the current Activity window and initializes each gesture from the window or system brightness; iOS directly synchronizes `UIScreen.main.brightness`.
 
 ### Switch Sources
 

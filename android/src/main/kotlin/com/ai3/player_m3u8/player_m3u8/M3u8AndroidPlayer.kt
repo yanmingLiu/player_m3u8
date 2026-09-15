@@ -199,9 +199,12 @@ class M3u8AndroidPlayer(
     }
 
     fun setVolume(volume: Float) {
+        setSystemVolumeState(volume)
+    }
+
+    fun setSystemVolumeState(volume: Float) {
         runOnMain {
             this.volume = volume.coerceIn(0f, 1f)
-            applyVolume()
             sendProgress(force = true)
         }
     }
@@ -242,7 +245,7 @@ class M3u8AndroidPlayer(
     }
 
     private fun effectiveVolume(): Float {
-        return if (isMuted) 0f else volume
+        return if (isMuted) 0f else 1f
     }
 
     fun dispose() {

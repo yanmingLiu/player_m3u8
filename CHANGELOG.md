@@ -1,3 +1,17 @@
+## 0.1.6
+
+### 中文
+
+- 迁移 Android 构建到 AGP 9 内置 Kotlin，移除 `org.jetbrains.kotlin.android` / `kotlin-android` 和 `kotlinOptions`。
+- example 同步升级 AGP 9.1、Gradle 9.3.1，并启用 `android.builtInKotlin=true`。
+- 将最低 Flutter/Dart 约束提升到 Flutter 3.44 / Dart 3.12。
+
+### English
+
+- Migrated Android builds to AGP 9 built-in Kotlin and removed `org.jetbrains.kotlin.android`, `kotlin-android`, and `kotlinOptions`.
+- Updated the example to AGP 9.1, Gradle 9.3.1, and enabled `android.builtInKotlin=true`.
+- Raised the minimum Flutter/Dart constraints to Flutter 3.44 / Dart 3.12.
+
 ## 0.1.5
 
 ### 中文

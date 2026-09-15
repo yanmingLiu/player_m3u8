@@ -1,6 +1,6 @@
 name: player_m3u8
 description: Texture-based Flutter video player for iOS and Android with HLS enhancements, local files, assets, caching, and disk prefetch.
-version: 0.1.5
+version: 0.1.6
 homepage: https://github.com/yanmingLiu/player_m3u8
 repository: https://github.com/yanmingLiu/player_m3u8
 issue_tracker: https://github.com/yanmingLiu/player_m3u8/issues
@@ -16,8 +16,8 @@ platforms:
   ios:
 
 environment:
-  sdk: ^3.10.0
-  flutter: '>=3.3.0'
+  sdk: ^3.12.0
+  flutter: '>=3.44.0'
 
 dependencies:
   flutter:
